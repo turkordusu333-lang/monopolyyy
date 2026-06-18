@@ -187,6 +187,7 @@ export default function App() {
   const [rageQuit, setRageQuit] = useState(false);
   const [showHistoryModal, setShowHistoryModal] = useState(false);
   const [showScavengeModal, setShowScavengeModal] = useState(false);
+  const [challengeTime, setChallengeTime] = useState(15);
 
   // ---- TEMEL DURUM SABİTLERİ (TDZ Hatasını Önlemek İçin En Üstte) ----
   const me = gameState?.players?.find(p => p.id === playerId);
@@ -227,6 +228,17 @@ export default function App() {
     const interval = setInterval(() => setNow(Date.now()), 1000);
     return () => clearInterval(interval);
   }, []);
+
+  // ---- HIZLI REDDET GERİ SAYIMI ----
+  useEffect(() => {
+    if (gameState?.fastChallenge && gameState?.challengeStartTime && gameState?.myPendingChallenge) {
+      const inv = setInterval(() => {
+        const rem = 15 - Math.floor((Date.now() - gameState.challengeStartTime) / 1000);
+        setChallengeTime(rem > 0 ? rem : 0);
+      }, 1000);
+      return () => clearInterval(inv);
+    }
+  }, [gameState?.fastChallenge, gameState?.challengeStartTime, gameState?.myPendingChallenge]);
 
   // ---- YERLEŞİK TÜRKÇE SESLENDİRME (TTS) ----
   const playTurkishVoice = useCallback((text) => {
@@ -1703,18 +1715,6 @@ export default function App() {
     const haveJustSayNo = me?.hasJustSayNo;
     const isCounter = ch.responderId === ch.sourceId; // sıra orijinal oyuncuya geri döndü (karşı-Reddet)
 
-    // Hızlı Reddet Geri Sayımı
-    const [challengeTime, setChallengeTime] = useState(15);
-    useEffect(() => {
-        if(gameState?.fastChallenge && gameState?.challengeStartTime && gameState?.myPendingChallenge) {
-          const inv = setInterval(() => {
-            const rem = 15 - Math.floor((Date.now() - gameState.challengeStartTime)/1000);
-            setChallengeTime(rem > 0 ? rem : 0);
-          }, 1000);
-          return () => clearInterval(inv);
-        }
-    }, [gameState?.fastChallenge, gameState?.challengeStartTime, gameState?.myPendingChallenge]);
-
     let description = '';
     switch (ch.action) {
       case 'rent': description = `${ch.sourceName} kira istiyor: ${ch.data.amount}M (${ch.data.reason})`; break;
@@ -1757,17 +1757,17 @@ export default function App() {
     if (!gameState?.myPendingPayment) return null;
     const payment = gameState.myPendingPayment;
     // Eğer hiç varlığım yoksa server otomatik geçer, ama yine de göstermeyelim
-    const hasBank = (me.bank || []).length > 0;
-    const hasProps = Object.values(me.properties || {}).flat().length > 0;
+    const hasBank = (me?.bank || []).length > 0;
+    const hasProps = Object.values(me?.properties || {}).flat().length > 0;
     if (!hasBank && !hasProps) return null;
 
     const selectedTotal =
-      (me.bank || []).filter(c => paymentSelection.bankCardIds.includes(c.id)).reduce((s, c) => s + c.value, 0) +
-      Object.values(me.properties || {}).flat().filter(c => paymentSelection.propertyCardIds.includes(c.id)).reduce((s, c) => s + c.value, 0);
+      (me?.bank || []).filter(c => paymentSelection.bankCardIds.includes(c.id)).reduce((s, c) => s + c.value, 0) +
+      Object.values(me?.properties || {}).flat().filter(c => paymentSelection.propertyCardIds.includes(c.id)).reduce((s, c) => s + c.value, 0);
 
     const totalAssets =
-      (me.bank || []).reduce((s, c) => s + c.value, 0) +
-      Object.values(me.properties || {}).flat().reduce((s, c) => s + c.value, 0);
+      (me?.bank || []).reduce((s, c) => s + c.value, 0) +
+      Object.values(me?.properties || {}).flat().reduce((s, c) => s + c.value, 0);
 
     const enoughOrAll = selectedTotal >= payment.amount || selectedTotal === totalAssets;
     const canSubmit = selectedTotal > 0 && enoughOrAll;
@@ -1786,7 +1786,7 @@ export default function App() {
           <>
             <div style={{ fontSize: 11, color: '#666', marginBottom: 4, marginTop: 8 }}>BANKA KARTLARI</div>
             <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', marginBottom: 8 }}>
-              {(me.bank || []).map(c => (
+              {(me?.bank || []).map(c => (
                 <div key={c.id} onClick={() => togglePaymentBankCard(c.id)} style={{
                   cursor: 'pointer',
                   background: paymentSelection.bankCardIds.includes(c.id) ? '#2ECC71' : 'rgba(255,255,255,0.1)',
@@ -1804,7 +1804,7 @@ export default function App() {
           <>
             <div style={{ fontSize: 11, color: '#666', marginBottom: 4 }}>TAPU SENEDİ KARTLARI (renk ne olursa olsun gidebilir)</div>
             <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', marginBottom: 8 }}>
-              {Object.entries(me.properties || {}).flatMap(([color, cards]) => cards.map(c => (
+              {Object.entries(me?.properties || {}).flatMap(([color, cards]) => cards.map(c => (
                 <div key={c.id} onClick={() => togglePaymentPropertyCard(c.id)} style={{ cursor: 'pointer' }}>
                   <CardVisual card={c} small selected={paymentSelection.propertyCardIds.includes(c.id)} />
                 </div>
@@ -1842,8 +1842,8 @@ export default function App() {
             <div style={{ flex: 1, background: 'rgba(231,76,60,0.1)', padding: 10, borderRadius: 8 }}>
                <div style={{ color: '#E74C3C', fontWeight: 'bold', marginBottom: 8 }}>Ne Vereceksin? (Senin)</div>
                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
-                 {me.bank.map(c => <div key={c.id} onClick={() => toggle('offerBankIds', c.id)} style={{ cursor:'pointer', opacity: tradeSelection.offerBankIds.includes(c.id)?1:0.4 }}><CardVisual card={c} small/></div>)}
-                 {Object.values(me.properties).flat().map(c => <div key={c.id} onClick={() => toggle('offerPropIds', c.id)} style={{ cursor:'pointer', opacity: tradeSelection.offerPropIds.includes(c.id)?1:0.4 }}><CardVisual card={c} small/></div>)}
+                 {(me?.bank || []).map(c => <div key={c.id} onClick={() => toggle('offerBankIds', c.id)} style={{ cursor:'pointer', opacity: tradeSelection.offerBankIds.includes(c.id)?1:0.4 }}><CardVisual card={c} small/></div>)}
+                 {Object.values(me?.properties || {}).flat().map(c => <div key={c.id} onClick={() => toggle('offerPropIds', c.id)} style={{ cursor:'pointer', opacity: tradeSelection.offerPropIds.includes(c.id)?1:0.4 }}><CardVisual card={c} small/></div>)}
                </div>
             </div>
             <div style={{ flex: 1, background: 'rgba(46,204,113,0.1)', padding: 10, borderRadius: 8 }}>
