@@ -929,6 +929,17 @@ export default function App() {
     setError('');
   };
 
+  // ---- MASA DEVİRME (RAGE QUIT) ----
+  const handleRageQuit = () => {
+    if(!window.confirm("Gerçekten masayı devirip odadan çıkmak istiyor musun?")) return;
+    setRageQuit(true);
+    sfxGlassBreak();
+    setTimeout(() => {
+      handleExit();
+      setRageQuit(false);
+    }, 1500);
+  };
+
   const handlePlayCard = useCallback((card, options = {}) => {
     // Fırlatma animasyonunu tetikle
     sfxWhoosh();
