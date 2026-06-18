@@ -353,9 +353,9 @@ export default function App() {
   };
 
   useEffect(() => {
-    // Mobil cihazlarda bağlantı kopmalarını minimize etmek için websocket'i zorla
+    // Render.com proxy uyumluluğu için önce polling sonra websocket kullanılması gerekir
     const s = io(SERVER_URL, {
-      transports: ['websocket', 'polling'],
+      transports: ['polling', 'websocket'],
       reconnectionAttempts: Infinity,
       reconnectionDelay: 1000,
       reconnectionDelayMax: 5000,
@@ -387,6 +387,11 @@ export default function App() {
     s.on('disconnect', () => {
       setStatus('Bağlantı kesildi');
       setIsConnected(false);
+    });
+    
+    s.on('connect_error', (err) => {
+      console.error('Socket bağlantı hatası:', err.message);
+      setStatus('Sunucuya bağlanılamıyor! Yeniden deneniyor...');
     });
     s.on('publicRooms', (rooms) => setPublicRooms(rooms));
     s.on('roomClosed', () => { setStatus('Oda host tarafından kapatıldı.'); handleExit(); });
@@ -822,6 +827,8 @@ export default function App() {
 
   const handleCreate = () => {
     if (!myName.trim()) return setError('İsim gir');
+    if (!socket || !socket.connected) return setError('Sunucuya henüz bağlanılamadı, lütfen bekleyin...');
+    
     socket.emit('createRoom', { name: myName, settings: roomSettings }, (res) => {
       if (res.ok) {
         setRoomCode(res.roomCode);
@@ -836,6 +843,8 @@ export default function App() {
 
   const handleJoin = () => {
     if (!myName.trim() || !joinCode.trim()) return setError('İsim ve kod gir');
+    if (!socket || !socket.connected) return setError('Sunucuya henüz bağlanılamadı, lütfen bekleyin...');
+    
     socket.emit('joinRoom', { roomCode: joinCode.toUpperCase(), name: myName }, (res) => {
       if (res.ok) {
         setRoomCode(joinCode.toUpperCase());
