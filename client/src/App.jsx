@@ -18,8 +18,8 @@ import { ToastStack } from './components/ToastStack';
 import { CardRentPanel, CardProbabilityPanel } from './components/CardPanels';
 import { AnimatedCounter } from './AnimatedCounter';
 
-// Render.com'da çalışması için adresin dinamik (otomatik) alınmasını sağlıyoruz
-const SERVER_URL = import.meta.env.VITE_SERVER_URL || (window.location.hostname === 'localhost' ? 'http://localhost:3001' : window.location.origin);
+// GitHub'a yanlışlıkla yüklenen .env dosyasındaki eski modem adresini yoksayıyoruz
+const SERVER_URL = window.location.hostname === 'localhost' ? 'http://localhost:3001' : window.location.origin;
 
 const inputStyle = { width: '100%', padding: '10px 14px', background: 'rgba(255,255,255,0.1)', border: '1px solid rgba(255,255,255,0.2)', borderRadius: 8, color: '#fff', fontSize: 14, marginBottom: 12, boxSizing: 'border-box', outline: 'none' };
 
