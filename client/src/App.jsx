@@ -353,9 +353,9 @@ export default function App() {
   };
 
   useEffect(() => {
-    // Proxy (Keenetic/Render) engellemelerini aşmak için sadece polling kullan
+    // Render.com üzerinde en hızlı ve sorunsuz bağlantı için WebSocket öncelikli ayar
     const s = io(SERVER_URL, {
-      transports: ['polling'],
+      transports: ['websocket', 'polling'],
       reconnectionAttempts: Infinity,
       reconnectionDelay: 1000,
       reconnectionDelayMax: 5000,
