@@ -1542,50 +1542,50 @@ export default function App() {
   const renderRoomSettings = (disabled = false) => {
     const selStyle = { background: 'rgba(0,0,0,0.5)', color: '#fff', border: '1px solid rgba(255,255,255,0.2)', borderRadius: 4, padding: '4px 8px', outline: 'none' };
     return (
-      <div style={{ background: 'rgba(0,0,0,0.3)', padding: '12px 16px', borderRadius: 8, marginTop: 12, textAlign: 'left', pointerEvents: disabled ? 'none' : 'auto', opacity: disabled ? 0.7 : 1 }}>
-        <div style={{ fontSize: 12, color: '#FFD700', fontWeight: 'bold', marginBottom: 12 }}>⚙️ GELİŞMİŞ OYUN AYARLARI</div>
-        
-        <label style={{ display: 'flex', alignItems: 'center', marginBottom: 10, cursor: 'pointer' }}>
+      <details className="settings-details" style={{ pointerEvents: disabled ? 'none' : 'auto', opacity: disabled ? 0.7 : 1, marginTop: 12 }}>
+        <summary>⚙️ GELİŞMİŞ OYUN AYARLARI</summary>
+        <div className="settings-content">
+        <label style={{ display: 'flex', alignItems: 'center', cursor: 'pointer' }}>
           <input type="checkbox" checked={roomSettings.autoEndTurn} onChange={e => setRoomSettings(prev => ({ ...prev, autoEndTurn: e.target.checked }))} style={{ marginRight: 8 }} />
           <span style={{ fontSize: 13, color: '#fff' }}>3 Hamle Sonrası Eli Otomatik Bitir</span>
         </label>
 
-        <label style={{ display: 'flex', alignItems: 'center', marginBottom: 10, cursor: 'pointer' }}>
+        <label style={{ display: 'flex', alignItems: 'center', cursor: 'pointer' }}>
           <input type="checkbox" checked={roomSettings.allowCounterJustSayNo} onChange={e => setRoomSettings(prev => ({ ...prev, allowCounterJustSayNo: e.target.checked }))} style={{ marginRight: 8 }} />
           <span style={{ fontSize: 13, color: '#fff' }}>Çifte Reddet (İtiraza itiraz etme izni)</span>
         </label>
 
-        <label style={{ display: 'flex', alignItems: 'center', marginBottom: 10, cursor: 'pointer' }}>
+        <label style={{ display: 'flex', alignItems: 'center', cursor: 'pointer' }}>
           <input type="checkbox" checked={roomSettings.openHands} onChange={e => setRoomSettings(prev => ({ ...prev, openHands: e.target.checked }))} style={{ marginRight: 8 }} />
           <span style={{ fontSize: 13, color: '#fff' }}>Açık El Modu (Herkes birbirinin kartını görür)</span>
         </label>
 
-        <label style={{ display: 'flex', alignItems: 'center', marginBottom: 10, cursor: 'pointer' }}>
+        <label style={{ display: 'flex', alignItems: 'center', cursor: 'pointer' }}>
           <input type="checkbox" checked={roomSettings.lockWildcards} onChange={e => setRoomSettings(prev => ({ ...prev, lockWildcards: e.target.checked }))} style={{ marginRight: 8 }} />
           <span style={{ fontSize: 13, color: '#fff' }}>Joker Kilidi (Joker rengi sonradan değiştirilemez)</span>
         </label>
 
-        <label style={{ display: 'flex', alignItems: 'center', marginBottom: 10, cursor: 'pointer' }}>
+        <label style={{ display: 'flex', alignItems: 'center', cursor: 'pointer' }}>
           <input type="checkbox" checked={roomSettings.fastChallenge} onChange={e => setRoomSettings(prev => ({ ...prev, fastChallenge: e.target.checked }))} style={{ marginRight: 8 }} />
           <span style={{ fontSize: 13, color: '#fff' }}>Hızlı Reddet (Yanıt için sadece 15 Saniye)</span>
         </label>
 
-        <label style={{ display: 'flex', alignItems: 'center', marginBottom: 10, cursor: 'pointer' }}>
+        <label style={{ display: 'flex', alignItems: 'center', cursor: 'pointer' }}>
           <input type="checkbox" checked={roomSettings.allowTrades} onChange={e => setRoomSettings(prev => ({ ...prev, allowTrades: e.target.checked }))} style={{ marginRight: 8 }} />
           <span style={{ fontSize: 13, color: '#fff' }}>Barışçıl Takas İzni (Aksiyon Harcar)</span>
         </label>
 
-        <label style={{ display: 'flex', alignItems: 'center', marginBottom: 10, cursor: 'pointer' }}>
+        <label style={{ display: 'flex', alignItems: 'center', cursor: 'pointer' }}>
           <input type="checkbox" checked={roomSettings.streetThugs} onChange={e => setRoomSettings(prev => ({ ...prev, streetThugs: e.target.checked }))} style={{ marginRight: 8 }} />
           <span style={{ fontSize: 13, color: '#fff' }}>Sokak Haydutları (Atılan kartları Karaborsadan 2M'e al)</span>
         </label>
 
-        <label style={{ display: 'flex', alignItems: 'center', marginBottom: 10, cursor: 'pointer' }}>
+        <label style={{ display: 'flex', alignItems: 'center', cursor: 'pointer' }}>
           <input type="checkbox" checked={roomSettings.gambleZari} onChange={e => setRoomSettings(prev => ({ ...prev, gambleZari: e.target.checked }))} style={{ marginRight: 8 }} />
           <span style={{ fontSize: 13, color: '#fff' }}>Kumarbazın Zarı (Tur sonu 🎲 Zar At şansı)</span>
         </label>
         
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <span style={{ fontSize: 13, color: '#fff' }}>Hamle Süresi (Gecikirse Geçer):</span>
           <select value={roomSettings.turnTimer} onChange={e => setRoomSettings(prev => ({ ...prev, turnTimer: Number(e.target.value) }))} style={selStyle}>
             <option value={0}>Sınırsız (Klasik)</option>
@@ -1595,7 +1595,7 @@ export default function App() {
           </select>
         </div>
         
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <span style={{ fontSize: 13, color: '#fff' }}>Kazanma Hedefi:</span>
           <select value={roomSettings.winSets} onChange={e => setRoomSettings(prev => ({ ...prev, winSets: Number(e.target.value) }))} style={selStyle}>
             <option value={2}>2 Tam Set (Kısa Oyun)</option>
@@ -1622,7 +1622,8 @@ export default function App() {
             <option value={3}>+3 Ekle (Kaos!)</option>
           </select>
         </div>
-      </div>
+        </div>
+      </details>
     );
   };
 
@@ -1864,20 +1865,19 @@ export default function App() {
   if (screen === 'lobby') {
     return ( // Lobi arka planına animasyon sınıfını ekle
       <div className="lobby-animated-bg" style={{ minHeight: '100vh', color: '#fff', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: 20 }}>
-        <div style={{ fontSize: 40, marginBottom: 8 }}>🏠</div>
-        <h1 style={{ color: '#FFD700', marginBottom: 4, fontSize: 28 }}>Monopoly Deal</h1>
-        <p style={{ color: '#aaa', marginBottom: 24, fontSize: 13 }}>Çevrimiçi Kart Oyunu</p>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 24 }}>
+          <div style={{ fontSize: 48, filter: 'drop-shadow(0 4px 10px rgba(0,0,0,0.5))' }}>🏠</div>
+          <div>
+            <h1 style={{ color: '#FFD700', fontSize: 32, margin: 0, textShadow: '0 2px 5px rgba(0,0,0,0.5)' }}>Monopoly Deal</h1>
+            <p style={{ color: '#E0E0E0', fontSize: 14, margin: 0, opacity: 0.8 }}>Çevrimiçi Kart Oyunu</p>
+          </div>
+        </div>
 
-        <div style={{ width: '100%', maxWidth: 360, background: 'rgba(255,255,255,0.05)', borderRadius: 12, padding: 24 }}>
-          <input
-            value={myName}
-            onChange={e => setMyName(e.target.value)}
-            placeholder="Adın"
-            style={inputStyle}
-          />
+        <div className="glass-card" style={{ width: '100%', maxWidth: 500 }}>
           
-          <div style={{ marginBottom: 16 }}>
-             <div style={{ fontSize: 12, color: '#aaa', marginBottom: 8, textAlign: 'center' }}>Avatarını Seç:</div>
+          {/* Avatar ve İsim Seçimi */}
+          <div style={{ marginBottom: 24, textAlign: 'center' }}>
+             <div style={{ fontSize: 12, color: '#FFD700', fontWeight: 'bold', marginBottom: 12, letterSpacing: 1 }}>KİMLİĞİNİ OLUŞTUR</div>
              <div style={{ display: 'flex', gap: 8, justifyContent: 'center' }}>
                {AVATAR_STYLES.map(style => (
                  <img 
@@ -1886,38 +1886,54 @@ export default function App() {
                    alt={style}
                    onClick={() => { setMyAvatarStyle(style); localStorage.setItem('md_avatar', style); }}
                    style={{ 
-                     width: 44, height: 44, borderRadius: '50%', cursor: 'pointer',
+                     width: 48, height: 48, borderRadius: '50%', cursor: 'pointer',
                      border: myAvatarStyle === style ? '3px solid #FFD700' : '2px solid transparent',
                      background: 'rgba(255,255,255,0.1)',
                      transition: 'transform 0.2s',
-                     transform: myAvatarStyle === style ? 'scale(1.1)' : 'scale(1)'
+                     transform: myAvatarStyle === style ? 'scale(1.15)' : 'scale(1)',
+                     boxShadow: myAvatarStyle === style ? '0 4px 10px rgba(255,215,0,0.4)' : 'none'
                    }}
                  />
                ))}
              </div>
+             <input
+               value={myName}
+               onChange={e => setMyName(e.target.value)}
+               placeholder="Oyuncu Adın..."
+               style={{ ...inputStyle, textAlign: 'center', fontSize: 16, padding: '12px', background: 'rgba(0,0,0,0.3)', border: '1px solid rgba(255,215,0,0.3)', marginTop: 16 }}
+             />
           </div>
 
           {!roomCode ? (
             <>
-              <label style={{ display: 'flex', alignItems: 'center', marginBottom: 12, cursor: 'pointer' }}>
-                <input type="checkbox" checked={roomSettings.isPublic} onChange={e => setRoomSettings(prev => ({ ...prev, isPublic: e.target.checked }))} style={{ marginRight: 8 }} />
-                <span style={{ fontSize: 13, color: '#fff' }}>🌍 Odayı Herkese Açık Yap (Lobi Tarayıcısında görünür)</span>
-              </label>
-              
-              {/* ODA AYARLARI PANELİ (Kurulmadan Önce) */}
-              {renderRoomSettings()}
+              <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap: 16 }}>
+                {/* ODA KUR */}
+                <div style={{ background: 'rgba(230, 126, 34, 0.1)', border: '1px solid rgba(230, 126, 34, 0.3)', borderRadius: 12, padding: 16, display: 'flex', flexDirection: 'column' }}>
+                  <h3 style={{color: '#E67E22', fontSize: 14, marginBottom: 12, textAlign: 'center'}}>✨ Yeni Oyun Kur</h3>
+                  <label style={{ display: 'flex', alignItems: 'center', marginBottom: 12, cursor: 'pointer', background: 'rgba(0,0,0,0.2)', padding: '8px', borderRadius: 8 }}>
+                    <input type="checkbox" checked={roomSettings.isPublic} onChange={e => setRoomSettings(prev => ({ ...prev, isPublic: e.target.checked }))} style={{ marginRight: 8 }} />
+                    <span style={{ fontSize: 12, color: '#fff' }}>🌍 Herkese Açık Yap</span>
+                  </label>
+                  {renderRoomSettings()}
+                  <div style={{flex:1}}></div>
+                  <button onClick={handleCreate} className="lobby-action-btn" style={{ ...btnStyle('linear-gradient(135deg, #E67E22, #D35400)'), width: '100%', padding: '12px', fontSize: 14, marginTop: 'auto' }}>
+                    🚀 Oda Oluştur
+                  </button>
+                </div>
 
-              <button onClick={handleCreate} style={{ ...btnStyle('#E67E22'), width: '100%', padding: '12px', fontSize: 15, marginBottom: 12 }}>
-                Yeni Oda Oluştur
-              </button>
-              <div style={{ textAlign: 'center', color: '#666', marginBottom: 12, fontSize: 12 }}>— ya da —</div>
-              <div style={{ display: 'flex', gap: 8, marginBottom: 16 }}>
-                <input value={joinCode} onChange={e => setJoinCode(e.target.value.toUpperCase())} placeholder="Oda Kodu" style={{ ...inputStyle, letterSpacing: 2, textAlign: 'center', marginBottom: 0, flex: 1 }} />
-                <button onClick={handleJoin} style={{ ...btnStyle('#2ECC71'), padding: '12px 20px', fontSize: 14 }}>Katıl</button>
+                {/* ODAYA KATIL */}
+                <div style={{ background: 'rgba(46, 204, 113, 0.1)', border: '1px solid rgba(46, 204, 113, 0.3)', borderRadius: 12, padding: 16, display: 'flex', flexDirection: 'column' }}>
+                  <h3 style={{color: '#2ECC71', fontSize: 14, marginBottom: 12, textAlign: 'center'}}>🔑 Özel Odaya Katıl</h3>
+                  <input value={joinCode} onChange={e => setJoinCode(e.target.value.toUpperCase())} placeholder="Oda Kodu" style={{ ...inputStyle, letterSpacing: 2, textAlign: 'center', background: 'rgba(0,0,0,0.3)', border: '1px solid rgba(46,204,113,0.3)', marginBottom: 12 }} />
+                  <div style={{flex:1}}></div>
+                  <button onClick={handleJoin} className="lobby-action-btn" style={{ ...btnStyle('linear-gradient(135deg, #2ECC71, #27AE60)'), width: '100%', padding: '12px', fontSize: 14, marginTop: 'auto' }}>
+                    Aramıza Katıl
+                  </button>
+                </div>
               </div>
-              
+
               {/* AÇIK ODALAR LİSTESİ */}
-              <div style={{ background: 'rgba(0,0,0,0.3)', padding: 12, borderRadius: 8, marginTop: 10 }}>
+              <div style={{ background: 'rgba(52, 152, 219, 0.1)', border: '1px solid rgba(52, 152, 219, 0.3)', padding: 16, borderRadius: 12, marginTop: 16 }}>
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
                   <div style={{ fontSize: 12, color: '#aaa', fontWeight: 'bold' }}>🌍 AÇIK ODALAR</div>
                   <button onClick={() => socket?.emit('requestPublicRooms')} style={{ background: 'rgba(255,255,255,0.1)', border: 'none', color: '#fff', padding: '4px 8px', borderRadius: 4, cursor: 'pointer', fontSize: 10 }}>
@@ -1943,18 +1959,21 @@ export default function App() {
             </>
           ) : (
             <div style={{ textAlign: 'center' }}>
-              <div style={{ fontSize: 13, color: '#aaa', marginBottom: 8 }}>Oda Kodu (arkadaşlarına ver):</div>
-              <div style={{ fontSize: 36, fontWeight: 900, color: '#FFD700', letterSpacing: 8, marginBottom: 16 }}>{roomCode}</div>
-              <div style={{ color: '#aaa', fontSize: 12, marginBottom: 12 }}>
+              <div style={{ fontSize: 12, color: '#aaa', marginBottom: 8, textTransform: 'uppercase', letterSpacing: 1 }}>Oda Kodu (Arkadaşlarınla Paylaş)</div>
+              <div style={{ display: 'inline-block', background: 'rgba(0,0,0,0.4)', border: '2px dashed #FFD700', borderRadius: 12, padding: '12px 30px', marginBottom: 20, cursor: 'pointer', transition: 'transform 0.2s' }} onMouseOver={e=>e.currentTarget.style.transform='scale(1.05)'} onMouseOut={e=>e.currentTarget.style.transform='scale(1)'} onClick={() => { navigator.clipboard.writeText(roomCode); showToast('Oda kodu kopyalandı!', 'success'); }}>
+                <div style={{ fontSize: 40, fontWeight: 900, color: '#FFD700', letterSpacing: 8, textShadow: '0 0 15px rgba(255,215,0,0.5)' }}>{roomCode} <span style={{fontSize:20, verticalAlign:'middle'}}>📋</span></div>
+              </div>
+              
+              <div style={{ color: '#aaa', fontSize: 13, marginBottom: 16 }}>
                 {gameState?.players?.length || 1}/5 oyuncu
               </div>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 12, alignItems: 'center', marginTop: 16 }}>
+              
+              <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap: 12, marginBottom: 24, textAlign: 'left' }}>
                 {gameState?.players?.map((p, idx) => (
                   <div key={p.id} style={{ 
                     display: 'flex', alignItems: 'center', gap: 12, 
-                    background: 'rgba(255,255,255,0.05)', padding: '8px 16px', borderRadius: 50,
-                    border: `1px solid ${PLAYER_COLORS[idx % PLAYER_COLORS.length]}55`,
-                    width: '100%'
+                    background: 'rgba(255,255,255,0.05)', padding: '8px 12px', borderRadius: 12,
+                    border: `1px solid ${PLAYER_COLORS[idx % PLAYER_COLORS.length]}55`
                   }}>
                     <img 
                       src={`https://api.dicebear.com/7.x/${p.avatar || 'avataaars'}/svg?seed=${p.name}`} 
@@ -1971,13 +1990,15 @@ export default function App() {
                           }
                         }
                       }}
-                      style={{ width: 40, height: 40, borderRadius: '50%', background: 'rgba(0,0,0,0.2)', cursor: p.id === playerId ? 'pointer' : 'default' }} 
+                      style={{ width: 44, height: 44, borderRadius: '50%', background: 'rgba(0,0,0,0.2)', cursor: p.id === playerId ? 'pointer' : 'default' }} 
                     />
-                    <span style={{ color: '#fff', fontSize: 15, fontWeight: 'bold' }}>
-                      {p.name}
-                    </span>
-                    {p.id === playerId && <span style={{ marginLeft: 'auto', fontSize: 11, background: '#FFD700', color: '#000', padding: '2px 8px', borderRadius: 10, fontWeight: 'bold' }}>SEN</span>}
-                    {idx === 0 && <span style={{ marginLeft: p.id === playerId ? 0 : 'auto', fontSize: 11, background: '#8E44AD', color: '#fff', padding: '2px 8px', borderRadius: 10, fontWeight: 'bold' }}>HOST</span>}
+                    <div style={{ display: 'flex', flexDirection: 'column', flex: 1 }}>
+                      <span style={{ color: '#fff', fontSize: 14, fontWeight: 'bold' }}>{p.name}</span>
+                      <div style={{ display: 'flex', gap: 6, marginTop: 4 }}>
+                        {p.id === playerId && <span style={{ fontSize: 9, background: '#FFD700', color: '#000', padding: '2px 6px', borderRadius: 10, fontWeight: 'bold' }}>SEN</span>}
+                        {idx === 0 && <span style={{ fontSize: 9, background: '#8E44AD', color: '#fff', padding: '2px 6px', borderRadius: 10, fontWeight: 'bold' }}>HOST</span>}
+                      </div>
+                    </div>
                   </div>
                 ))}
               </div>
