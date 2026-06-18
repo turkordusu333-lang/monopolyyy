@@ -11,7 +11,15 @@ class MonopolyDealGame {
     this.winSets = parseInt(settings.winSets) || 3; // Kazanma hedefi
     this.startCards = parseInt(settings.startCards) || 5; // Başlangıç kartı
     this.handLimit = parseInt(settings.handLimit) || 7; // El limiti
-    this.players = []; // { id, name, hand, bank, properties, buildings, connected }
+    this.allowCounterJustSayNo = settings.allowCounterJustSayNo ?? true; // Çifte Reddet ayarı
+    this.openHands = settings.openHands ?? false; // Açık El (Antrenman)
+    this.lockWildcards = settings.lockWildcards ?? false; // Joker Kilidi
+    this.fastChallenge = settings.fastChallenge ?? false; // 15 Sn Hızlı Reddet
+    this.allowTrades = settings.allowTrades ?? false; // Barışçıl Takas
+    this.streetThugs = settings.streetThugs ?? false; // Sokak Haydutları
+    this.gambleZari = settings.gambleZari ?? false; // Kumarbazın Zarı
+    this.extraDealBreakers = parseInt(settings.extraDealBreakers) || 0; // Özel Deste (+ Anlaşma Bozucu)
+    this.players = []; // { id, name, avatar, hand, bank, properties, buildings, connected }
     this.deck = [];
     this.discard = [];
     this.currentPlayerIndex = 0;
@@ -19,33 +27,38 @@ class MonopolyDealGame {
     this.phase = 'waiting'; // waiting, playing, ended
     this.winner = null;
     this.log = [];
+    this.scavengeMarket = []; // Karaborsa (Sokak Haydutları)
 
     this.turnStartTime = null; // Turun başladığı zaman damgası
     this.turnPausedRemaining = null; // Durdurulan süreden kalan miktar
+    this.challengeStartTime = null; // İtiraz sayacı (Hızlı reddet için)
     // Bekleyen "Reddet!" pencereleri (Hamle kartına itiraz)
     this.pendingChallenges = []; // { id, action, data, sourceId, targetId, cancelled, responderId }
     // Bekleyen ödemeler (oyuncu manuel seçim yapar)
     this.pendingPayments = []; // { id, payerId, collectorId, amount, reason }
+    this.pendingTrades = []; // Barışçıl Takas İstekleri
     this.theme = 'default';
   }
 
-  addPlayer(id, name) {
+  addPlayer(id, name, avatar = 'avataaars') {
     // Yeniden bağlanma kontrolü: Eğer bu ID'ye sahip oyuncu zaten varsa (sayfa yenilendiğinde)
     const existing = this.players.find(p => p.id === id);
     if (existing) {
+      existing.avatar = avatar; // Yeniden bağlanırken avatarı güncelle
       existing.connected = true;
       return true;
     }
 
     if (this.players.length >= 5 || this.phase !== 'waiting') return false;
     this.players.push({
-      id, name,
+      id, name, avatar,
       hand: [],
       bank: [],
       properties: {}, // color -> [cards]
       buildings: {},  // color -> { houses: n, hotel: bool }
       connected: true,
       isAFK: false, // Otomatik geçen/uyuyan oyuncu bayrağı
+      hasGambledThisTurn: false,
       stats: { rentCollected: 0, cardsDrawn: 0, stealsPerformed: 0, totalMoneyBanked: 0, actionsPlayed: 0 }
     });
     return true;
@@ -70,14 +83,29 @@ class MonopolyDealGame {
     if (settings.winSets) this.winSets = parseInt(settings.winSets);
     if (settings.startCards) this.startCards = parseInt(settings.startCards);
     if (settings.handLimit) this.handLimit = parseInt(settings.handLimit);
+    if (settings.allowCounterJustSayNo !== undefined) this.allowCounterJustSayNo = settings.allowCounterJustSayNo;
+    if (settings.openHands !== undefined) this.openHands = settings.openHands;
+    if (settings.lockWildcards !== undefined) this.lockWildcards = settings.lockWildcards;
+    if (settings.fastChallenge !== undefined) this.fastChallenge = settings.fastChallenge;
+    if (settings.allowTrades !== undefined) this.allowTrades = settings.allowTrades;
+    if (settings.streetThugs !== undefined) this.streetThugs = settings.streetThugs;
+    if (settings.gambleZari !== undefined) this.gambleZari = settings.gambleZari;
+    if (settings.extraDealBreakers !== undefined) this.extraDealBreakers = parseInt(settings.extraDealBreakers);
 
-    this.deck = shuffle(createDeck());
+    let newDeck = createDeck();
+    // ÖZEL DESTE: Ekstra Anlaşma Bozucu Ekleme
+    for(let i = 0; i < this.extraDealBreakers; i++) {
+      newDeck.push({ id: `custom_db_${i}`, type: 'action', action: 'dealbreaker', name: 'Anlaşma Bozucu (ÖZEL)', value: 5, key: 'action_dealbreaker', colors: [] });
+    }
+    this.deck = shuffle(newDeck);
     this.discard = [];
     this.phase = 'playing';
     this.winner = null;
     this.log = [];
     this.pendingChallenges = [];
     this.pendingPayments = [];
+    this.pendingTrades = [];
+    this.scavengeMarket = [];
     this.players.forEach(p => {
       p.hand = [];
       p.bank = [];
@@ -86,6 +114,7 @@ class MonopolyDealGame {
       p.stats = { // İstatistikleri sıfırla
         rentCollected: 0, cardsDrawn: 0, stealsPerformed: 0, totalMoneyBanked: 0, actionsPlayed: 0
       };
+      p.hasGambledThisTurn = false;
       p.hand = this.drawCards(this.startCards);
       p.stats.cardsDrawn = this.startCards; // İlk çekilen kartları say
     });
@@ -125,7 +154,7 @@ class MonopolyDealGame {
   }
 
   get hasBlockingState() {
-    return this.pendingChallenges.length > 0 || this.pendingPayments.length > 0;
+    return this.pendingChallenges.length > 0 || this.pendingPayments.length > 0 || this.pendingTrades.length > 0;
   }
 
   drawCards(n) {
@@ -238,6 +267,8 @@ class MonopolyDealGame {
     
     if (this.currentPlayer.id !== playerId) return { ok: false, error: 'Sıra sende değil' };
     if (this.hasBlockingState) return { ok: false, error: 'Önce bekleyen ödeme/itirazları çöz' };
+
+    if (this.lockWildcards) return { ok: false, error: 'Bu odada "Joker Kilidi" açık. Yere inmiş jokerlerin rengi bir daha değiştirilemez!' };
 
     let foundCard = null, foundColor = null;
     for (const [color, cards] of Object.entries(player.properties)) {
@@ -513,6 +544,7 @@ class MonopolyDealGame {
   // ──────────────────────────────────────────────────────────
   openChallenge({ action, sourceId, targetId, data }) {
     this.pauseTurnTimer(3); // Araya girildi! Süreyi dondur ve +3 saniye hediye et
+    this.challengeStartTime = Date.now(); // Hızlı reddet için itiraz başlangıcı
     
     this.pendingChallenges.push({
       id: nextPendingId(),
@@ -540,6 +572,10 @@ class MonopolyDealGame {
     if (ch.responderId !== playerId) return { ok: false, error: 'Sırada sen değilsin' };
 
     if (useJustSayNo) {
+      if (!this.allowCounterJustSayNo && ch.cancelled) {
+        return { ok: false, error: 'Bu odada Çifte Reddet (İtiraza itiraz) kuralı kapalıdır.' };
+      }
+      
       const cardIdx = player.hand.findIndex(c => c.action === 'justsayno');
       if (cardIdx === -1) return { ok: false, error: 'Reddet! kartın yok' };
       const jCard = player.hand.splice(cardIdx, 1)[0];
@@ -796,6 +832,132 @@ class MonopolyDealGame {
     return rent;
   }
 
+  // ──────────────────────────────────────────────────────────
+  // BARIŞÇIL TAKAS SİSTEMİ
+  // ──────────────────────────────────────────────────────────
+  proposeTrade(sourceId, targetId, offerBankIds, offerPropIds, requestBankIds, requestPropIds) {
+    if (!this.allowTrades) return { ok: false, error: 'Bu odada Barışçıl Takas kapalı.' };
+    if (this.currentPlayer.id !== sourceId) return { ok: false, error: 'Sıra sende değil' };
+    if (this.hasBlockingState) return { ok: false, error: 'Önce bekleyen eylemleri çöz' };
+    if (this.actionsLeft <= 0) return { ok: false, error: 'Aksiyon hakkın bitti' };
+
+    const target = this.players.find(p => p.id === targetId);
+    if (!target) return { ok: false, error: 'Hedef bulunamadı' };
+
+    this.pendingTrades.push({ id: nextPendingId(), sourceId, targetId, offerBankIds, offerPropIds, requestBankIds, requestPropIds });
+    this.pauseTurnTimer(15);
+    this.addLog(`${this.currentPlayer.name}, ${target.name} ile barışçıl bir takas yapmak istiyor! 🤝`, 'action');
+    return { ok: true };
+  }
+
+  respondToTrade(playerId, tradeId, accepted) {
+    const tradeIndex = this.pendingTrades.findIndex(t => t.id === tradeId);
+    if (tradeIndex === -1) return { ok: false, error: 'Takas bulunamadı' };
+    const trade = this.pendingTrades[tradeIndex];
+    if (trade.targetId !== playerId) return { ok: false, error: 'Bu takas sana gelmedi' };
+
+    this.pendingTrades.splice(tradeIndex, 1);
+    this.resumeTurnTimer();
+    const source = this.players.find(p => p.id === trade.sourceId);
+    const target = this.players.find(p => p.id === trade.targetId);
+
+    if (!accepted) {
+      this.addLog(`${target.name}, takas teklifini reddetti. ❌`, 'system');
+      return { ok: true };
+    }
+
+    this.actionsLeft -= 1; // Takas 1 aksiyon puanı yer
+    if (this.actionsLeft < 0) this.actionsLeft = 0;
+
+    const extractCards = (player, bankIds, propIds) => {
+      const bank = [], props = [];
+      bankIds.forEach(id => { const idx = player.bank.findIndex(c => c.id === id); if(idx !== -1) bank.push(player.bank.splice(idx,1)[0]); });
+      propIds.forEach(id => {
+        for (const col in player.properties) {
+          const idx = player.properties[col].findIndex(c => c.id === id);
+          if(idx !== -1) { props.push(player.properties[col].splice(idx,1)[0]); if(player.properties[col].length === 0) delete player.properties[col]; break; }
+        }
+      });
+      return { bank, props };
+    };
+
+    const offerCards = extractCards(source, trade.offerBankIds, trade.offerPropIds);
+    const requestCards = extractCards(target, trade.requestBankIds, trade.requestPropIds);
+
+    target.bank.push(...offerCards.bank);
+    offerCards.props.forEach(c => { const col = c.activeColor || c.color || 'wild'; if(!target.properties[col]) target.properties[col] = []; target.properties[col].push({...c, activeColor: col}); });
+    source.bank.push(...requestCards.bank);
+    requestCards.props.forEach(c => { const col = c.activeColor || c.color || 'wild'; if(!source.properties[col]) source.properties[col] = []; source.properties[col].push({...c, activeColor: col}); });
+
+    this.addLog(`${source.name} ve ${target.name} takas yaptı! 🤝`, 'property');
+    this.checkWin();
+    return { ok: true };
+  }
+
+  buyScavengeCard(playerId, cardId) {
+    if (!this.streetThugs) return { ok: false, error: 'Sokak Haydutları kapalı' };
+    const player = this.players.find(p => p.id === playerId);
+    if (!player) return { ok: false };
+    
+    const cardIdx = this.scavengeMarket.findIndex(c => c.id === cardId);
+    if (cardIdx === -1) return { ok: false, error: 'Kart karaborsada yok' };
+    
+    const totalBank = player.bank.reduce((s, c) => s + c.value, 0);
+    if (totalBank < 2) return { ok: false, error: 'Bankanda en az 2M olmalı (sadece nakit geçerlidir)' };
+    
+    let paid = 0;
+    const bankCards = [...player.bank].sort((a,b) => a.value - b.value);
+    const cardsToPay = [];
+    for (const c of bankCards) {
+        paid += c.value;
+        cardsToPay.push(c);
+        if (paid >= 2) break;
+    }
+    
+    cardsToPay.forEach(c => {
+        const idx = player.bank.findIndex(x => x.id === c.id);
+        if (idx !== -1) this.discard.push(player.bank.splice(idx, 1)[0]);
+    });
+    
+    const card = this.scavengeMarket.splice(cardIdx, 1)[0];
+    player.hand.push(card);
+    this.addLog(`${player.name}, Karaborsa'dan 2M ödeyerek çöpten kart aldı! 🕵️`, 'draw');
+    return { ok: true };
+  }
+
+  rollGambleDice(playerId) {
+    if (!this.gambleZari) return { ok: false, error: 'Kumarbazın Zarı kapalı' };
+    if (this.currentPlayer.id !== playerId) return { ok: false, error: 'Sıra sende değil' };
+    const player = this.currentPlayer;
+    if (player.hasGambledThisTurn) return { ok: false, error: 'Bu tur zaten zar attın' };
+    if (this.actionsLeft <= 0) return { ok: false, error: 'Aksiyon hakkın bitti' };
+    if (this.hasBlockingState) return { ok: false, error: 'Önce bekleyen eylemleri çöz' };
+
+    player.hasGambledThisTurn = true;
+    this.actionsLeft -= 1;
+    const roll = Math.floor(Math.random() * 6) + 1;
+    
+    if (roll <= 3) {
+        if (player.hand.length > 0) {
+            const randIdx = Math.floor(Math.random() * player.hand.length);
+            const lost = player.hand.splice(randIdx, 1)[0];
+            this.discard.push(lost);
+            this.addLog(`${player.name} zar attı: 🎲 ${roll}. Kötü şans! Elinden rastgele "${lost.name}" uçup gitti.`, 'system');
+        } else {
+            this.addLog(`${player.name} zar attı: 🎲 ${roll}. Şanslı! Eli boş olduğu için bir şey kaybetmedi.`, 'system');
+        }
+    } else {
+        const drawn = this.drawCards(2);
+        player.hand.push(...drawn);
+        this.addLog(`${player.name} zar attı: 🎲 ${roll}. Jackpot! Desteden 2 kart çekti.`, 'system');
+    }
+    
+    if (this.actionsLeft === 0 && this.autoEndTurn) this.endTurn(playerId);
+    else this.resetTurnTimer();
+    
+    return { ok: true, roll };
+  }
+
   discardDown(playerId, cardIds) {
     const player = this.players.find(p => p.id === playerId);
     if (!player) return { ok: false };
@@ -808,7 +970,11 @@ class MonopolyDealGame {
 
     cardIds.forEach(cid => {
       const idx = player.hand.findIndex(c => c.id === cid);
-      if (idx !== -1) this.discard.push(player.hand.splice(idx, 1)[0]);
+      if (idx !== -1) {
+        const c = player.hand.splice(idx, 1)[0];
+        if (this.streetThugs) this.scavengeMarket.push(c);
+        else this.discard.push(c);
+      }
     });
     this.addLog(`${player.name} ${over} kart attı`, 'draw');
     return { ok: true };
@@ -830,6 +996,7 @@ class MonopolyDealGame {
       player.isAFK = false;
     }
 
+    player.hasGambledThisTurn = false;
     this.currentPlayerIndex = (this.currentPlayerIndex + 1) % this.players.length;
     this.actionsLeft = 3;
     this.addLog(`--- Sıra ${this.currentPlayer.name} oyuncusuna geçti (Elde ${this.currentPlayer.hand.length} kart kaldı) ---`, 'system');
@@ -856,7 +1023,7 @@ class MonopolyDealGame {
 
   addLog(msg, type = 'info') {
     this.log.push({ msg, type, time: Date.now() });
-    if (this.log.length > 50) this.log.shift();
+    if (this.log.length > 80) this.log.shift(); // Maç Özeti için log limiti yükseltildi
   }
 
   getState(forPlayerId) {
@@ -867,6 +1034,11 @@ class MonopolyDealGame {
       turnStartTime: this.turnStartTime,
       turnPausedRemaining: this.turnPausedRemaining,
       turnTimer: this.turnTimer,
+      fastChallenge: this.fastChallenge,
+      allowTrades: this.allowTrades,
+      streetThugs: this.streetThugs,
+      gambleZari: this.gambleZari,
+      challengeStartTime: this.challengeStartTime,
       winSets: this.winSets,
       handLimit: this.handLimit,
       actionsLeft: this.actionsLeft,
@@ -874,20 +1046,23 @@ class MonopolyDealGame {
       players: this.players.map(p => ({
         id: p.id,
         name: p.name,
+        avatar: p.avatar,
         handCount: p.hand.length,
-        hand: p.id === forPlayerId ? p.hand : [],
+        hand: (p.id === forPlayerId || this.openHands) ? p.hand : [],
         bank: p.bank,
         bankTotal: p.bank.reduce((s, c) => s + (c.value || 0), 0),
         properties: p.properties,
         buildings: p.buildings,
         connected: p.connected,
         isAFK: p.isAFK,
+        hasGambledThisTurn: p.hasGambledThisTurn,
         hasJustSayNo: p.hand.some(c => c.action === 'justsayno'),
         stats: p.stats, // İstatistikleri istemciye gönder
       })),
       deckCount: this.deck.length,
       discard: this.discard.slice(-5), // Son 5 iskarta kartını gönder
-      log: this.log.slice(-20),
+      log: this.log, // Tümü (max 80) gönderilir
+      scavengeMarket: this.scavengeMarket, // Karaborsa kartları
       // Bana ait bekleyen ödeme (varsa)
       myPendingPayment: this.pendingPayments.find(p => p.payerId === forPlayerId) || null,
       // Tüm bekleyen ödemeler (gözlem için - kimden kime)
@@ -914,6 +1089,18 @@ class MonopolyDealGame {
         cancelled: c.cancelled,
         data: c.data,
       })),
+      // Takas İstekleri
+      pendingTrades: this.pendingTrades.map(t => ({
+        id: t.id,
+        sourceId: t.sourceId,
+        sourceName: this.players.find(x => x.id === t.sourceId)?.name,
+        targetId: t.targetId,
+        targetName: this.players.find(x => x.id === t.targetId)?.name,
+        offerBankIds: t.offerBankIds,
+        offerPropIds: t.offerPropIds,
+        requestBankIds: t.requestBankIds,
+        requestPropIds: t.requestPropIds
+      }))
     };
   }
 }

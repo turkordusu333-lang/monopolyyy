@@ -4,7 +4,7 @@ import { motion, AnimatePresence, useIsPresent } from 'framer-motion';
 import './App.css';
 import {
   isSoundEnabled, setSoundEnabled, sfxCardPlay, sfxCardDraw, sfxWhoosh, sfxCoin, sfxError, sfxYourTurn, sfxTurnEnded, sfxAlert, sfxPaymentDue, sfxBuild, sfxClick,
-  sfxTick, playBGM, stopBGM, setBgmVolume, sfxLaugh, sfxAngry, sfxChaChing
+  sfxTick, playBGM, stopBGM, setBgmVolume, setBgmTension, sfxLaugh, sfxAngry, sfxChaChing, sfxGlassBreak, sfxPartyHorn
 } from './sounds';
 import { THEMES, COLOR_INFO, PLAYER_COLORS, SET_SIZES, ACTION_STYLE, CARD_TOTAL_COUNTS } from './constants';
 import { getCardTip, isSetComplete, getCardTotalCount, getRarity } from './utils';
@@ -108,6 +108,8 @@ const FannedPropertySet = ({ color, cards, buildings, isOwn, onFlip, onHoverCard
 
 // ---- MAIN APP ----
 export default function App() {
+  const AVATAR_STYLES = ['avataaars', 'bottts', 'fun-emoji', 'micah', 'lorelei'];
+  const [myAvatarStyle, setMyAvatarStyle] = useState(localStorage.getItem('md_avatar') || 'avataaars');
   const [socket, setSocket] = useState(null);
   const [screen, setScreen] = useState('lobby'); // lobby, game
   const [myName, setMyName] = useState(localStorage.getItem('md_name') || '');
@@ -144,7 +146,8 @@ export default function App() {
   const myBankRef = useRef(null); // Kendi bankamızın pozisyonu için
   const [previewCard, setPreviewCard] = useState(null);
   const [payingFlyingCards, setPayingFlyingCards] = useState([]); // Ödeme animasyonu için
-  const [roomSettings, setRoomSettings] = useState({ autoEndTurn: true, turnTimer: 0, winSets: 3, startCards: 5, handLimit: 7, isPublic: false }); 
+  const [roomSettings, setRoomSettings] = useState({ autoEndTurn: true, turnTimer: 0, winSets: 3, startCards: 5, handLimit: 7, isPublic: false, allowCounterJustSayNo: true, openHands: false, lockWildcards: false, fastChallenge: false, allowTrades: true, extraDealBreakers: 0, streetThugs: false, gambleZari: false }); 
+  const [tradeSelection, setTradeSelection] = useState({ offerBankIds: [], offerPropIds: [], requestBankIds: [], requestPropIds: [] });
   const [publicRooms, setPublicRooms] = useState([]); // Açık odalar
   const draggedRef = useRef(false); // Kart sürükleniyor mu? (onClick ile çakışmayı önlemek için)
   const [isDragging, setIsDragging] = useState(false); // Kart sürükleniyor mu?
@@ -177,12 +180,20 @@ export default function App() {
   const [now, setNow] = useState(Date.now()); // Canlı tur süresi sayacı için
   const prevTurnAlertRef = useRef(null); // Süre dolduğunda çalacak alarm için
   const [mousePos, setMousePos] = useState({ x: 0, y: 0 }); // Dinamik önizleme ekranı için
+  const [chatMessages, setChatMessages] = useState([]);
+  const [chatInput, setChatInput] = useState('');
+  const [isChatOpen, setIsChatOpen] = useState(false);
+  const chatEndRef = useRef(null);
+  const [rageQuit, setRageQuit] = useState(false);
+  const [showHistoryModal, setShowHistoryModal] = useState(false);
+  const [showScavengeModal, setShowScavengeModal] = useState(false);
 
   // ---- TEMEL DURUM SABİTLERİ (TDZ Hatasını Önlemek İçin En Üstte) ----
   const me = gameState?.players?.find(p => p.id === playerId);
   const isMyTurn = gameState?.currentPlayerId === playerId;
-  const isBlocked = (gameState?.pendingChallenges?.length > 0) || (gameState?.pendingPayments?.length > 0);
+  const isBlocked = (gameState?.pendingChallenges?.length > 0) || (gameState?.pendingPayments?.length > 0) || (gameState?.pendingTrades?.length > 0);
   const activeTheme = gameState?.theme || selectedTheme;
+  const myPendingTrade = gameState?.pendingTrades?.find(t => t.targetId === playerId);
 
   // ---- DİNAMİK MOUSE TAKİBİ (Sadece Masaüstü) ----
   useEffect(() => {
@@ -371,7 +382,7 @@ export default function App() {
       const savedPid = localStorage.getItem('md_pid');
 
       if (savedRoom && savedName && savedPid) {
-        s.emit('joinRoom', { roomCode: savedRoom, name: savedName, reconnectPlayerId: savedPid }, (res) => {
+        s.emit('joinRoom', { roomCode: savedRoom, name: savedName, reconnectPlayerId: savedPid, avatar: myAvatarStyle }, (res) => {
           if (res.ok) {
             setPlayerId(savedPid);
             setStatus('Oturum geri yüklendi');
@@ -406,6 +417,14 @@ export default function App() {
     s.on('gameStarted', () => setStatus('Oyun başladı!'));
     s.on('playerJoined', ({ name, playerCount }) => setStatus(`${name} katıldı (${playerCount} oyuncu)`));
     
+    s.on('chatMessage', (msg) => {
+      setChatMessages(prev => [...prev.slice(-49), msg]);
+      if (!isChatOpen) {
+        showToast(`💬 ${msg.senderName}: ${msg.text}`, 'info', 3000);
+        sfxClick();
+      }
+    });
+
     // Sunucudan gelen isim değişikliği olayını dinle
     s.on('playerNameChanged', ({ oldName, newName }) => {
       const msg = `${oldName} ismini ${newName} olarak değiştirdi.`;
@@ -427,6 +446,23 @@ export default function App() {
     setSocket(s);
     return () => s.disconnect();
   }, []);
+
+  // ---- DİNAMİK GERİLİM MÜZİĞİ (Tension BGM) ----
+  useEffect(() => {
+    if (!gameState || gameState.phase !== 'playing') {
+      setBgmTension(false);
+      return;
+    }
+    // Odadaki oyunculardan herhangi biri kazanmaya (WinSets - 1) ulaştıysa gerilimi başlat
+    const isAnyoneCloseToWin = gameState.players.some(p => {
+      let cSets = 0;
+      Object.entries(p.properties || {}).forEach(([color, cards]) => {
+        if(isSetComplete(cards, color)) cSets++;
+      });
+      return cSets >= (gameState.winSets - 1);
+    });
+    setBgmTension(isAnyoneCloseToWin);
+  }, [gameState?.players, gameState?.winSets, gameState?.phase]);
 
   const handleCloseRoom = () => {
     if (!socket || !roomCode) return;
@@ -611,24 +647,33 @@ export default function App() {
 
     const lastLog = lastEntry.msg.toLowerCase();
     let overlay = null;
+    const actorName = lastEntry.msg.split(',')[0] || lastEntry.msg.split(' ')[0] || 'Biri';
 
     if (lastEntry.type === 'action') {
-      if (lastLog.includes('kira')) { overlay = { text: 'KİRA ÖDEMESİ!', icon: '🧾' }; playTurkishVoice('Kira zamanı! Pamuk eller cebe, çabuk öde.'); }
-      else if (lastLog.includes('çaldı') || lastLog.includes('sinsi') || lastLog.includes('aldı!')) { overlay = { text: 'ARAZİ ÇALINDI!', icon: '🫳' }; playTurkishVoice('O güzel arazini sinsi bir şekilde yürütüyorum. Teşekkürler!'); }
-      else if (lastLog.includes('takas') || lastLog.includes('zorunlu')) { overlay = { text: 'ZORUNLU TAKAS!', icon: '🔁' }; playTurkishVoice('İtiraz istemiyorum, o kartı bana ver bunu sen al. Zorunlu takas!'); }
+      if (lastLog.includes('kira')) { overlay = { text: 'KİRA ÖDEMESİ!', icon: '🧾' }; playTurkishVoice(`${actorName} kira istiyor. Pamuk eller cebe!`); }
+      else if (lastLog.includes('çaldı') || lastLog.includes('sinsi') || lastLog.includes('aldı!')) { overlay = { text: 'HIRSIZLIK!', icon: '🥷' }; playTurkishVoice(`${actorName} sinsi bir şekilde arazi çaldı.`); }
+      else if (lastLog.includes('takas') || lastLog.includes('zorunlu')) { overlay = { text: 'ZORUNLU TAKAS!', icon: '🔁' }; playTurkishVoice(`${actorName} zorunlu takas oynadı! Kartlar el değiştiriyor.`); }
       else if (lastLog.includes('anlaşma bozucu')) { 
         overlay = { text: 'ANLAŞMA BOZULDU!', icon: '💣' }; 
-        playTurkishVoice('İşte bu bir soygun! Anlaşma bozuldu, o bütün set artık tamamen benim.'); 
+        playTurkishVoice(`İşte bu bir soygun! ${actorName} Anlaşma Bozucu oynadı ve koca bir seti çaldı.`); 
+        sfxGlassBreak();
         setBoardShake('heavy'); setTimeout(() => setBoardShake(false), 1200); // Sinematik Sarsıntı
       }
-      else if (lastLog.includes('reddet')) { overlay = { text: 'REDDEDİLDİ!', icon: '🛡️' }; playTurkishVoice('Hadi oradan! Bunu kesinlikle reddediyorum.'); }
-      else if (lastLog.includes('borç') || lastLog.includes('tahsildar') || lastLog.includes('haciz')) { playTurkishVoice('Borç tahsildarı kapıda! Paraları hemen masaya dökün.'); }
-      else if (lastLog.includes('doğum günü')) { playTurkishVoice('Bugün benim doğum günüm! Herkes bana hediye olarak para versin.'); }
-      else if (lastLog.includes('başlangıç') || lastLog.includes('pass go')) { playTurkishVoice('Başlangıç noktasından geçiyorum, taze kartlarım yolda.'); }
-    } else if (lastEntry.type === 'property' && (lastLog.includes('ev') || lastLog.includes('otel'))) {
-      playTurkishVoice('Ohooo! Yeni bir bina diktim, buradan geçen fena yanacak!');
-      sfxBuild();
-      showToast(lastEntry.msg, 'success');
+      else if (lastLog.includes('reddet')) { overlay = { text: 'REDDEDİLDİ!', icon: '🛡️' }; playTurkishVoice(`Hadi oradan! ${actorName} reddet kartı oynadı.`); }
+      else if (lastLog.includes('borç') || lastLog.includes('tahsildar') || lastLog.includes('haciz')) { playTurkishVoice(`${actorName} borç tahsildarı oynadı. Paraları hemen masaya dökün.`); }
+      else if (lastLog.includes('doğum günü')) { 
+        playTurkishVoice(`Bugün ${actorName}'in doğum günü! Herkes hediye olarak para versin.`); 
+        sfxPartyHorn();
+      }
+      else if (lastLog.includes('başlangıç') || lastLog.includes('pass go')) { playTurkishVoice(`${actorName} başlangıç kartı oynadı ve desteden iki yeni kart çekti.`); }
+    } else if (lastEntry.type === 'property') {
+      if (lastLog.includes('ev') || lastLog.includes('otel')) {
+        playTurkishVoice(`Ohooo! ${actorName} yeni bir bina dikti, buradan geçen fena yanacak!`);
+        sfxBuild();
+        showToast(lastEntry.msg, 'success');
+      } else {
+        playTurkishVoice(`${actorName} masaya yeni bir arazi kartı yerleştirdi.`);
+      }
     }
 
     if (overlay) {
@@ -829,7 +874,7 @@ export default function App() {
     if (!myName.trim()) return setError('İsim gir');
     if (!socket || !socket.connected) return setError('Sunucuya henüz bağlanılamadı, lütfen bekleyin...');
     
-    socket.emit('createRoom', { name: myName, settings: roomSettings }, (res) => {
+    socket.emit('createRoom', { name: myName, settings: { ...roomSettings, avatar: myAvatarStyle } }, (res) => {
       if (res.ok) {
         setRoomCode(res.roomCode);
         setPlayerId(res.playerId);
@@ -845,7 +890,7 @@ export default function App() {
     if (!myName.trim() || !joinCode.trim()) return setError('İsim ve kod gir');
     if (!socket || !socket.connected) return setError('Sunucuya henüz bağlanılamadı, lütfen bekleyin...');
     
-    socket.emit('joinRoom', { roomCode: joinCode.toUpperCase(), name: myName }, (res) => {
+    socket.emit('joinRoom', { roomCode: joinCode.toUpperCase(), name: myName, avatar: myAvatarStyle }, (res) => {
       if (res.ok) {
         setRoomCode(joinCode.toUpperCase());
         setPlayerId(res.playerId);
@@ -992,6 +1037,37 @@ export default function App() {
     }, (allSelected.length * 150) + 100);
   };
 
+  // ---- TAKAS MANTIĞI ----
+  const handleProposeTrade = () => {
+    socket.emit('proposeTrade', { targetId: modal.targetId, ...tradeSelection }, (res) => {
+      if (res.ok) { setModal(null); setTradeSelection({ offerBankIds: [], offerPropIds: [], requestBankIds: [], requestPropIds: [] }); setError(''); sfxClick(); }
+      else { setError(res.error); sfxError(); }
+    });
+  };
+
+  const handleRespondTrade = (tradeId, accepted) => {
+    socket.emit('respondToTrade', { tradeId, accepted }, (res) => {
+      if (!res.ok) { sfxError(); showToast(res.error, 'error'); }
+      else sfxClick();
+    });
+  };
+
+  const handleRollGambleDice = () => {
+    sfxClick();
+    socket.emit('rollGambleDice', {}, (res) => {
+      if (!res.ok) { setError(res.error); sfxError(); }
+      else { setError(''); }
+    });
+  };
+
+  const handleBuyScavenge = (cardId) => {
+    sfxCoin();
+    socket.emit('buyScavengeCard', { cardId }, (res) => {
+      if (!res.ok) { showToast(res.error, 'error'); sfxError(); }
+      else { showToast('Kart satın alındı!', 'success'); setShowScavengeModal(false); }
+    });
+  };
+
   // ---- ISKARTA MODALI ----
   const renderDiscardModal = () => {
     if (!showDiscardModal) return null;
@@ -1009,6 +1085,45 @@ export default function App() {
       </Modal>
     );
   };
+
+  // ---- KARABORSA MODALI ----
+  const renderScavengeModal = () => {
+    if (!showScavengeModal) return null;
+    return (
+      <Modal title="🕵️ Karaborsa (Çöpteki Kartlar)" onClose={() => setShowScavengeModal(false)}>
+        <p style={{ color: '#aaa', fontSize: 12, marginBottom: 12 }}>Atılan bu kartları <b>2M Nakit</b> karşılığında satın alabilirsiniz (Arazi kartları geçerli değildir, tam para üstü verilmez).</p>
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, justifyContent: 'center' }}>
+          {gameState.scavengeMarket?.length > 0 ? (
+            gameState.scavengeMarket.map(card => (
+              <div key={card.id} style={{ display: 'flex', flexDirection: 'column', gap: 6, alignItems: 'center' }}>
+                <CardVisual card={card} small onHover={setPreviewCard} />
+                <button onClick={() => handleBuyScavenge(card.id)} style={{ ...btnStyle('#2ECC71'), width: '100%', fontSize: 11 }}>2M ile Al</button>
+              </div>
+            ))
+          ) : (
+            <p style={{ color: '#aaa' }}>Karaborsa şu an boş.</p>
+          )}
+        </div>
+      </Modal>
+    );
+  };
+
+  // ---- GEÇMİŞ MODALI ----
+  const renderHistoryModal = () => {
+    if (!showHistoryModal) return null;
+    return (
+      <Modal title="📜 Maç Geçmişi" onClose={() => setShowHistoryModal(false)}>
+        <div style={{ maxHeight: '60vh', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 8, paddingRight: 8 }}>
+          {gameState.log?.map((entry, i) => (
+            <div key={i} style={{ background: 'rgba(255,255,255,0.05)', padding: '8px 12px', borderRadius: 8, fontSize: 13, borderLeft: entry.type==='system' ? '3px solid #FFD700' : '3px solid #3498DB' }}>
+               {renderLogMsg(entry)}
+               <div style={{ fontSize: 9, color: '#666', marginTop: 4 }}>{new Date(entry.time).toLocaleTimeString('tr-TR')}</div>
+            </div>
+          )).reverse()}
+        </div>
+      </Modal>
+    );
+  }
 
   // ---- OYUNCU DETAY MODALI (RAKİP TAHTASI) ----
   const renderPlayerDetailsModal = () => {
@@ -1032,6 +1147,12 @@ export default function App() {
             ))}
           </div>
         </div>
+          {gameState?.allowTrades && isMyTurn && !isBlocked && p.id !== playerId && (
+            <button onClick={() => { setViewingPlayerId(null); setTradeSelection({ offerBankIds: [], offerPropIds: [], requestBankIds: [], requestPropIds: [] }); setModal({ type: 'proposeTrade', targetId: p.id }); }} 
+                    style={{ ...btnStyle('#3498DB'), width: '100%', padding: '12px', marginBottom: 16, fontSize: 14 }}>
+              🤝 Barışçıl Takas Teklif Et (Ticaret)
+            </button>
+          )}
         <div style={{ marginBottom: 16, padding: 10, background: 'rgba(255,255,255,0.05)', borderRadius: 8, overflowX: 'auto' }}>
           <div style={{ fontSize: 12, color: '#aaa', marginBottom: 16 }}>BANKA ({p.bankTotal}M)</div>
           <div style={{ position: 'relative', display: 'flex', alignItems: 'center', height: 110, paddingLeft: 10, minWidth: (p.bank?.length || 0) * 30 + 50 }}>
@@ -1071,6 +1192,14 @@ export default function App() {
       }
     });
   };
+
+  const handleSendChat = (e) => {
+    e.preventDefault();
+    if (!chatInput.trim() || !socket) return;
+    socket.emit('sendChatMessage', { text: chatInput.trim() });
+    setChatInput('');
+  };
+  useEffect(() => { if (isChatOpen) chatEndRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [chatMessages, isChatOpen]);
 
   const handleDiscard = () => {
     const over = (me?.hand?.length || 0) - (gameState?.handLimit || 7);
@@ -1409,6 +1538,41 @@ export default function App() {
           <input type="checkbox" checked={roomSettings.autoEndTurn} onChange={e => setRoomSettings(prev => ({ ...prev, autoEndTurn: e.target.checked }))} style={{ marginRight: 8 }} />
           <span style={{ fontSize: 13, color: '#fff' }}>3 Hamle Sonrası Eli Otomatik Bitir</span>
         </label>
+
+        <label style={{ display: 'flex', alignItems: 'center', marginBottom: 10, cursor: 'pointer' }}>
+          <input type="checkbox" checked={roomSettings.allowCounterJustSayNo} onChange={e => setRoomSettings(prev => ({ ...prev, allowCounterJustSayNo: e.target.checked }))} style={{ marginRight: 8 }} />
+          <span style={{ fontSize: 13, color: '#fff' }}>Çifte Reddet (İtiraza itiraz etme izni)</span>
+        </label>
+
+        <label style={{ display: 'flex', alignItems: 'center', marginBottom: 10, cursor: 'pointer' }}>
+          <input type="checkbox" checked={roomSettings.openHands} onChange={e => setRoomSettings(prev => ({ ...prev, openHands: e.target.checked }))} style={{ marginRight: 8 }} />
+          <span style={{ fontSize: 13, color: '#fff' }}>Açık El Modu (Herkes birbirinin kartını görür)</span>
+        </label>
+
+        <label style={{ display: 'flex', alignItems: 'center', marginBottom: 10, cursor: 'pointer' }}>
+          <input type="checkbox" checked={roomSettings.lockWildcards} onChange={e => setRoomSettings(prev => ({ ...prev, lockWildcards: e.target.checked }))} style={{ marginRight: 8 }} />
+          <span style={{ fontSize: 13, color: '#fff' }}>Joker Kilidi (Joker rengi sonradan değiştirilemez)</span>
+        </label>
+
+        <label style={{ display: 'flex', alignItems: 'center', marginBottom: 10, cursor: 'pointer' }}>
+          <input type="checkbox" checked={roomSettings.fastChallenge} onChange={e => setRoomSettings(prev => ({ ...prev, fastChallenge: e.target.checked }))} style={{ marginRight: 8 }} />
+          <span style={{ fontSize: 13, color: '#fff' }}>Hızlı Reddet (Yanıt için sadece 15 Saniye)</span>
+        </label>
+
+        <label style={{ display: 'flex', alignItems: 'center', marginBottom: 10, cursor: 'pointer' }}>
+          <input type="checkbox" checked={roomSettings.allowTrades} onChange={e => setRoomSettings(prev => ({ ...prev, allowTrades: e.target.checked }))} style={{ marginRight: 8 }} />
+          <span style={{ fontSize: 13, color: '#fff' }}>Barışçıl Takas İzni (Aksiyon Harcar)</span>
+        </label>
+
+        <label style={{ display: 'flex', alignItems: 'center', marginBottom: 10, cursor: 'pointer' }}>
+          <input type="checkbox" checked={roomSettings.streetThugs} onChange={e => setRoomSettings(prev => ({ ...prev, streetThugs: e.target.checked }))} style={{ marginRight: 8 }} />
+          <span style={{ fontSize: 13, color: '#fff' }}>Sokak Haydutları (Atılan kartları Karaborsadan 2M'e al)</span>
+        </label>
+
+        <label style={{ display: 'flex', alignItems: 'center', marginBottom: 10, cursor: 'pointer' }}>
+          <input type="checkbox" checked={roomSettings.gambleZari} onChange={e => setRoomSettings(prev => ({ ...prev, gambleZari: e.target.checked }))} style={{ marginRight: 8 }} />
+          <span style={{ fontSize: 13, color: '#fff' }}>Kumarbazın Zarı (Tur sonu 🎲 Zar At şansı)</span>
+        </label>
         
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
           <span style={{ fontSize: 13, color: '#fff' }}>Hamle Süresi (Gecikirse Geçer):</span>
@@ -1436,6 +1600,15 @@ export default function App() {
             <option value={5}>5 Kart (Standart)</option>
             <option value={7}>7 Kart (Hızlı Başlangıç)</option>
             <option value={10}>10 Kart (Kaos Modu)</option>
+          </select>
+        </div>
+        
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <span style={{ fontSize: 13, color: '#fff' }}>Deste Hilesi (Ekstra Anlaşma Bozucu):</span>
+          <select value={roomSettings.extraDealBreakers} onChange={e => setRoomSettings(prev => ({ ...prev, extraDealBreakers: Number(e.target.value) }))} style={selStyle}>
+            <option value={0}>Yok (Orijinal 2 Adet)</option>
+            <option value={1}>+1 Ekle (Toplam 3)</option>
+            <option value={3}>+3 Ekle (Kaos!)</option>
           </select>
         </div>
       </div>
@@ -1518,6 +1691,18 @@ export default function App() {
     const haveJustSayNo = me?.hasJustSayNo;
     const isCounter = ch.responderId === ch.sourceId; // sıra orijinal oyuncuya geri döndü (karşı-Reddet)
 
+    // Hızlı Reddet Geri Sayımı
+    const [challengeTime, setChallengeTime] = useState(15);
+    useEffect(() => {
+        if(gameState?.fastChallenge && gameState?.challengeStartTime && gameState?.myPendingChallenge) {
+          const inv = setInterval(() => {
+            const rem = 15 - Math.floor((Date.now() - gameState.challengeStartTime)/1000);
+            setChallengeTime(rem > 0 ? rem : 0);
+          }, 1000);
+          return () => clearInterval(inv);
+        }
+    }, [gameState?.fastChallenge, gameState?.challengeStartTime, gameState?.myPendingChallenge]);
+
     let description = '';
     switch (ch.action) {
       case 'rent': description = `${ch.sourceName} kira istiyor: ${ch.data.amount}M (${ch.data.reason})`; break;
@@ -1538,6 +1723,7 @@ export default function App() {
             onu oynayarak hamleni yine geçerli kılabilirsin!
           </p>
         )}
+        {gameState.fastChallenge && <div style={{color: '#E74C3C', fontWeight: 'bold', marginBottom: 10}}>⏱️ Otomatik kabul edilmesine: {challengeTime} saniye</div>}
         <div style={{ display: 'flex', gap: 8 }}>
           {haveJustSayNo ? (
             <button onClick={() => handleRespondChallenge(ch.id, true)} style={{ ...btnStyle('#E74C3C'), flex: 1, padding: '12px' }}>
@@ -1632,6 +1818,37 @@ export default function App() {
     );
   };
 
+  // ── TAKAS TEKLİF VE YANIT MODALLARI ──
+  const renderTradeModal = () => {
+    if (modal?.type === 'proposeTrade') {
+      const target = gameState.players.find(p => p.id === modal.targetId);
+      const toggle = (type, id) => setTradeSelection(p => ({ ...p, [type]: p[type].includes(id) ? p[type].filter(x => x !== id) : [...p[type], id] }));
+      const canSubmit = tradeSelection.offerBankIds.length + tradeSelection.offerPropIds.length + tradeSelection.requestBankIds.length + tradeSelection.requestPropIds.length > 0;
+      return (
+        <Modal title={`🤝 ${target?.name} İle Takas Yap`} onClose={() => setModal(null)}>
+          <div style={{ display: 'flex', gap: 10, flexDirection: isMobile ? 'column' : 'row' }}>
+            <div style={{ flex: 1, background: 'rgba(231,76,60,0.1)', padding: 10, borderRadius: 8 }}>
+               <div style={{ color: '#E74C3C', fontWeight: 'bold', marginBottom: 8 }}>Ne Vereceksin? (Senin)</div>
+               <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
+                 {me.bank.map(c => <div key={c.id} onClick={() => toggle('offerBankIds', c.id)} style={{ cursor:'pointer', opacity: tradeSelection.offerBankIds.includes(c.id)?1:0.4 }}><CardVisual card={c} small/></div>)}
+                 {Object.values(me.properties).flat().map(c => <div key={c.id} onClick={() => toggle('offerPropIds', c.id)} style={{ cursor:'pointer', opacity: tradeSelection.offerPropIds.includes(c.id)?1:0.4 }}><CardVisual card={c} small/></div>)}
+               </div>
+            </div>
+            <div style={{ flex: 1, background: 'rgba(46,204,113,0.1)', padding: 10, borderRadius: 8 }}>
+               <div style={{ color: '#2ECC71', fontWeight: 'bold', marginBottom: 8 }}>Ne Alacaksın? ({target?.name})</div>
+               <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
+                 {target.bank.map(c => <div key={c.id} onClick={() => toggle('requestBankIds', c.id)} style={{ cursor:'pointer', opacity: tradeSelection.requestBankIds.includes(c.id)?1:0.4 }}><CardVisual card={c} small/></div>)}
+                 {Object.values(target.properties).flat().map(c => <div key={c.id} onClick={() => toggle('requestPropIds', c.id)} style={{ cursor:'pointer', opacity: tradeSelection.requestPropIds.includes(c.id)?1:0.4 }}><CardVisual card={c} small/></div>)}
+               </div>
+            </div>
+          </div>
+          <button onClick={handleProposeTrade} disabled={!canSubmit} style={{ ...btnStyle('#3498DB'), width: '100%', marginTop: 16, padding: 12, opacity: canSubmit ? 1 : 0.5 }}>Teklifi Gönder</button>
+        </Modal>
+      );
+    }
+    return null;
+  };
+
   // ---- LOBBY ----
   if (screen === 'lobby') {
     return ( // Lobi arka planına animasyon sınıfını ekle
@@ -1647,6 +1864,27 @@ export default function App() {
             placeholder="Adın"
             style={inputStyle}
           />
+          
+          <div style={{ marginBottom: 16 }}>
+             <div style={{ fontSize: 12, color: '#aaa', marginBottom: 8, textAlign: 'center' }}>Avatarını Seç:</div>
+             <div style={{ display: 'flex', gap: 8, justifyContent: 'center' }}>
+               {AVATAR_STYLES.map(style => (
+                 <img 
+                   key={style}
+                   src={`https://api.dicebear.com/7.x/${style}/svg?seed=${myName || 'Oyuncu'}`} 
+                   alt={style}
+                   onClick={() => { setMyAvatarStyle(style); localStorage.setItem('md_avatar', style); }}
+                   style={{ 
+                     width: 44, height: 44, borderRadius: '50%', cursor: 'pointer',
+                     border: myAvatarStyle === style ? '3px solid #FFD700' : '2px solid transparent',
+                     background: 'rgba(255,255,255,0.1)',
+                     transition: 'transform 0.2s',
+                     transform: myAvatarStyle === style ? 'scale(1.1)' : 'scale(1)'
+                   }}
+                 />
+               ))}
+             </div>
+          </div>
 
           {!roomCode ? (
             <>
@@ -1708,7 +1946,7 @@ export default function App() {
                     width: '100%'
                   }}>
                     <img 
-                      src={`https://api.dicebear.com/7.x/avataaars/svg?seed=${p.name}`} 
+                      src={`https://api.dicebear.com/7.x/${p.avatar || 'avataaars'}/svg?seed=${p.name}`} 
                       alt="avatar" 
                       title={p.id === playerId ? "İsmini değiştirmek için tıkla" : ""}
                       onClick={() => {
@@ -1801,7 +2039,13 @@ export default function App() {
     : (gameState?.turnTimer > 0 && gameState?.turnStartTime ? Math.max(0, gameState.turnTimer - Math.floor((now - gameState.turnStartTime) / 1000)) : null);
   const showDanger = isMyTurn && !isBlocked && remainingTime !== null && remainingTime <= 10 && remainingTime > 0;
 
+  // Kazananın Rengi
+  const winnerColor = gameState?.winner ? PLAYER_COLORS[gameState.players.findIndex(p => p.id === gameState.winner.id) % PLAYER_COLORS.length] : '#0f0f23';
+
   const getDynamicBackground = () => {
+    if (gameState?.winner) {
+      return `radial-gradient(ellipse at center, ${winnerColor}44 0%, #0f0f23 80%)`;
+    }
     if (showDanger) {
       // Süre azaldığında tehlikeli kırmızı
       return 'radial-gradient(ellipse at center, #5c1a1a 0%, #0f0f23 75%)';
@@ -1820,6 +2064,16 @@ export default function App() {
 
   return (
     <ThemeContext.Provider value={{ themeId: activeTheme, manifest }}>
+      <style>
+      {`
+        .rage-quit-active { animation: rage-quit-anim 1.5s cubic-bezier(0.25, 0.46, 0.45, 0.94) forwards; pointer-events: none; }
+        @keyframes rage-quit-anim {
+           0% { transform: rotate(0deg) scale(1); filter: blur(0px); }
+           20% { transform: rotate(-5deg) scale(1.05) translateY(-20px); filter: blur(1px); }
+           100% { transform: rotate(180deg) scale(0.2) translateY(1500px); filter: blur(10px); opacity: 0; }
+        }
+      `}
+      </style>
       <div className={boardShake === 'heavy' ? "board-shake-heavy" : boardShake ? "board-shake-active" : ""} style={{ minHeight: '100vh', background: getDynamicBackground(), color: '#fff', display: 'flex', flexDirection: 'column', fontSize: 13, transition: 'background 0.8s ease-in-out' }}>
         
         {/* Üst bar */}
@@ -1844,6 +2098,14 @@ export default function App() {
                 SIRA SENİN ({gameState.actionsLeft} aksiyon)
               </span>
             )}
+          <button onClick={() => setShowHistoryModal(true)} style={{ ...btnStyle('rgba(52, 152, 219, 0.2)'), padding: '4px 8px', fontSize: 11, border: '1px solid rgba(52, 152, 219, 0.5)' }}>
+            📜 Geçmiş
+          </button>
+          {gameState.streetThugs && gameState.scavengeMarket?.length > 0 && (
+            <button onClick={() => setShowScavengeModal(true)} style={{ ...btnStyle('rgba(231, 76, 60, 0.2)'), padding: '4px 8px', fontSize: 11, border: '1px solid rgba(231, 76, 60, 0.5)' }}>
+              🕵️ Karaborsa ({gameState.scavengeMarket.length})
+            </button>
+          )}
             <button onClick={toggleTts} title={ttsOn ? 'Türkçe Seslendirmeyi Kapat' : 'Türkçe Seslendirmeyi Aç'} style={{
               background: 'rgba(255,255,255,0.08)', border: `1px solid ${ttsOn ? '#4FC3F7' : 'rgba(255,255,255,0.2)'}`,
               color: '#fff', borderRadius: 6, cursor: 'pointer', fontSize: 13, padding: '3px 8px',
@@ -1870,6 +2132,9 @@ export default function App() {
                  Oyunu Bitir
                </button>
             )}
+            <button onClick={handleRageQuit} style={{ background: 'transparent', border: '1px solid #E74C3C', color: '#E74C3C', padding: '4px 10px', borderRadius: 6, cursor: 'pointer', fontSize: 11, fontWeight: 'bold' }}>
+              (╯°□°)╯︵ ┻━┻ Masayı Devir
+            </button>
             <button onClick={handleExit} style={{ background: '#E74C3C', border: 'none', color: '#fff', padding: '4px 10px', borderRadius: 6, cursor: 'pointer', fontSize: 11, fontWeight: 'bold' }}>
               Çıkış
             </button>
@@ -1882,6 +2147,9 @@ export default function App() {
         {renderDiscardModal()}
         {renderDeckStatsModal()}
         {renderPlayerDetailsModal()}
+        {renderTradeModal()}
+        {renderScavengeModal()}
+        {renderHistoryModal()}
         <ToastStack toasts={toasts} />
 
         {/* Son Saniye Kırmızı Tehlike Ekranı */}
@@ -1889,6 +2157,9 @@ export default function App() {
 
         {/* Anlaşma Bozucu Sinematik Flaş */}
         {boardShake === 'heavy' && <div className="flash-red-overlay" />}
+
+        {/* Kanlı Kira Gecesi Efekti */}
+        {gameState.myPendingPayment && <div className="bloody-payment-overlay" />}
 
         {/* Bağlantı Kesildi Ekranı */}
         {!isConnected && (
@@ -1901,26 +2172,42 @@ export default function App() {
           </div>
         )}
 
+        {/* BARIŞÇIL TAKAS ONAY EKRANI (Hedef İçin) */}
+        {myPendingTrade && (
+           <div style={{ position: 'fixed', inset: 0, zIndex: 3000, background: 'rgba(0,0,0,0.85)', display: 'flex', alignItems: 'center', justifyContent: 'center', backdropFilter: 'blur(8px)' }}>
+              <div style={{ background: '#1a1a2e', padding: 24, borderRadius: 12, border: '2px solid #3498DB', maxWidth: 400, textAlign: 'center' }}>
+                 <div style={{ fontSize: 40, marginBottom: 10 }}>🤝</div>
+                 <h2 style={{ color: '#3498DB', marginBottom: 16 }}>{myPendingTrade.sourceName} Takas Teklif Ediyor!</h2>
+                 <div style={{ color: '#aaa', fontSize: 13, marginBottom: 20 }}>Senden <b>{myPendingTrade.requestBankIds.length + myPendingTrade.requestPropIds.length} kart</b> istiyor ve karşılığında <b>{myPendingTrade.offerBankIds.length + myPendingTrade.offerPropIds.length} kart</b> veriyor. Detayları görmek ister misin? (Takas yaparsanız varlıklar doğrudan yer değiştirir.)</div>
+                 <div style={{ display: 'flex', gap: 10 }}>
+                    <button onClick={() => handleRespondTrade(myPendingTrade.id, true)} style={{ ...btnStyle('#2ECC71'), flex: 1, padding: 12, fontSize: 14 }}>✅ Kabul Et</button>
+                    <button onClick={() => handleRespondTrade(myPendingTrade.id, false)} style={{ ...btnStyle('#E74C3C'), flex: 1, padding: 12, fontSize: 14 }}>❌ Reddet</button>
+                 </div>
+              </div>
+           </div>
+        )}
+
         {/* Desteden Uçan Kartlar (Çekme Animasyonu) */}
         <AnimatePresence>
           {flyingCards.map(fc => (
-            <motion.div
-              key={fc.id}
-              initial={{ x: fc.startX, y: fc.startY, scale: 0.1, rotateY: 180, rotateZ: -30, opacity: 0 }}
-              animate={{
-                x: [fc.startX, window.innerWidth / 2, window.innerWidth / 2 - 60 + (Math.random() * 20 - 10)],
-                y: [fc.startY, window.innerHeight / 2 - 100, window.innerHeight - 150],
-                scale: [0.1, 1.8, 0.8],
-                rotateY: 0,
-                rotateZ: [-30, 10, 360 + (Math.random() * 20 - 10)],
-                opacity: [0, 1, 1]
-              }}
-              exit={{ opacity: 0, scale: 0.5 }}
-              transition={{ duration: 0.85, delay: fc.delay, ease: "easeOut", times: [0, 0.4, 1] }}
-              style={{ position: 'fixed', zIndex: 1001, pointerEvents: 'none' }}
-            >
-              <CardVisual card={fc.card} />
-            </motion.div>
+            <div key={fc.id} className="card-draw-3d-wrapper">
+              <motion.div
+                initial={{ x: fc.startX, y: fc.startY, scale: 0.1, rotateY: 180, rotateZ: -30, opacity: 0 }}
+                animate={{
+                  x: [fc.startX, window.innerWidth / 2, window.innerWidth / 2 - 60 + (Math.random() * 20 - 10)],
+                  y: [fc.startY, window.innerHeight / 2 - 100, window.innerHeight - 150],
+                  scale: [0.1, 1.8, 0.8],
+                  rotateY: [180, 270, 360], /* 3D Hearthstone Çevirme Efekti */
+                  rotateZ: [-30, 10, 360 + (Math.random() * 20 - 10)],
+                  opacity: [0, 1, 1]
+                }}
+                exit={{ opacity: 0, scale: 0.5 }}
+                transition={{ duration: 0.85, delay: fc.delay, ease: "easeOut", times: [0, 0.4, 1] }}
+                style={{ position: 'relative' }}
+              >
+                <CardVisual card={fc.card} />
+              </motion.div>
+            </div>
           ))}
         </AnimatePresence>
 
@@ -2084,7 +2371,7 @@ export default function App() {
           </div>
         )}
 
-        <div className="game-main" style={{ display: 'flex', flex: 1, overflow: 'hidden', flexDirection: isMobile ? 'column' : 'row' }}>
+        <div className={`game-main ${rageQuit ? 'rage-quit-active' : ''}`} style={{ display: 'flex', flex: 1, overflow: 'hidden', flexDirection: isMobile ? 'column' : 'row' }}>
           {/* Sol: Diğer oyuncular */}
           <div className="players-sidebar" style={{ 
             width: isMobile ? '100%' : 260, height: isMobile ? 'auto' : '100%', maxHeight: isMobile ? '200px' : 'none', 
@@ -2095,6 +2382,7 @@ export default function App() {
               {gameState.players.filter(p => p.id !== playerId).map(player => {
                 // Renk uyumunu garantilemek için ana listedeki sırasını buluyoruz
                 const pIdx = gameState.players.findIndex(x => x.id === player.id);
+                const isTargeted = gameState.pendingChallenges.some(ch => (ch.action === 'slydeal' || ch.action === 'dealbreaker' || ch.action === 'debtcollector') && ch.targetId === player.id);
                 return (
                   // PlayerPanel.jsx dosyasını React.forwardRef ile sarmalamayı unutmayın!
                   // export const PlayerPanel = React.forwardRef(({...}, ref) => { ... });
@@ -2107,6 +2395,7 @@ export default function App() {
                       : 'none',
                     transition: 'box-shadow 0.3s'
                   }}>
+                    {isTargeted && <div className="target-crosshair" />}
                     <PlayerPanel
                       ref={el => (playerPanelRefs.current[player.id] = el)}
                       player={player} 
@@ -2301,9 +2590,17 @@ export default function App() {
             )}
 
             {!selectedCard && isMyTurn && !discardMode && !isBlocked && (
-            <button onClick={() => { sfxClick(); handleEndTurn(); }} style={{ ...btnStyle('linear-gradient(135deg, #8E44AD, #5B2C6F)'), padding: '10px 24px', boxShadow: '0 4px 10px rgba(142,68,173,0.4)', fontSize: 13, marginLeft: 'auto' }}>
-                🛑 Turu Bitir
-              </button>
+              <>
+                <div style={{ flex: 1 }} />
+                {gameState.gambleZari && !me.hasGambledThisTurn && gameState.actionsLeft > 0 && (
+                  <button onClick={handleRollGambleDice} style={{ ...btnStyle('linear-gradient(135deg, #16A085, #117864)'), padding: '10px 20px', boxShadow: '0 4px 10px rgba(22,160,133,0.4)', fontSize: 13 }}>
+                    🎲 Zar At
+                  </button>
+                )}
+                <button onClick={() => { sfxClick(); handleEndTurn(); }} style={{ ...btnStyle('linear-gradient(135deg, #8E44AD, #5B2C6F)'), padding: '10px 24px', boxShadow: '0 4px 10px rgba(142,68,173,0.4)', fontSize: 13 }}>
+                  🛑 Turu Bitir
+                </button>
+              </>
             )}
 
             {discardMode && (
@@ -2320,6 +2617,39 @@ export default function App() {
 
             {error && <div style={{ color: '#f44', fontSize: 13, alignSelf: 'center', fontWeight: 'bold' }}>{error}</div>}
           </div>
+        </div>
+        
+        {/* ---- SOHBET (CHAT) PENCERESİ ---- */}
+        <div style={{ position: 'fixed', bottom: isMobile ? 60 : 20, right: 20, zIndex: 1500, width: isMobile ? 280 : 320, display: 'flex', flexDirection: 'column', alignItems: 'flex-end', pointerEvents: 'none' }}>
+          <button onClick={() => setIsChatOpen(!isChatOpen)} style={{ ...btnStyle('#3498DB'), pointerEvents: 'auto', borderRadius: 20, padding: '10px 16px', boxShadow: '0 4px 10px rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', gap: 6 }}>
+            💬 Sohbet {chatMessages.length > 0 ? <span style={{ background: '#E74C3C', borderRadius: '50%', padding: '2px 6px', fontSize: 10 }}>{chatMessages.length}</span> : ''}
+          </button>
+          
+          <AnimatePresence>
+            {isChatOpen && (
+              <motion.div initial={{ opacity: 0, y: 20, scale: 0.9 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={{ opacity: 0, y: 20, scale: 0.9 }}
+                style={{ background: 'rgba(20, 20, 30, 0.95)', pointerEvents: 'auto', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 12, padding: 12, marginTop: 10, width: '100%', display: 'flex', flexDirection: 'column', backdropFilter: 'blur(10px)', boxShadow: '0 10px 30px rgba(0,0,0,0.5)' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', borderBottom: '1px solid rgba(255,255,255,0.1)', paddingBottom: 8, marginBottom: 8 }}>
+                  <span style={{ fontSize: 13, fontWeight: 'bold', color: '#FFD700' }}>Oda Sohbeti</span>
+                  <button onClick={() => setIsChatOpen(false)} style={{ background: 'none', border: 'none', color: '#aaa', cursor: 'pointer' }}>✕</button>
+                </div>
+                <div style={{ flex: 1, maxHeight: 250, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 6, paddingRight: 4, marginBottom: 8 }}>
+                  {chatMessages.length === 0 && <div style={{ color: '#666', fontSize: 11, textAlign: 'center', margin: 'auto' }}>Sohbete ilk mesajı sen gönder...</div>}
+                  {chatMessages.map(msg => (
+                    <div key={msg.id} style={{ alignSelf: msg.senderId === playerId ? 'flex-end' : 'flex-start', background: msg.senderId === playerId ? 'rgba(52, 152, 219, 0.2)' : 'rgba(255,255,255,0.1)', border: `1px solid ${msg.senderId === playerId ? 'rgba(52,152,219,0.5)' : 'rgba(255,255,255,0.1)'}`, padding: '6px 10px', borderRadius: 12, borderBottomRightRadius: msg.senderId === playerId ? 2 : 12, borderBottomLeftRadius: msg.senderId === playerId ? 12 : 2, maxWidth: '85%' }}>
+                      <div style={{ fontSize: 9, color: msg.senderId === playerId ? '#3498DB' : '#aaa', marginBottom: 2 }}>{msg.senderName}</div>
+                      <div style={{ fontSize: 12, wordBreak: 'break-word' }}>{msg.text}</div>
+                    </div>
+                  ))}
+                  <div ref={chatEndRef} />
+                </div>
+                <form onSubmit={handleSendChat} style={{ display: 'flex', gap: 8 }}>
+                  <input value={chatInput} onChange={e => setChatInput(e.target.value)} placeholder="Bir şeyler yaz..." style={{ width: '100%', padding: '8px 12px', background: 'rgba(0,0,0,0.5)', border: '1px solid rgba(255,255,255,0.2)', borderRadius: 20, color: '#fff', fontSize: 12, outline: 'none' }} maxLength={120} />
+                  <button type="submit" style={{ ...btnStyle('#2ECC71'), borderRadius: '50%', width: 32, height: 32, padding: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>➤</button>
+                </form>
+              </motion.div>
+            )}
+          </AnimatePresence>
         </div>
 
         {/* ---- DEBUG PENCERESİ AÇMA BUTONU ---- */}

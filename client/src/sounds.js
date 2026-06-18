@@ -80,6 +80,13 @@ export function setBgmVolume(volume) {
   try { localStorage.setItem('md_bgm_vol', volume); } catch(e) {}
 }
 
+// Gerilim Müziği Hızlandırıcısı (Biri kazanmaya yaklaşınca)
+export function setBgmTension(isTense) {
+  if (bgmAudio) {
+    bgmAudio.playbackRate = isTense ? 1.15 : 1.0;
+  }
+}
+
 export function stopBGM() {
   if (bgmAudio) bgmAudio.pause();
 }
@@ -196,4 +203,14 @@ export function sfxAngry() {
 
 export function sfxChaChing() {
   playFile('/sounds/cha-ching.mp3', 0.7);
+}
+
+// Anlaşma Bozucu (Cam Kırılma Sesi)
+export function sfxGlassBreak() {
+  playFile('/sounds/glass.mp3', 0.8);
+}
+
+// Doğum Günü (Parti Düdüğü)
+export function sfxPartyHorn() {
+  playFile('/sounds/horn.mp3', 0.7);
 }

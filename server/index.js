@@ -12,7 +12,9 @@ app.use(express.json());
 
 const server = http.createServer(app);
 const io = new Server(server, {
-  cors: { origin: '*', methods: ['GET', 'POST'] }
+  cors: { origin: '*', methods: ['GET', 'POST'] },
+  pingInterval: 10000, // Her 10 saniyede bir bağlantıyı kontrol et
+  pingTimeout: 30000   // Yanıt gelmezse 30 saniye bekle
 });
 
 // Frontend'in derlenmiş (build) dosyalarını sun
@@ -30,6 +32,16 @@ setInterval(() => {
       if (Date.now() - game.turnStartTime > game.turnTimer * 1000) { // Saniyeyi milisaniyeye çevir
         console.log(`[Room ${roomCode}] Tur süresi doldu, ${game.currentPlayer.name} turu otomatik bitiriliyor.`);
         game.endTurn(game.currentPlayer.id); // Otomatik tur bitir
+        broadcastState(roomCode);
+      }
+    }
+
+    // Hızlı Reddet (15 saniye) Kontrolü
+    if (game.phase === 'playing' && game.fastChallenge && game.pendingChallenges.length > 0) {
+      if (game.challengeStartTime && (Date.now() - game.challengeStartTime > 15000)) {
+        const ch = game.pendingChallenges[0];
+        console.log(`[Room ${roomCode}] İtiraz süresi doldu, ${ch.responderId} otomatik kabul etti.`);
+        game.respondToChallenge(ch.responderId, ch.id, false); // İtirazı pas geçer (kabul eder)
         broadcastState(roomCode);
       }
     }
@@ -85,7 +97,7 @@ io.on('connection', (socket) => {
     const game = new MonopolyDealGame(roomCode, safeSettings); // Oda ayarlarını game objesine geçir
     rooms[roomCode] = { game, players: {}, host: playerId, isPublic: safeSettings.isPublic || false };
 
-    game.addPlayer(playerId, name);
+    game.addPlayer(playerId, name, safeSettings.avatar || 'avataaars');
     rooms[roomCode].players[socket.id] = { id: playerId, name };
 
     socket.join(roomCode);
@@ -97,7 +109,7 @@ io.on('connection', (socket) => {
     broadcastPublicRooms();
   });
 
-  socket.on('joinRoom', ({ roomCode, name, reconnectPlayerId }, cb) => {
+  socket.on('joinRoom', ({ roomCode, name, reconnectPlayerId, avatar }, cb) => {
     const room = rooms[roomCode];
     if (!room) return cb({ ok: false, error: 'Oda bulunamadı' });
 
@@ -110,7 +122,7 @@ io.on('connection', (socket) => {
       playerId = uuidv4();
     }
 
-    const ok = room.game.addPlayer(playerId, name);
+    const ok = room.game.addPlayer(playerId, name, avatar || 'avataaars');
     if (!ok) return cb({ ok: false, error: 'Katılamadı' });
 
     room.players[socket.id] = { id: playerId, name };
@@ -140,11 +152,31 @@ io.on('connection', (socket) => {
     }
   });
 
+  socket.on('updateAvatar', ({ roomCode, newAvatar }) => {
+    const room = rooms[roomCode];
+    if (room) {
+      const player = room.game.players.find(p => p.id === socket.data.playerId);
+      if (player) {
+        player.avatar = newAvatar;
+        broadcastState(roomCode);
+      }
+    }
+  });
+
   socket.on('sendEmote', ({ targetId, emoji }) => {
     const { roomCode, playerId } = socket.data;
     const room = rooms[roomCode];
     if (room) {
       io.to(roomCode).emit('playerEmote', { senderId: playerId, targetId, emoji });
+    }
+  });
+
+  socket.on('sendChatMessage', ({ text }) => {
+    const { roomCode, playerId } = socket.data;
+    const room = rooms[roomCode];
+    if (room) {
+      const player = room.game.players.find(p => p.id === playerId);
+      io.to(roomCode).emit('chatMessage', { id: uuidv4(), senderId: playerId, senderName: player ? player.name : 'Biri', text, time: Date.now() });
     }
   });
 
@@ -212,6 +244,42 @@ io.on('connection', (socket) => {
     const room = rooms[roomCode];
     if (!room) return cb?.({ ok: false, error: 'Oda yok' });
     const result = room.game.submitPayment(playerId, bankCardIds || [], propertyCardIds || []);
+    cb?.(result);
+    broadcastState(roomCode);
+  });
+
+  socket.on('proposeTrade', (payload, cb) => {
+    const { roomCode, playerId } = socket.data;
+    const room = rooms[roomCode];
+    if (!room) return cb?.({ ok: false, error: 'Oda yok' });
+    const result = room.game.proposeTrade(playerId, payload.targetId, payload.offerBankIds, payload.offerPropIds, payload.requestBankIds, payload.requestPropIds);
+    cb?.(result);
+    broadcastState(roomCode);
+  });
+
+  socket.on('respondToTrade', ({ tradeId, accepted }, cb) => {
+    const { roomCode, playerId } = socket.data;
+    const room = rooms[roomCode];
+    if (!room) return cb?.({ ok: false, error: 'Oda yok' });
+    const result = room.game.respondToTrade(playerId, tradeId, accepted);
+    cb?.(result);
+    broadcastState(roomCode);
+  });
+
+  socket.on('buyScavengeCard', ({ cardId }, cb) => {
+    const { roomCode, playerId } = socket.data;
+    const room = rooms[roomCode];
+    if (!room) return cb?.({ ok: false, error: 'Oda yok' });
+    const result = room.game.buyScavengeCard(playerId, cardId);
+    cb?.(result);
+    broadcastState(roomCode);
+  });
+
+  socket.on('rollGambleDice', (_, cb) => {
+    const { roomCode, playerId } = socket.data;
+    const room = rooms[roomCode];
+    if (!room) return cb?.({ ok: false, error: 'Oda yok' });
+    const result = room.game.rollGambleDice(playerId);
     cb?.(result);
     broadcastState(roomCode);
   });
