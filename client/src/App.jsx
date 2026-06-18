@@ -18,7 +18,8 @@ import { ToastStack } from './components/ToastStack';
 import { CardRentPanel, CardProbabilityPanel } from './components/CardPanels';
 import { AnimatedCounter } from './AnimatedCounter';
 
-const SERVER_URL = import.meta.env.VITE_SERVER_URL || 'http://localhost:3001';
+// Render.com'da çalışması için adresin dinamik (otomatik) alınmasını sağlıyoruz
+const SERVER_URL = import.meta.env.VITE_SERVER_URL || (window.location.hostname === 'localhost' ? 'http://localhost:3001' : window.location.origin);
 
 const inputStyle = { width: '100%', padding: '10px 14px', background: 'rgba(255,255,255,0.1)', border: '1px solid rgba(255,255,255,0.2)', borderRadius: 8, color: '#fff', fontSize: 14, marginBottom: 12, boxSizing: 'border-box', outline: 'none' };
 
@@ -355,8 +356,10 @@ export default function App() {
     // Mobil cihazlarda bağlantı kopmalarını minimize etmek için websocket'i zorla
     const s = io(SERVER_URL, {
       transports: ['websocket', 'polling'],
-      reconnectionAttempts: 10,
-      reconnectionDelay: 2000
+      reconnectionAttempts: Infinity,
+      reconnectionDelay: 1000,
+      reconnectionDelayMax: 5000,
+      timeout: 20000
     });
 
     s.on('connect', () => {
