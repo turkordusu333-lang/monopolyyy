@@ -3,7 +3,7 @@ import { COLOR_INFO, ACTION_STYLE } from '../constants';
 import { getCardImageSrc } from '../utils';
 import { ThemeContext } from '../ThemeContext';
 
-export function CardVisual({ card, selected, onClick, small, dimmed, onHover, isRentPlayable }) {
+export function CardVisual({ card, selected, onClick, small, dimmed, onHover, isRentPlayable, comboClass }) {
   const { themeId, manifest } = useContext(ThemeContext);
   const imgSrc = getCardImageSrc(themeId, card?.key);
   const [imgFailed, setImgFailed] = useState(false);
@@ -67,7 +67,7 @@ export function CardVisual({ card, selected, onClick, small, dimmed, onHover, is
       onClick={handleClick}
       onMouseEnter={() => onHover && onHover(card)}
       onMouseLeave={() => onHover && onHover(null)}
-      className={`${shaking ? "card-shake" : ""} ${isRentPlayable ? "rent-glow" : ""} ${isRare ? "holo-wrapper" : ""}`}
+      className={`${shaking ? "card-shake" : ""} ${isRentPlayable ? "rent-glow" : ""} ${isRare ? "holo-wrapper" : ""} ${comboClass || ""}`}
       style={{
         width: w, height: h,
         background: showImage ? '#222' : getBg(),

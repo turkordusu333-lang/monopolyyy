@@ -59,7 +59,7 @@ export const PlayerPanel = React.forwardRef(({ player, isMe, isCurrent, onSelect
   });
 
   return (
-    <div ref={ref} className="player-panel" style={{
+    <div ref={ref} className={`player-panel ${isCurrent ? 'spotlight-glow' : ''}`} style={{
       background: isCurrent ? `linear-gradient(135deg, ${playerColor}22, rgba(255,255,255,0.03))` : 'rgba(255,255,255,0.03)',
       border: isCurrent ? `2px solid ${playerColor}` : `1px solid ${playerColor}55`,
       boxShadow: isCurrent ? `0 0 15px ${playerColor}44` : 'none',
@@ -71,7 +71,7 @@ export const PlayerPanel = React.forwardRef(({ player, isMe, isCurrent, onSelect
       {emotes.map(emote => (
         <div key={emote.id} className="emote-bubble">{emote.emoji}</div>
       ))}
-
+ 
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8, borderBottom: `1px solid ${playerColor}33`, paddingBottom: 6 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
           {isCurrent && <span className="hourglass-anim" style={{ fontSize: 14 }}>⏳</span>}
@@ -79,6 +79,7 @@ export const PlayerPanel = React.forwardRef(({ player, isMe, isCurrent, onSelect
           <div style={{ width: 10, height: 10, borderRadius: '50%', background: playerColor, boxShadow: `0 0 8px ${playerColor}` }} />
           <span style={{ color: playerColor, fontWeight: 800, fontSize: 14, textShadow: '0 1px 2px rgba(0,0,0,0.8)' }}>{player.name}</span>
           {isMe && <span style={{ fontSize: 10, color: '#fff', background: playerColor, padding: '2px 6px', borderRadius: 4, fontWeight: 'bold' }}>SEN</span>}
+          {player.hasJustSayNo && isMe && <span className="shield-badge">🛡️ Kalkan Aktif</span>}
           {player.connected === false && <span style={{ fontSize: 10, color: '#f44' }}>● Çevrimdışı</span>}
         </div>
         <div style={{ display: 'flex', gap: 10, fontSize: 11, color: '#ddd', fontWeight: 'bold' }}>
@@ -86,7 +87,9 @@ export const PlayerPanel = React.forwardRef(({ player, isMe, isCurrent, onSelect
             💰 <AnimatedCounter value={player.bankTotal} />M
           </span>
           <span title="Eldeki Kartlar">🃏 {player.handCount}</span>
-          <span title="Tam Setler" style={{ color: completeSets > 0 ? '#2ECC71' : '#ddd' }}>🏘️ {completeSets}/3</span>
+          <span title="Tam Setler" style={{ display: 'inline-flex', alignItems: 'center', gap: 2, color: completeSets > 0 ? '#FFD700' : '#ddd' }}>
+            🏘️ {'★'.repeat(completeSets)}{'☆'.repeat(Math.max(0, 3 - completeSets))}
+          </span>
         </div>
       </div>
 

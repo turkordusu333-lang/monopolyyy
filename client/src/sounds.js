@@ -19,7 +19,7 @@ export function setSoundEnabled(value) {
   enabled = value;
   try { localStorage.setItem('monopolyDealSound', value ? 'on' : 'off'); } catch (e) { /* ignore */ }
   if (!value && bgmAudio) bgmAudio.pause();
-  else if (value && bgmAudio) bgmAudio.play().catch(() => {});
+  else if (value && bgmAudio) bgmAudio.play().catch(() => { });
 }
 
 function getCtx() {
@@ -77,7 +77,7 @@ export function playBGM() {
 
 export function setBgmVolume(volume) {
   if (bgmAudio) bgmAudio.volume = volume;
-  try { localStorage.setItem('md_bgm_vol', volume); } catch(e) {}
+  try { localStorage.setItem('md_bgm_vol', volume); } catch (e) { }
 }
 
 // Gerilim Müziği Hızlandırıcısı (Biri kazanmaya yaklaşınca)
@@ -93,124 +93,144 @@ export function stopBGM() {
 
 // ── SES EFEKTLERİ ──
 
-// Kart oynama - kısa "tık"
+// Kart oynama - kısa "tık" veya mp3
 export function sfxCardPlay() {
-  play(() => tone(520, 0, 0.08, { type: 'triangle', volume: 0.15 }));
+  playFile('/sounds/card_play.mp3', 0.85);
 }
 
-// Kart çekme - hızlı yükselen "hışırtı"
+// Kart çekme - hızlı yükselen "hışırtı" veya mp3
 export function sfxCardDraw() {
-  play(() => {
-    tone(300, 0, 0.1, { type: 'sine', volume: 0.1 });
-    tone(600, 0.05, 0.1, { type: 'sine', volume: 0.08 });
-  });
+  playFile('/sounds/card_draw.mp3', 0.8);
 }
 
 // Kart fırlatma (masaya atma) - hızlı alçalan "whoosh"
 export function sfxWhoosh() {
-  play(() => {
-    const ctx = getCtx();
-    if (!ctx) return;
-    const osc = ctx.createOscillator();
-    const gain = ctx.createGain();
-    osc.type = 'sine';
-    osc.frequency.setValueAtTime(1200, ctx.currentTime);
-    osc.frequency.exponentialRampToValueAtTime(50, ctx.currentTime + 0.3);
-    gain.gain.setValueAtTime(0.1, ctx.currentTime);
-    gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.3);
-    osc.connect(gain);
-    gain.connect(ctx.destination);
-    osc.start();
-    osc.stop(ctx.currentTime + 0.3);
-  });
+  playFile('/sounds/whoosh.mp3', 0.7);
 }
 
 // Kart bankaya konuldu - "ka-ching" benzeri
 export function sfxCoin() {
-  playFile('/sounds/coin.mp3', 0.6);
+  playFile('/sounds/coin.mp3', 0.85);
 }
 
 // Hata / geçersiz hamle
 export function sfxError() {
-  play(() => {
-    tone(200, 0, 0.15, { type: 'sawtooth', volume: 0.12 });
-    tone(150, 0.1, 0.18, { type: 'sawtooth', volume: 0.12 });
-  });
+  playFile('/sounds/error.mp3', 0.8);
 }
 
 // Sıra sana geçti - dikkat çekici, yükselen melodi
 export function sfxYourTurn() {
-  // playFile fonksiyonu ile public klasöründeki MP3 dosyasını çalıyoruz:
-  playFile('/sounds/your-turn.mp3', 0.7);
+  playFile('/sounds/your-turn.mp3', 0.85);
 }
+
+// ── MONOPOLY DEAL KART SESLERİ (MP3) ──
+// Not: Dosyalar /public/sounds/ altına konacak.
+export function sfxActionDealbreaker() { playFile('/sounds/dealbreaker_haciz.mp3', 0.9); }
+export function sfxActionJustSayNo() { playFile('/sounds/justsayno_reddet.mp3', 0.9); }
+export function sfxActionCounterJustSayNo() { playFile('/sounds/justsayno_counter_reddet_reddet.mp3', 0.95); }
+export function sfxActionSlyDeal() { playFile('/sounds/slydeal_tapu.mp3', 0.9); }
+export function sfxActionForcedDeal() { playFile('/sounds/forceddeal_degiskokus.mp3', 0.9); }
+export function sfxActionDebtCollector() { playFile('/sounds/debtcollector_tasilat.mp3', 0.9); }
+export function sfxActionBirthday() { playFile('/sounds/birthday_dogum_gunu.mp3', 0.9); }
+export function sfxActionPassGoTwoDraw() { playFile('/sounds/two-draw_2-kart-cek.mp3', 0.9); }
+
+// Kira kartı & ödeme (kiranızı ödeyin)
+export function sfxRentCardPlayed() { playFile('/sounds/rent_kira_karti.mp3', 0.9); }
+export function sfxRentPaymentDue() { playFile('/sounds/rent-paid_kiranizi-odeyin.mp3', 0.9); }
+
+// Bankaya para koyma
+export function sfxBankDeposit1M() { playFile('/sounds/bank_deposit_1m.mp3', 0.85); }
+export function sfxBankDeposit2M() { playFile('/sounds/bank_deposit_2m.mp3', 0.85); }
+export function sfxBankDeposit3M() { playFile('/sounds/bank_deposit_3m.mp3', 0.85); }
+export function sfxBankDeposit4M() { playFile('/sounds/bank_deposit_4m.mp3', 0.85); }
+export function sfxBankDeposit5M() { playFile('/sounds/bank_deposit_5m.mp3', 0.85); }
+export function sfxBankDeposit10M() { playFile('/sounds/bank_deposit_10m.mp3', 0.85); }
+
+// Arazi kartı
+export function sfxPropertyPlayed() { playFile('/sounds/property_play.mp3', 0.85); }
+export function sfxJokerPropertyPlayed() { playFile('/sounds/joker_arazi.mp3', 0.9); }
+
+// İlçe/mahalle (tekil MP3)
+export function sfxStreetPropertyPlayed(slug) {
+  if (!slug) return;
+  playFile(`/sounds/${slug}.mp3`, 0.9);
+}
+
+export function sfxActionRentAll() { playFile('/sounds/rent_kira_karti.mp3', 0.85); }
 
 // Turun bitti - kısa, alçalan
 export function sfxTurnEnded() {
-  play(() => {
-    tone(440, 0, 0.1, { type: 'sine', volume: 0.15 }); // A4
-    tone(330, 0.08, 0.15, { type: 'sine', volume: 0.15 }); // E4
-  });
+  playFile('/sounds/turn_ended.mp3', 0.8);
 }
 
 // Reddet! / itiraz uyarısı
 export function sfxAlert() {
-  play(() => {
-    tone(1000, 0, 0.07, { type: 'square', volume: 0.12 });
-    tone(1000, 0.12, 0.07, { type: 'square', volume: 0.12 });
-  });
+  playFile('/sounds/alert.mp3', 0.85);
 }
 
 // Ödeme isteği geldi
 export function sfxPaymentDue() {
-  play(() => {
-    tone(660, 0, 0.1, { type: 'triangle', volume: 0.18 });
-    tone(990, 0.1, 0.15, { type: 'triangle', volume: 0.18 });
-  });
+  playFile('/sounds/payment_due.mp3', 0.85);
 }
 
 // Kazanma fanfarı
 export function sfxWin() {
-  playFile('/sounds/win.mp3', 0.8);
+  playFile('/sounds/win.mp3', 0.9);
 }
 
 // Genel UI tıklama sesi
 export function sfxClick() {
-  play(() => tone(800, 0, 0.05, { type: 'triangle', volume: 0.1 }));
+  playFile('/sounds/click.mp3', 0.7);
 }
 
 // Ev/Otel inşa etme
 export function sfxBuild() {
-  play(() => {
-    tone(200, 0, 0.1, { type: 'square', volume: 0.15 });
-    tone(400, 0.1, 0.15, { type: 'square', volume: 0.15 });
-    tone(600, 0.2, 0.2, { type: 'square', volume: 0.15 });
-  });
+  playFile('/sounds/build.mp3', 0.85);
 }
 
 // Son 10 saniye tik-tak sesi
 export function sfxTick() {
-  playFile('/sounds/tick.mp3', 0.5);
+  playFile('/sounds/tick.mp3', 0.65);
 }
 
 // --- EMOJİ SESLERİ ---
-export function sfxLaugh() {
-  playFile('/sounds/laugh.mp3', 0.6);
-}
-
-export function sfxAngry() {
-  playFile('/sounds/angry.mp3', 0.6);
-}
-
-export function sfxChaChing() {
-  playFile('/sounds/cha-ching.mp3', 0.7);
-}
+export function sfxLaugh() { playFile('/sounds/laugh.mp3', 0.75); }
+export function sfxAngry() { playFile('/sounds/angry.mp3', 0.75); }
+export function sfxChaChing() { playFile('/sounds/cha-ching.mp3', 0.8); }
+export function sfxFire() { playFile('/sounds/fire.mp3', 0.85); }
+export function sfxClap() { playFile('/sounds/clap.mp3', 0.85); }
+export function sfxCry() { playFile('/sounds/cry.mp3', 0.85); }
+export function sfxShock() { playFile('/sounds/shock.mp3', 0.85); }
 
 // Anlaşma Bozucu (Cam Kırılma Sesi)
-export function sfxGlassBreak() {
-  playFile('/sounds/glass.mp3', 0.8);
-}
+export function sfxGlassBreak() { playFile('/sounds/glass.mp3', 0.85); }
 
 // Doğum Günü (Parti Düdüğü)
-export function sfxPartyHorn() {
-  playFile('/sounds/horn.mp3', 0.7);
+export function sfxPartyHorn() { playFile('/sounds/horn.mp3', 0.85); }
+
+// Masaya vurunca çalacak bas sarsıntı sesi
+export function sfxTableSlap() {
+  playFile('/sounds/table_slap.mp3', 0.9);
 }
+
+// Kart destesi karıştırma sesi
+export function sfxShuffle() {
+  playFile('/sounds/shuffle.mp3', 0.85);
+}
+
+// ── YENİ EKLENEN SES SİSTEMLERİ ──
+export function sfxLobbyJoin() { playFile('/sounds/lobby_join.mp3', 0.8); }
+export function sfxGameStart() { playFile('/sounds/game_start.mp3', 0.85); }
+export function sfxTradeProposed() { playFile('/sounds/trade_proposed.mp3', 0.85); }
+export function sfxTradeAccepted() { playFile('/sounds/trade_accepted.mp3', 0.85); }
+export function sfxTradeRejected() { playFile('/sounds/trade_rejected.mp3', 0.8); }
+export function sfxDiceRoll() { playFile('/sounds/dice_roll.mp3', 0.85); }
+export function sfxCopied() { playFile('/sounds/copied.mp3', 0.85); }
+export function sfxChatSent() { playFile('/sounds/chat_sent.mp3', 0.75); }
+export function sfxRageQuit() { playFile('/sounds/rage_quit.mp3', 0.9); }
+export function sfxUndo() { playFile('/sounds/undo.mp3', 0.8); }
+export function sfxDoubleRent() { playFile('/sounds/double_rent.mp3', 0.9); }
+export function sfxHouse() { playFile('/sounds/house.mp3', 0.85); }
+export function sfxHotel() { playFile('/sounds/hotel.mp3', 0.85); }
+export function sfxDisconnect() { playFile('/sounds/disconnect.mp3', 0.8); }
+export function sfxReconnect() { playFile('/sounds/reconnect.mp3', 0.85); }

@@ -194,108 +194,177 @@ io.on('connection', (socket) => {
   });
 
   socket.on('playCard', ({ cardId, options }, cb) => {
-    const { roomCode, playerId } = socket.data;
-    const room = rooms[roomCode];
-    if (!room) return cb?.({ ok: false, error: 'Oda yok' });
-    const result = room.game.playCard(playerId, cardId, options || {});
-    cb?.(result);
-    broadcastState(roomCode);
+    try {
+      const { roomCode, playerId } = socket.data;
+      const room = rooms[roomCode];
+      if (!room) return cb?.({ ok: false, error: 'Oda yok' });
+      const result = room.game.playCard(playerId, cardId, options || {});
+      cb?.(result);
+      broadcastState(roomCode);
+    } catch (err) {
+      console.error("playCard crash:", err);
+      cb?.({ ok: false, error: 'Sunucu Hatası: ' + err.message });
+    }
   });
 
   socket.on('endTurn', (_, cb) => {
-    const { roomCode, playerId } = socket.data;
-    const room = rooms[roomCode];
-    if (!room) return cb?.({ ok: false, error: 'Oda yok' });
-    const result = room.game.endTurn(playerId);
-    cb?.(result);
-    broadcastState(roomCode);
+    try {
+      const { roomCode, playerId } = socket.data;
+      const room = rooms[roomCode];
+      if (!room) return cb?.({ ok: false, error: 'Oda yok' });
+      const result = room.game.endTurn(playerId);
+      cb?.(result);
+      broadcastState(roomCode);
+    } catch (err) {
+      console.error("endTurn crash:", err);
+      cb?.({ ok: false, error: 'Sunucu Hatası: ' + err.message });
+    }
+  });
+
+  socket.on('undoMove', (_, cb) => {
+    try {
+      const { roomCode, playerId } = socket.data;
+      const room = rooms[roomCode];
+      if (!room) return cb?.({ ok: false, error: 'Oda yok' });
+      const result = room.game.undoMove(playerId);
+      cb?.(result);
+      broadcastState(roomCode);
+    } catch (err) {
+      console.error("undoMove crash:", err);
+      cb?.({ ok: false, error: 'Sunucu Hatası: ' + err.message });
+    }
   });
 
   socket.on('discardCards', ({ cardIds }, cb) => {
-    const { roomCode, playerId } = socket.data;
-    const room = rooms[roomCode];
-    if (!room) return cb?.({ ok: false, error: 'Oda yok' });
-    const result = room.game.discardDown(playerId, cardIds);
-    cb?.(result);
-    broadcastState(roomCode);
+    try {
+      const { roomCode, playerId } = socket.data;
+      const room = rooms[roomCode];
+      if (!room) return cb?.({ ok: false, error: 'Oda yok' });
+      const result = room.game.discardDown(playerId, cardIds);
+      cb?.(result);
+      broadcastState(roomCode);
+    } catch (err) {
+      console.error("discardCards crash:", err);
+      cb?.({ ok: false, error: 'Sunucu Hatası: ' + err.message });
+    }
   });
 
 
   socket.on('flipProperty', ({ cardId, newColor }, cb) => {
-    const { roomCode, playerId } = socket.data;
-    const room = rooms[roomCode];
-    if (!room) return cb?.({ ok: false, error: 'Oda yok' });
-    const result = room.game.flipProperty(playerId, cardId, newColor);
-    cb?.(result);
-    broadcastState(roomCode);
+    try {
+      const { roomCode, playerId } = socket.data;
+      const room = rooms[roomCode];
+      if (!room) return cb?.({ ok: false, error: 'Oda yok' });
+      const result = room.game.flipProperty(playerId, cardId, newColor);
+      cb?.(result);
+      broadcastState(roomCode);
+    } catch (err) {
+      console.error("flipProperty crash:", err);
+      cb?.({ ok: false, error: 'Sunucu Hatası: ' + err.message });
+    }
   });
 
   socket.on('respondToChallenge', ({ challengeId, useJustSayNo }, cb) => {
-    const { roomCode, playerId } = socket.data;
-    const room = rooms[roomCode];
-    if (!room) return cb?.({ ok: false, error: 'Oda yok' });
-    const result = room.game.respondToChallenge(playerId, challengeId, !!useJustSayNo);
-    cb?.(result);
-    broadcastState(roomCode);
+    try {
+      const { roomCode, playerId } = socket.data;
+      const room = rooms[roomCode];
+      if (!room) return cb?.({ ok: false, error: 'Oda yok' });
+      const result = room.game.respondToChallenge(playerId, challengeId, !!useJustSayNo);
+      cb?.(result);
+      broadcastState(roomCode);
+    } catch (err) {
+      console.error("respondToChallenge crash:", err);
+      cb?.({ ok: false, error: 'Sunucu Hatası: ' + err.message });
+    }
   });
 
   socket.on('submitPayment', ({ bankCardIds, propertyCardIds }, cb) => {
-    const { roomCode, playerId } = socket.data;
-    const room = rooms[roomCode];
-    if (!room) return cb?.({ ok: false, error: 'Oda yok' });
-    const result = room.game.submitPayment(playerId, bankCardIds || [], propertyCardIds || []);
-    cb?.(result);
-    broadcastState(roomCode);
+    try {
+      const { roomCode, playerId } = socket.data;
+      const room = rooms[roomCode];
+      if (!room) return cb?.({ ok: false, error: 'Oda yok' });
+      const result = room.game.submitPayment(playerId, bankCardIds || [], propertyCardIds || []);
+      cb?.(result);
+      broadcastState(roomCode);
+    } catch (err) {
+      console.error("submitPayment crash:", err);
+      cb?.({ ok: false, error: 'Sunucu Hatası: ' + err.message });
+    }
   });
 
   socket.on('proposeTrade', (payload, cb) => {
-    const { roomCode, playerId } = socket.data;
-    const room = rooms[roomCode];
-    if (!room) return cb?.({ ok: false, error: 'Oda yok' });
-    const result = room.game.proposeTrade(playerId, payload.targetId, payload.offerBankIds, payload.offerPropIds, payload.requestBankIds, payload.requestPropIds);
-    cb?.(result);
-    broadcastState(roomCode);
+    try {
+      const { roomCode, playerId } = socket.data;
+      const room = rooms[roomCode];
+      if (!room) return cb?.({ ok: false, error: 'Oda yok' });
+      const result = room.game.proposeTrade(playerId, payload.targetId, payload.offerBankIds, payload.offerPropIds, payload.requestBankIds, payload.requestPropIds);
+      cb?.(result);
+      broadcastState(roomCode);
+    } catch (err) {
+      console.error("proposeTrade crash:", err);
+      cb?.({ ok: false, error: 'Sunucu Hatası: ' + err.message });
+    }
   });
 
   socket.on('respondToTrade', ({ tradeId, accepted }, cb) => {
-    const { roomCode, playerId } = socket.data;
-    const room = rooms[roomCode];
-    if (!room) return cb?.({ ok: false, error: 'Oda yok' });
-    const result = room.game.respondToTrade(playerId, tradeId, accepted);
-    cb?.(result);
-    broadcastState(roomCode);
+    try {
+      const { roomCode, playerId } = socket.data;
+      const room = rooms[roomCode];
+      if (!room) return cb?.({ ok: false, error: 'Oda yok' });
+      const result = room.game.respondToTrade(playerId, tradeId, accepted);
+      cb?.(result);
+      broadcastState(roomCode);
+    } catch (err) {
+      console.error("respondToTrade crash:", err);
+      cb?.({ ok: false, error: 'Sunucu Hatası: ' + err.message });
+    }
   });
 
   socket.on('buyScavengeCard', ({ cardId }, cb) => {
-    const { roomCode, playerId } = socket.data;
-    const room = rooms[roomCode];
-    if (!room) return cb?.({ ok: false, error: 'Oda yok' });
-    const result = room.game.buyScavengeCard(playerId, cardId);
-    cb?.(result);
-    broadcastState(roomCode);
+    try {
+      const { roomCode, playerId } = socket.data;
+      const room = rooms[roomCode];
+      if (!room) return cb?.({ ok: false, error: 'Oda yok' });
+      const result = room.game.buyScavengeCard(playerId, cardId);
+      cb?.(result);
+      broadcastState(roomCode);
+    } catch (err) {
+      console.error("buyScavengeCard crash:", err);
+      cb?.({ ok: false, error: 'Sunucu Hatası: ' + err.message });
+    }
   });
 
   socket.on('rollGambleDice', (_, cb) => {
-    const { roomCode, playerId } = socket.data;
-    const room = rooms[roomCode];
-    if (!room) return cb?.({ ok: false, error: 'Oda yok' });
-    const result = room.game.rollGambleDice(playerId);
-    cb?.(result);
-    broadcastState(roomCode);
+    try {
+      const { roomCode, playerId } = socket.data;
+      const room = rooms[roomCode];
+      if (!room) return cb?.({ ok: false, error: 'Oda yok' });
+      const result = room.game.rollGambleDice(playerId);
+      cb?.(result);
+      broadcastState(roomCode);
+    } catch (err) {
+      console.error("rollGambleDice crash:", err);
+      cb?.({ ok: false, error: 'Sunucu Hatası: ' + err.message });
+    }
   });
 
   socket.on('closeRoom', ({ roomCode }, cb) => {
-    const { playerId } = socket.data;
-    const room = rooms[roomCode];
+    try {
+      const { playerId } = socket.data;
+      const room = rooms[roomCode];
 
-    if (!room) return cb?.({ ok: false, error: 'Oda bulunamadı' });
-    if (room.host !== playerId) return cb?.({ ok: false, error: 'Sadece host odayı kapatabilir' });
+      if (!room) return cb?.({ ok: false, error: 'Oda bulunamadı' });
+      if (room.host !== playerId) return cb?.({ ok: false, error: 'Sadece host odayı kapatabilir' });
 
-    io.to(roomCode).emit('roomClosed'); // Odadaki tüm istemcilere bildir
-    delete rooms[roomCode]; // Sunucudan odayı sil
+      io.to(roomCode).emit('roomClosed'); // Odadaki tüm istemcilere bildir
+      delete rooms[roomCode]; // Sunucudan odayı sil
 
-    cb?.({ ok: true });
-    broadcastPublicRooms();
+      cb?.({ ok: true });
+      broadcastPublicRooms();
+    } catch (err) {
+      console.error("closeRoom crash:", err);
+      cb?.({ ok: false, error: 'Sunucu Hatası: ' + err.message });
+    }
   });
 
   socket.on('disconnect', () => {
