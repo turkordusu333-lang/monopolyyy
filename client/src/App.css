@@ -1,10 +1,44 @@
 * { box-sizing: border-box; margin: 0; padding: 0; }
-body { font-family: 'Segoe UI', system-ui, sans-serif; background: #0f0f23; }
+body { 
+  font-family: 'Outfit', 'Inter', 'Segoe UI', system-ui, sans-serif; 
+  background: #080d21;
+}
 ::-webkit-scrollbar { width: 6px; height: 6px; }
 ::-webkit-scrollbar-track { background: rgba(255,255,255,0.05); }
 ::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.2); border-radius: 3px; }
 input::placeholder { color: rgba(255,255,255,0.4); }
-button:active { opacity: 0.8; transform: scale(0.98); }
+
+/* ── Concentric Circles Board Background ── */
+.game-board-container {
+  position: relative;
+  overflow: hidden;
+}
+.game-board-container::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background-image: 
+    radial-gradient(circle at center, transparent 20%, rgba(255,255,255,0.015) 20.5%, rgba(255,255,255,0.015) 21%, transparent 21.5%),
+    radial-gradient(circle at center, transparent 38%, rgba(255,255,255,0.018) 38.5%, rgba(255,255,255,0.018) 39.5%, transparent 40%),
+    radial-gradient(circle at center, transparent 56%, rgba(255,255,255,0.01) 56.5%, rgba(255,255,255,0.01) 57.5%, transparent 58%);
+  background-size: 100% 100%;
+  z-index: 1;
+}
+
+/* ── 3D Button Hover & Active States ── */
+button {
+  transition: transform 0.1s cubic-bezier(0.175, 0.885, 0.32, 1.275), box-shadow 0.1s ease !important;
+}
+button:hover {
+  transform: translateY(-2px);
+  filter: brightness(1.1);
+}
+button:active {
+  transform: translateY(2px) scale(0.97) !important;
+  box-shadow: 0 1px 0 rgba(0, 0, 0, 0.2), 0 2px 4px rgba(0, 0, 0, 0.25) !important;
+  filter: brightness(0.95);
+}
 
 /* ── Havai Fişek Animasyonu ── */
 @keyframes fw-rocket {
@@ -55,7 +89,9 @@ html, body { overscroll-behavior-y: contain; }
   /* Ana alan: sütun düzeni */
   .game-main {
     flex-direction: column;
-    overflow: visible !important;
+    overflow: hidden;
+    flex: 1;
+    min-height: 0;
   }
 
   /* Oyuncular: yatay kaydırmalı şerit */
@@ -117,10 +153,10 @@ html, body { overscroll-behavior-y: contain; }
   transform-origin: bottom center; /* Kartın aşağıdan yukarı doğru büyümesini sağlar */
 }
 
-.stacked-card-wrapper:hover {
+.stacked-card-wrapper:not(.selected-card):hover {
   z-index: 999 !important; /* Diğer tüm kartların üstüne çıkar */
   /* 3D Hover Efekti */
-  transform: translateY(-25px) scale(1.1) rotateX(10deg) rotateY(-5deg); 
+  transform: translateY(-25px) scale(1.15) rotateX(10deg) rotateY(-5deg) !important; 
   box-shadow: -5px 15px 25px rgba(0,0,0,0.5);
 }
 
@@ -768,10 +804,24 @@ html, body { overscroll-behavior-y: contain; }
 }
 
 /* ── Spot Işığı Glow ── */
+@keyframes active-player-pulse {
+  0% {
+    box-shadow: 0 0 10px var(--player-color, #FFD700);
+    border-color: var(--player-color, #FFD700) !important;
+  }
+  50% {
+    box-shadow: 0 0 22px var(--player-color, #FFD700);
+    border-color: var(--player-color, #FFD700) !important;
+  }
+  100% {
+    box-shadow: 0 0 10px var(--player-color, #FFD700);
+    border-color: var(--player-color, #FFD700) !important;
+  }
+}
 .spotlight-glow {
-  box-shadow: 0 0 25px rgba(255, 215, 0, 0.8) !important;
-  border: 2px solid #FFD700 !important;
+  animation: active-player-pulse 2s infinite ease-in-out !important;
   position: relative;
+  z-index: 5;
 }
 
 /* ── Masaya Vurunca Zıplama ── */
@@ -966,5 +1016,67 @@ input:checked + .switch-toggle::after {
   border-radius: 20px;
   text-shadow: 0 0 5px rgba(46, 204, 113, 0.5);
   animation: system-log-blink 2s infinite ease-in-out;
+}
+
+/* ── Kart Hover-Zoom ve Detayların Görünmesi (Arazilerim) ── */
+.fanned-card-wrapper {
+  transition: transform 0.25s cubic-bezier(0.175, 0.885, 0.32, 1.275), z-index 0.15s !important;
+}
+.fanned-card-wrapper:hover {
+  transform: scale(2.0) translateY(-40px) rotate(0deg) !important;
+  z-index: 9999 !important;
+  filter: drop-shadow(0 15px 25px rgba(0,0,0,0.6)) !important;
+}
+.fanned-card-wrapper:hover .card-details-hoverable {
+  display: flex !important;
+}
+
+/* ── Mini Kart Tasarımı ve Hover Davranışı ── */
+.mini-card-wrapper {
+  position: relative;
+  width: 38px;
+  height: 52px;
+  cursor: pointer;
+  z-index: 1;
+}
+
+.mini-card-wrapper .mini-card-hover-view {
+  display: none;
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 99999;
+  pointer-events: none;
+  box-shadow: 0 15px 35px rgba(0,0,0,0.6);
+  border-radius: 12px;
+}
+
+.mini-card-wrapper:hover {
+  z-index: 99999 !important;
+}
+
+.mini-card-wrapper:hover .mini-card-hover-view {
+  display: block;
+}
+
+.mini-card-wrapper:hover .mini-card-face {
+  opacity: 0;
+}
+
+.mini-card-wrapper:hover .card-details-hoverable {
+  display: flex !important;
+}
+
+/* ── Kart Üzerindeki Aksiyon Butonları (Mobil Uyumlu) ── */
+.card-overlay-buttons button {
+  min-height: 34px !important;
+  font-size: 11px !important;
+  padding: 6px 12px !important;
+  text-transform: none !important;
+  font-weight: 800 !important;
+  width: 90% !important;
+  margin: 0 !important;
+  flex: none !important;
 }
 

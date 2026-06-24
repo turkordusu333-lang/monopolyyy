@@ -6,16 +6,20 @@ import { AnimatedCounter } from '../AnimatedCounter';
 const MicroProp = ({ color, cards, buildings, onHoverCard }) => {
   const goal = SET_SIZES[color] || 1;
   const isComplete = isSetComplete(cards, color);
-  const info = COLOR_INFO[color];
+  const info = COLOR_INFO[color] || { hex: '#aaa', light: '#ccc' };
   return (
     <div className="micro-prop-tag" style={{ 
       borderColor: isComplete ? info.hex : 'rgba(255,255,255,0.1)',
-      background: isComplete ? `linear-gradient(135deg, ${info.hex}44, rgba(0,0,0,0.4))` : 'rgba(0,0,0,0.2)',
-      boxShadow: isComplete ? `0 0 8px ${info.hex}66` : 'none',
-      padding: '4px 6px'
+      background: isComplete ? `linear-gradient(135deg, ${info.hex}33, rgba(0,0,0,0.45))` : 'rgba(0,0,0,0.25)',
+      boxShadow: isComplete ? `0 0 8px ${info.hex}44` : 'none',
+      padding: '4px 6px',
+      borderRadius: 6,
+      display: 'flex',
+      alignItems: 'center',
+      gap: 6
     }}>
-      <div style={{ width: 8, height: 8, borderRadius: '50%', background: info.hex }} />
-      <div style={{ display: 'flex', gap: 1 }}>
+      <div style={{ width: 6, height: 6, borderRadius: '50%', background: info.hex }} />
+      <div style={{ display: 'flex', gap: 2 }}>
         {cards.map(c => {
           let cardClass = '';
           if (c.isWild) cardClass = 'is-wild';
@@ -24,18 +28,54 @@ const MicroProp = ({ color, cards, buildings, onHoverCard }) => {
             <div key={c.id} className={`micro-card-dot ${cardClass} ${isComplete ? 'is-complete' : ''}`}
                  onMouseEnter={() => onHoverCard && onHoverCard(c)}
                  onMouseLeave={() => onHoverCard && onHoverCard(null)}
-                 style={{ backgroundColor: isComplete ? info.hex : 'rgba(255,255,255,0.15)', borderColor: isComplete ? info.light : info.hex, color: info.hex }}>
-               {c.isWild && '🌟'}
-               {c.isDual && '🌗'}
+                 style={{ 
+                   width: 16,
+                   height: 22,
+                   backgroundColor: '#FFFFFF',
+                   border: isComplete ? `1px solid ${info.hex}` : '1px solid rgba(0,0,0,0.15)',
+                   borderRadius: 3,
+                   display: 'flex',
+                   flexDirection: 'column',
+                   justifyContent: 'flex-start',
+                   alignItems: 'center',
+                   overflow: 'hidden',
+                   position: 'relative',
+                   cursor: 'pointer'
+                 }}>
+               {/* Color stripe at top */}
+               <div style={{
+                 width: '100%',
+                 height: 4,
+                 background: c.isWild ? 'linear-gradient(90deg, #E74C3C, #F39C12, #2ECC71, #3498DB)' : info.hex,
+                 flexShrink: 0
+               }} />
+               {/* Value stamp inside tiny card */}
+               <div style={{
+                 fontSize: 8,
+                 fontWeight: 900,
+                 color: '#333',
+                 lineHeight: 1,
+                 marginTop: 2,
+                 transform: 'scale(0.85)'
+               }}>
+                 {c.isWild ? '★' : (c.value || '')}
+               </div>
             </div>
           );
         })}
         {Array.from({ length: Math.max(0, goal - cards.length) }).map((_, i) => (
-          <div key={`empty-${i}`} className="micro-card-dot is-empty" style={{ borderColor: `${info.hex}88` }} />
+          <div key={`empty-${i}`} className="micro-card-dot is-empty" style={{ 
+            width: 16,
+            height: 22,
+            backgroundColor: 'rgba(255,255,255,0.03)',
+            border: `1.2px dashed ${info.hex}77`,
+            borderRadius: 3,
+            boxSizing: 'border-box'
+          }} />
         ))}
       </div>
       {(buildings?.[color]?.houses > 0 || buildings?.[color]?.hotel) && (
-        <div style={{ display: 'flex', marginLeft: 2 }}>
+        <div style={{ display: 'flex', marginLeft: 2, gap: 1 }}>
           {buildings?.[color]?.houses > 0 && <span style={{ fontSize: 9 }}>🏠</span>}
           {buildings?.[color]?.hotel && <span style={{ fontSize: 9 }}>🏨</span>}
         </div>
@@ -64,7 +104,8 @@ export const PlayerPanel = React.forwardRef(({ player, isMe, isCurrent, onSelect
       border: isCurrent ? `2px solid ${playerColor}` : `1px solid ${playerColor}55`,
       boxShadow: isCurrent ? `0 0 15px ${playerColor}44` : 'none',
       borderRadius: 12, padding: 12, marginBottom: 10, cursor: !isMe ? 'pointer' : 'default',
-      transition: 'all 0.3s ease', position: 'relative'
+      transition: 'all 0.3s ease', position: 'relative',
+      '--player-color': playerColor
     }} onClick={() => !isMe && onSelectTarget && onSelectTarget(player.id)}>
       
       {/* Emojileri Render Et */}

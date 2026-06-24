@@ -32,7 +32,24 @@ const SERVER_URL = window.location.hostname === 'localhost' ? 'http://localhost:
 
 const inputStyle = { width: '100%', padding: '10px 14px', background: 'rgba(255,255,255,0.1)', border: '1px solid rgba(255,255,255,0.2)', borderRadius: 8, color: '#fff', fontSize: 14, marginBottom: 12, boxSizing: 'border-box', outline: 'none' };
 
-const btnStyle = (bg) => ({ padding: '8px 14px', background: bg, color: '#fff', border: 'none', borderRadius: 8, cursor: 'pointer', fontWeight: 700, fontSize: 12 });
+const btnStyle = (bg) => ({
+  padding: '10px 18px',
+  background: bg,
+  color: '#fff',
+  border: 'none',
+  borderRadius: 24,
+  cursor: 'pointer',
+  fontWeight: 800,
+  fontSize: 12,
+  boxShadow: '0 4px 0 rgba(0, 0, 0, 0.25), 0 4px 10px rgba(0, 0, 0, 0.28)',
+  textTransform: 'uppercase',
+  letterSpacing: '0.6px',
+  transition: 'transform 0.1s, box-shadow 0.1s',
+  display: 'inline-flex',
+  alignItems: 'center',
+  justifyContent: 'center',
+  gap: '4px'
+});
 
 const ACTION_NAMES = { rent: 'Kira', birthday: 'Doğum Günüm!', debtcollector: 'Borç Tahsildarı', slydeal: 'Sinsi Anlaşma', forceddeal: 'Zorunlu Anlaşma', dealbreaker: 'Anlaşma Bozucu' };
 
@@ -106,7 +123,7 @@ const FannedPropertySet = ({ color, cards, buildings, isOwn, onFlip, onHoverCard
   const isComplete = isSetComplete(cards, color);
 
   return (
-    <div className="champion-set-wrapper" style={{
+    <div className={`champion-set-wrapper ${isComplete ? 'complete-set-glow' : ''}`} style={{
       background: isComplete ? `linear-gradient(135deg, ${info.hex}44, rgba(0,0,0,0.4))` : 'rgba(0,0,0,0.2)',
       padding: '12px 10px',
       borderRadius: 12,
@@ -120,12 +137,13 @@ const FannedPropertySet = ({ color, cards, buildings, isOwn, onFlip, onHoverCard
         {info.name} {isComplete && '★'}
       </div>
 
-      <div style={{ display: 'flex', justifyContent: 'center', padding: '0 10px', height: 110, alignItems: 'flex-start' }}>
+      <div style={{ display: 'flex', justifyContent: 'center', padding: '0 10px', height: 130, alignItems: 'flex-start' }}>
         {cards.map((c, i) => (
           <div
             key={c.id}
             onMouseEnter={() => onHoverCard && onHoverCard(c)}
             onMouseLeave={() => onHoverCard && onHoverCard(null)}
+            className="fanned-card-wrapper"
             style={{
               marginLeft: i > 0 ? -40 : 0,
               zIndex: i,
@@ -182,6 +200,10 @@ export default function App() {
   const [is3DTable, setIs3DTable] = useState(() => localStorage.getItem('md_3d') !== 'off');
   const [handHidden, setHandHidden] = useState(false);
   const [slapActive, setSlapActive] = useState(false);
+  const [isLogOpen, setIsLogOpen] = useState(true);
+  const [activeTab, setActiveTab] = useState('board'); // board, log
+  const [isHeaderOpen, setIsHeaderOpen] = useState(true);
+  const [isMenuOpen, setIsMenuOpen] = useState(false);
 
   useEffect(() => {
     const handleResize = () => setIsMobile(window.innerWidth < 768);
@@ -229,10 +251,8 @@ export default function App() {
     const saved = localStorage.getItem('md_bgm_vol');
     return saved !== null ? parseFloat(saved) : 0.15;
   });
-  const [ttsOn, setTtsOn] = useState(() => {
-    const saved = localStorage.getItem('md_tts');
-    return saved !== null ? saved === 'true' : true; // Varsayılan olarak açık
-  });
+  const ttsOn = false;
+  const setTtsOn = () => {};
   const logRef = useRef(null);
   const prevLogTimeRef = useRef(null);
   const initialDealLogged = useRef(false);
@@ -302,22 +322,10 @@ export default function App() {
     }
   }, [gameState?.fastChallenge, gameState?.challengeStartTime, gameState?.myPendingChallenge]);
 
-  // ---- YERLEŞİK TÜRKÇE SESLENDİRME (TTS) ----
+  // ---- YERLEŞİK TÜRKÇE SESLENDİRME (TTS) - DEVRE DIŞI ----
   const playTurkishVoice = useCallback((text) => {
-    if (!ttsOn) return;
-    window.speechSynthesis.cancel(); // Önceki sesi sustur
-    const u = new SpeechSynthesisUtterance(text);
-    u.lang = 'tr-TR';
-    u.rate = 1.15; // Konuşma hızı
-    u.pitch = 1.1; // Ses tonu
-
-    // Cihazdaki en kaliteli Türkçe sesi bulmaya çalış
-    const voices = window.speechSynthesis.getVoices();
-    const turkishVoice = voices.find(v => v.lang === 'tr-TR' && (v.name.includes('Google') || v.name.includes('Premium')));
-    if (turkishVoice) u.voice = turkishVoice;
-
-    window.speechSynthesis.speak(u);
-  }, [ttsOn]);
+    // Disabled Completely
+  }, []);
 
   // ---- BİLDİRİM (TOAST) SİSTEMİ ----
   const showToast = useCallback((text, kind = 'info', duration = 2500) => {
@@ -430,12 +438,7 @@ export default function App() {
     localStorage.setItem('md_sound', next ? 'true' : 'false'); // Ses tercihini tarayıcıya kaydet
   };
 
-  const toggleTts = () => {
-    const next = !ttsOn;
-    setTtsOn(next);
-    localStorage.setItem('md_tts', next ? 'true' : 'false');
-    playTurkishVoice(next ? 'Türkçe seslendirme açık.' : 'Seslendirme kapalı.');
-  };
+  const toggleTts = () => {};
 
   useEffect(() => {
     // Render.com üzerinde en hızlı ve sorunsuz bağlantı için WebSocket öncelikli ayar
@@ -675,6 +678,7 @@ export default function App() {
   }, [myCompleteSetsCount, showToast, spawnMoney]);
 
   // ---- EL KARTLARINI YEREL DURUMA (LOCALHAND) SENKRONİZE ETME (SIRALAMA İÇİN) ----
+  const prevIsMyTurn = useRef(false);
   useEffect(() => {
     if (!me?.hand) return;
     setLocalHand(prev => {
@@ -682,9 +686,27 @@ export default function App() {
       const filtered = prev.filter(c => meHandIds.includes(c.id)); // Artık bende olmayan kartları sil
       const localIds = filtered.map(c => c.id);
       const added = me.hand.filter(c => !localIds.includes(c.id)); // Yeni eklenen kartları sona koy
-      return [...filtered, ...added];
+      const nextHand = [...filtered, ...added];
+
+      // Eğer sıra bize yeni geldiyse, el kartlarını otomatik sırala
+      if (isMyTurn && !prevIsMyTurn.current) {
+        return [...nextHand].sort((a, b) => {
+          const typeScore = { property: 1, action: 2, money: 3 };
+          if (typeScore[a.type] !== typeScore[b.type]) return typeScore[a.type] - typeScore[b.type];
+          if (a.type === 'property') {
+            const colorA = a.activeColor || a.color || 'z';
+            const colorB = b.activeColor || b.color || 'z';
+            return colorA.localeCompare(colorB);
+          }
+          if (a.type === 'money') return b.value - a.value; // Paraları büyükten küçüğe
+          if (a.type === 'action') return a.action.localeCompare(b.action); // Aksiyonları alfabetik
+          return 0;
+        });
+      }
+      return nextHand;
     });
-  }, [me?.hand]);
+    prevIsMyTurn.current = isMyTurn;
+  }, [me?.hand, isMyTurn]);
 
   // ---- EL KARTLARINI OTOMATİK SIRALAMA (TİPE/RENGE GÖRE) ----
   const handleSortHand = () => {
@@ -1295,6 +1317,83 @@ export default function App() {
     );
   }
 
+  // ---- MOBİL MENÜ MODALI ----
+  const renderMenuModal = () => {
+    if (!isMenuOpen) return null;
+    return (
+      <Modal title="⚙️ OYUN MENÜSÜ" onClose={() => setIsMenuOpen(false)}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 12, padding: '8px 0' }}>
+          
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'rgba(255,255,255,0.05)', padding: '10px 14px', borderRadius: 10 }}>
+            <span style={{ fontSize: 13, color: '#aaa', fontWeight: 'bold' }}>🎴 DESTE KARTLARI</span>
+            <button onClick={() => { setIsMenuOpen(false); setShowDeckStats(true); sfxClick(); }} style={btnStyle('rgba(255,255,255,0.15)')}>
+              Detayları Gör ({gameState.deckCount})
+            </button>
+          </div>
+
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'rgba(255,255,255,0.05)', padding: '10px 14px', borderRadius: 10 }}>
+            <span style={{ fontSize: 13, color: '#aaa', fontWeight: 'bold' }}>🗑️ ISKARTA YIĞINI</span>
+            <button onClick={() => { setIsMenuOpen(false); setShowDiscardModal(true); sfxClick(); }} style={btnStyle('rgba(255,255,255,0.15)')}>
+              Iskartaya Bak ({gameState.discard?.length || 0})
+            </button>
+          </div>
+
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'rgba(255,255,255,0.05)', padding: '10px 14px', borderRadius: 10 }}>
+            <span style={{ fontSize: 13, color: '#aaa', fontWeight: 'bold' }}>👓 3D MASA GÖRÜNÜMÜ</span>
+            <button onClick={() => { const next = !is3DTable; setIs3DTable(next); localStorage.setItem('md_3d', next ? 'on' : 'off'); sfxClick(); }} style={btnStyle(is3DTable ? 'rgba(46,204,113,0.3)' : 'rgba(255,255,255,0.15)')}>
+              {is3DTable ? 'AÇIK' : 'KAPALI'}
+            </button>
+          </div>
+
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'rgba(255,255,255,0.05)', padding: '10px 14px', borderRadius: 10 }}>
+            <span style={{ fontSize: 13, color: '#aaa', fontWeight: 'bold' }}>📜 HAREKET GEÇMİŞİ</span>
+            <button onClick={() => { setIsMenuOpen(false); setShowHistoryModal(true); sfxClick(); }} style={btnStyle('rgba(52, 152, 219, 0.25)')}>
+              Geçmişi Gör
+            </button>
+          </div>
+
+          {gameState.streetThugs && gameState.scavengeMarket?.length > 0 && (
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'rgba(255,255,255,0.05)', padding: '10px 14px', borderRadius: 10 }}>
+              <span style={{ fontSize: 13, color: '#E74C3C', fontWeight: 'bold' }}>🕵️ KARABORSA</span>
+              <button onClick={() => { setIsMenuOpen(false); setShowScavengeModal(true); sfxClick(); }} style={btnStyle('rgba(231, 76, 60, 0.25)')}>
+                Markete Git ({gameState.scavengeMarket.length})
+              </button>
+            </div>
+          )}
+
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 6, background: 'rgba(255,255,255,0.05)', padding: '10px 14px', borderRadius: 10 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <span style={{ fontSize: 13, color: '#aaa', fontWeight: 'bold' }}>🔊 SES DÜZEYİ</span>
+              <button onClick={() => { toggleSound(); sfxClick(); }} style={{ background: 'none', border: 'none', fontSize: 16, cursor: 'pointer', color: '#fff' }}>
+                {soundOn ? '🔊' : '🔇'}
+              </button>
+            </div>
+            {soundOn && (
+              <input
+                type="range" min="0" max="0.5" step="0.01"
+                value={bgmVolume}
+                onChange={e => { setBgmVolumeState(e.target.value); setBgmVolume(e.target.value); }}
+                style={{ width: '100%', cursor: 'pointer', marginTop: 6 }}
+              />
+            )}
+          </div>
+
+          <div style={{ display: 'flex', gap: 10, marginTop: 12 }}>
+            {gameState?.players?.[0]?.id === playerId && (
+              <button onClick={() => { setIsMenuOpen(false); socket.emit('returnToLobby', { roomCode }); }} style={{ ...btnStyle('#E67E22'), flex: 1, padding: '12px', fontSize: '13px' }}>
+                Oyunu Bitir
+              </button>
+            )}
+            <button onClick={() => { setIsMenuOpen(false); handleRageQuit(); }} style={{ ...btnStyle('#E74C3C'), flex: 1, padding: '12px', fontSize: '13px' }}>
+              Masayı Devir
+            </button>
+          </div>
+
+        </div>
+      </Modal>
+    );
+  };
+
   // ---- OYUNCU DETAY MODALI (RAKİP TAHTASI) ----
   const renderPlayerDetailsModal = () => {
     if (!viewingPlayerId) return null;
@@ -1790,6 +1889,88 @@ export default function App() {
                   );
                 })}
               </div>
+            </div>
+          </div>
+        </Modal>
+      );
+    }
+
+    if (modal.type === 'viewCardDetails') {
+      const card = modal.card;
+      const isProp = card.type === 'property';
+      const isAction = card.type === 'action';
+      const isMoney = card.type === 'money';
+      const baseColor = isProp && card.color ? COLOR_INFO[card.color] : null;
+      const activeColor = isProp && card.activeColor ? COLOR_INFO[card.activeColor] : null;
+      
+      const ACTION_COLORS = {
+        passgo: '#3498DB',
+        dealbreaker: '#8E44AD',
+        justsayno: '#E74C3C',
+        birthday: '#E91E8C',
+        rent: '#16A085',
+        doublerent: '#D35400',
+        slydeal: '#F39C12',
+        forceddeal: '#F39C12',
+        debtcollector: '#F39C12',
+        house: '#27AE60',
+        hotel: '#1E8449'
+      };
+      
+      const cardThemeColor = activeColor?.hex || baseColor?.hex || (isAction ? ACTION_COLORS[card.action] : '#95A5A6');
+      const displayName = manifest?.names?.[card.key] || card.name;
+
+      return (
+        <Modal title="🔍 KART DETAYLARI" onClose={() => setModal(null)}>
+          <div style={{ display: 'flex', flexDirection: isMobile ? 'column' : 'row', gap: 20, alignItems: 'center', justifyContent: 'center' }}>
+            {/* Left Column: Card Visual */}
+            <div style={{
+              perspective: '1000px',
+              width: 132 * 1.25,
+              height: 192 * 1.25,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+            }}>
+              <div style={{
+                boxShadow: '0 15px 35px rgba(0,0,0,0.5)',
+                borderRadius: '12px',
+                overflow: 'hidden'
+              }}>
+                <CardVisual card={card} small={false} />
+              </div>
+            </div>
+
+            {/* Right Column: Card Rents or Description */}
+            <div style={{ flex: 1, color: '#fff', fontSize: 13, display: 'flex', flexDirection: 'column', gap: 10, width: '100%' }}>
+              <h3 style={{ color: cardThemeColor, margin: 0, fontSize: 18, fontWeight: 900, textTransform: 'uppercase', textShadow: '0 1px 3px rgba(0,0,0,0.4)' }}>
+                {displayName}
+              </h3>
+              
+              <div style={{ fontSize: 12, background: 'rgba(255,255,255,0.05)', padding: '6px 10px', borderRadius: 6, color: '#aaa', display: 'inline-flex', alignSelf: 'flex-start' }}>
+                Değer: <b style={{ color: '#FFD700', marginLeft: 4 }}>{card.value}M Nakit</b>
+              </div>
+
+              {isProp && baseColor?.rents && (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 6, background: 'rgba(0,0,0,0.3)', borderRadius: 10, padding: 12, border: '1px solid rgba(255,255,255,0.08)' }}>
+                  <div style={{ fontWeight: 'black', color: '#FFD700', fontSize: 11, letterSpacing: 0.5, borderBottom: '1px solid rgba(255,255,255,0.15)', paddingBottom: 6, marginBottom: 4 }}>KİRA TABLOSU</div>
+                  {baseColor.rents.map((r, i) => (
+                    <div key={i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 12.5, fontWeight: 'bold' }}>
+                      <span style={{ color: '#ccc' }}>{i + 1} Kart Sahipliği:</span>
+                      <span style={{ color: '#2ECC71' }}>{r}M</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {(isAction || card.description) && (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 6, background: 'rgba(255,255,255,0.03)', borderRadius: 10, padding: 12, border: '1px solid rgba(255,255,255,0.05)' }}>
+                  <div style={{ fontWeight: 'bold', color: '#FFD700', fontSize: 11, borderBottom: '1px solid rgba(255,255,255,0.1)', paddingBottom: 6, marginBottom: 4 }}>KART AÇIKLAMASI</div>
+                  <p style={{ lineHeight: 1.5, margin: 0, fontSize: 12, color: '#eee' }}>
+                    {getDetailedCardTip(card)}
+                  </p>
+                </div>
+              )}
             </div>
           </div>
         </Modal>
@@ -2422,22 +2603,22 @@ export default function App() {
 
   const getDynamicBackground = () => {
     if (gameState?.winner) {
-      return `radial-gradient(ellipse at center, ${winnerColor}44 0%, #0f0f23 80%)`;
+      return `radial-gradient(circle at center, ${winnerColor}55 0%, #0b071e 80%)`;
     }
     if (showDanger) {
       // Süre azaldığında tehlikeli kırmızı
-      return 'radial-gradient(ellipse at center, #5c1a1a 0%, #0f0f23 75%)';
+      return 'radial-gradient(circle at center, #781c1c 0%, #0c081e 80%)';
     }
     if (isBlocked) {
       // Ödeme/itiraz beklenirken gergin mor
-      return 'radial-gradient(ellipse at center, #4a1e4e 0%, #0f0f23 75%)';
+      return 'radial-gradient(circle at center, #5b1a78 0%, #0c081e 80%)';
     }
     if (isMyTurn) {
       // Sıra bendeyken odaklanma mavisi
-      return 'radial-gradient(ellipse at center, #1a2a6c 0%, #0f0f23 75%)';
+      return 'radial-gradient(circle at center, #1a4da3 0%, #060e22 80%)';
     }
     // Varsayılan arka plan
-    return '#0f0f23';
+    return 'radial-gradient(circle at center, #1c2b5e 0%, #080d21 80%)';
   };
 
   return (
@@ -2452,84 +2633,117 @@ export default function App() {
         }
       `}
       </style>
-      <div className={`${is3DTable ? 'table-3d' : ''} ${boardShake === 'heavy' ? "board-shake-heavy" : boardShake ? "board-shake-active" : ""}`} style={{ minHeight: '100vh', background: getDynamicBackground(), color: '#fff', display: 'flex', flexDirection: 'column', fontSize: 13, transition: 'background 0.8s ease-in-out' }}>
+      <div className={`game-board-container ${is3DTable ? 'table-3d' : ''} ${boardShake === 'heavy' ? "board-shake-heavy" : boardShake ? "board-shake-active" : ""}`} style={{ height: isMobile ? '100vh' : 'auto', maxHeight: isMobile ? '100vh' : 'none', overflow: isMobile ? 'hidden' : 'visible', background: getDynamicBackground(), color: '#fff', display: 'flex', flexDirection: 'column', fontSize: 13, transition: 'background 0.8s ease-in-out' }}>
 
         {/* Üst bar */}
-        <div className="game-topbar" style={{ background: '#1a1a2e', padding: '10px 16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid rgba(255,255,255,0.1)', flexWrap: 'wrap', gap: 8, zIndex: 100 }}>
-          <div style={{ color: '#FFD700', fontWeight: 900, fontSize: 16 }}>🏠 Monopoly Deal</div>
-          <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
-            <span style={{ color: '#aaa', fontSize: 11 }}>Oda: <b style={{ color: '#fff' }}>{roomCode}</b></span>            <button ref={deckRef} onClick={() => setShowDeckStats(true)} style={{ background: 'rgba(255,255,255,0.1)', padding: '4px 8px', borderRadius: 6, color: '#aaa', fontSize: 11, border: 'none', cursor: 'pointer' }}>
-              🎴 Deste: <b style={{ color: '#fff' }}>{gameState.deckCount}</b> (Detay)
-            </button>
-            {gameState.turnTimer > 0 && gameState.turnStartTime && (
-              <span style={{ background: 'rgba(231, 76, 60, 0.2)', padding: '4px 8px', borderRadius: 6, color: '#fff', fontSize: 11, border: '1px solid rgba(231,76,60,0.5)' }}>
-                ⏱️ Süre: <b style={{ color: '#FFD700' }}>
-                  {isBlocked ? `DURDURULDU (${remainingTime}s)` : `${remainingTime}s`}
-                </b>
-              </span>
-            )}
-            <button onClick={() => setShowDiscardModal(true)} style={{ ...btnStyle('rgba(255,255,255,0.1)'), padding: '4px 8px', fontSize: 11 }}>
-              🗑️ Iskarta ({gameState.discard?.length || 0})
-            </button>
-            <button onClick={() => { const next = !is3DTable; setIs3DTable(next); localStorage.setItem('md_3d', next ? 'on' : 'off'); sfxClick(); }} style={{ ...btnStyle(is3DTable ? 'rgba(46,204,113,0.15)' : 'rgba(255,255,255,0.1)'), padding: '4px 8px', fontSize: 11, border: is3DTable ? '1px solid rgba(46,204,113,0.4)' : 'none' }}>
-              {is3DTable ? '👓 3D Masa: Açık' : '👓 3D Masa: Kapalı'}
-            </button>
-            {isMyTurn && (
-              <span style={{ background: '#FFD700', color: '#000', fontWeight: 700, padding: '4px 8px', borderRadius: 6, fontSize: 11 }}>
-                SIRA SENİN ({gameState.actionsLeft} aksiyon)
-              </span>
-            )}
-            <button onClick={() => setShowHistoryModal(true)} style={{ ...btnStyle('rgba(52, 152, 219, 0.2)'), padding: '4px 8px', fontSize: 11, border: '1px solid rgba(52, 152, 219, 0.5)' }}>
-              📜 Geçmiş
-            </button>
-            {gameState.streetThugs && gameState.scavengeMarket?.length > 0 && (
-              <button onClick={() => setShowScavengeModal(true)} style={{ ...btnStyle('rgba(231, 76, 60, 0.2)'), padding: '4px 8px', fontSize: 11, border: '1px solid rgba(231, 76, 60, 0.5)' }}>
-                🕵️ Karaborsa ({gameState.scavengeMarket.length})
-              </button>
-            )}
-            <button onClick={toggleTts} title={ttsOn ? 'Türkçe Seslendirmeyi Kapat' : 'Türkçe Seslendirmeyi Aç'} style={{
-              background: 'rgba(255,255,255,0.08)', border: `1px solid ${ttsOn ? '#4FC3F7' : 'rgba(255,255,255,0.2)'}`,
-              color: '#fff', borderRadius: 6, cursor: 'pointer', fontSize: 13, padding: '3px 8px',
-            }}>
-              {ttsOn ? '🗣️' : '💬'}
-            </button>
-            <button onClick={toggleSound} title={soundOn ? 'Sesi Kapat' : 'Sesi Aç'} style={{
-              background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.2)',
-              color: '#fff', borderRadius: 6, cursor: 'pointer', fontSize: 13, padding: '3px 8px',
-            }}>
-              {soundOn ? '🔊' : '🔇'}
-            </button>
-            {soundOn && (
-              <input
-                type="range" min="0" max="0.5" step="0.01"
-                value={bgmVolume}
-                onChange={e => { setBgmVolumeState(e.target.value); setBgmVolume(e.target.value); }}
-                title="Arka Plan Müziği Sesi"
-                style={{ width: 60, cursor: 'pointer' }}
-              />
-            )}
-            {gameState?.players?.[0]?.id === playerId && (
-              <button onClick={() => { socket.emit('returnToLobby', { roomCode }); }} style={{ background: '#E67E22', border: 'none', color: '#fff', padding: '4px 10px', borderRadius: 6, cursor: 'pointer', fontSize: 11, fontWeight: 'bold' }}>
-                Oyunu Bitir
-              </button>
-            )}
-            <button onClick={() => {
-              sfxTableSlap();
-              setBoardShake(true);
-              setSlapActive(true);
-              setTimeout(() => setBoardShake(false), 300);
-              setTimeout(() => setSlapActive(false), 450);
-            }} style={{ background: 'transparent', border: '1px solid #F39C12', color: '#F39C12', padding: '4px 10px', borderRadius: 6, cursor: 'pointer', fontSize: 11, fontWeight: 'bold' }}>
-              👊 Masaya Vur!
-            </button>
-            <button onClick={handleRageQuit} style={{ background: 'transparent', border: '1px solid #E74C3C', color: '#E74C3C', padding: '4px 10px', borderRadius: 6, cursor: 'pointer', fontSize: 11, fontWeight: 'bold' }}>
-              (╯°□°)╯︵ ┻━┻ Masayı Devir
-            </button>
-            <button onClick={handleExit} style={{ background: '#E74C3C', border: 'none', color: '#fff', padding: '4px 10px', borderRadius: 6, cursor: 'pointer', fontSize: 11, fontWeight: 'bold' }}>
-              Çıkış
-            </button>
+        {!isHeaderOpen ? (
+          <div 
+            onClick={() => { setIsHeaderOpen(true); sfxClick(); }}
+            style={{
+              background: '#1a1a2e',
+              height: '24px',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              cursor: 'pointer',
+              borderBottom: '1px solid rgba(255,255,255,0.1)',
+              transition: 'background 0.2s',
+              zIndex: 100,
+              fontSize: '11px',
+              color: '#aaa',
+              fontWeight: 'bold',
+              letterSpacing: 1,
+              userSelect: 'none'
+            }}
+            onMouseEnter={e => e.currentTarget.style.background = '#22223b'}
+            onMouseLeave={e => e.currentTarget.style.background = '#1a1a2e'}
+          >
+            ▼ ÜST BARI GÖSTER
           </div>
-        </div>
+        ) : (
+          <div className="game-topbar" style={{ background: '#1a1a2e', padding: '10px 16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid rgba(255,255,255,0.1)', flexWrap: 'wrap', gap: 8, zIndex: 100 }}>
+            {isMobile ? (
+              <div style={{ display: 'flex', width: '100%', justifyContent: 'space-between', alignItems: 'center' }}>
+                <div style={{ color: '#FFD700', fontWeight: 900, fontSize: 15 }}>🏠 Monopoly Deal</div>
+                <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                  {isMyTurn && (
+                    <span style={{ background: '#FFD700', color: '#000', fontWeight: 700, padding: '2px 6px', borderRadius: 4, fontSize: 10 }}>
+                      SIRA SENDE
+                    </span>
+                  )}
+                  <button onClick={() => { setIsMenuOpen(true); sfxClick(); }} style={{ ...btnStyle('rgba(255,255,255,0.1)'), padding: '4px 10px', fontSize: 11, border: '1px solid rgba(255,255,255,0.2)' }}>
+                    ⚙️ MENÜ
+                  </button>
+                  <button onClick={() => { setIsHeaderOpen(false); sfxClick(); }} style={{ background: 'transparent', border: 'none', color: '#aaa', cursor: 'pointer', fontSize: 14, padding: '0 4px' }} title="Barı Gizle">
+                    ▲
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <>
+                <div style={{ color: '#FFD700', fontWeight: 900, fontSize: 16 }}>🏠 Monopoly Deal</div>
+                <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
+                  <span style={{ color: '#aaa', fontSize: 11 }}>Oda: <b style={{ color: '#fff' }}>{roomCode}</b></span>
+                  <button ref={deckRef} onClick={() => setShowDeckStats(true)} style={{ background: 'rgba(255,255,255,0.1)', padding: '4px 8px', borderRadius: 6, color: '#aaa', fontSize: 11, border: 'none', cursor: 'pointer' }}>
+                    🎴 Deste: <b style={{ color: '#fff' }}>{gameState.deckCount}</b> (Detay)
+                  </button>
+                  {gameState.turnTimer > 0 && gameState.turnStartTime && (
+                    <span style={{ background: 'rgba(231, 76, 60, 0.2)', padding: '4px 8px', borderRadius: 6, color: '#fff', fontSize: 11, border: '1px solid rgba(231,76,60,0.5)' }}>
+                      ⏱️ Süre: <b style={{ color: '#FFD700' }}>
+                        {isBlocked ? `DURDURULDU (${remainingTime}s)` : `${remainingTime}s`}
+                      </b>
+                    </span>
+                  )}
+                  <button onClick={() => setShowDiscardModal(true)} style={{ ...btnStyle('rgba(255,255,255,0.1)'), padding: '4px 8px', fontSize: 11 }}>
+                    🗑️ Iskarta ({gameState.discard?.length || 0})
+                  </button>
+                  <button onClick={() => { const next = !is3DTable; setIs3DTable(next); localStorage.setItem('md_3d', next ? 'on' : 'off'); sfxClick(); }} style={{ ...btnStyle(is3DTable ? 'rgba(46,204,113,0.15)' : 'rgba(255,255,255,0.1)'), padding: '4px 8px', fontSize: 11, border: is3DTable ? '1px solid rgba(46,204,113,0.4)' : 'none' }}>
+                    {is3DTable ? '👓 3D Masa: Açık' : '👓 3D Masa: Kapalı'}
+                  </button>
+                  {isMyTurn && (
+                    <span style={{ background: '#FFD700', color: '#000', fontWeight: 700, padding: '4px 8px', borderRadius: 6, fontSize: 11 }}>
+                      SIRA SENİN ({gameState.actionsLeft} aksiyon)
+                    </span>
+                  )}
+                  <button onClick={() => setShowHistoryModal(true)} style={{ ...btnStyle('rgba(52, 152, 219, 0.2)'), padding: '4px 8px', fontSize: 11, border: '1px solid rgba(52, 152, 219, 0.5)' }}>
+                    📜 Geçmiş
+                  </button>
+                  {gameState.streetThugs && gameState.scavengeMarket?.length > 0 && (
+                    <button onClick={() => setShowScavengeModal(true)} style={{ ...btnStyle('rgba(231, 76, 60, 0.2)'), padding: '4px 8px', fontSize: 11, border: '1px solid rgba(231, 76, 60, 0.5)' }}>
+                      🕵️ Karaborsa ({gameState.scavengeMarket.length})
+                    </button>
+                  )}
+                  <button onClick={toggleSound} title={soundOn ? 'Sesi Kapat' : 'Sesi Aç'} style={{
+                    background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.2)',
+                    color: '#fff', borderRadius: 6, cursor: 'pointer', fontSize: 13, padding: '3px 8px',
+                  }}>
+                    {soundOn ? '🔊' : '🔇'}
+                  </button>
+                  {soundOn && (
+                    <input
+                      type="range" min="0" max="0.5" step="0.01"
+                      value={bgmVolume}
+                      onChange={e => { setBgmVolumeState(e.target.value); setBgmVolume(e.target.value); }}
+                      title="Arka Plan Müziği Sesi"
+                      style={{ width: 60, cursor: 'pointer' }}
+                    />
+                  )}
+                  {gameState?.players?.[0]?.id === playerId && (
+                    <button onClick={() => { socket.emit('returnToLobby', { roomCode }); }} style={{ background: '#E67E22', border: 'none', color: '#fff', padding: '4px 10px', borderRadius: 6, cursor: 'pointer', fontSize: 11, fontWeight: 'bold' }}>
+                      Oyunu Bitir
+                    </button>
+                  )}
+                  <button onClick={handleRageQuit} style={{ background: 'transparent', border: '1px solid #E74C3C', color: '#E74C3C', padding: '4px 10px', borderRadius: 6, cursor: 'pointer', fontSize: 11, fontWeight: 'bold' }}>
+                    (╯°□°)╯︵ ┻━┻ Masayı Devir
+                  </button>
+                  <button onClick={() => { setIsHeaderOpen(false); sfxClick(); }} style={{ ...btnStyle('rgba(255,255,255,0.1)'), padding: '4px 8px', fontSize: 11 }}>
+                    ▲ Gizle
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
+        )}
 
         {/* Canlı Hamle Şeridi (Action Ticker) */}
         {gameState.log?.length > 0 && (
@@ -2555,6 +2769,7 @@ export default function App() {
         {renderChallengeModal()}
         {renderPaymentModal()}
         {renderDiscardModal()}
+        {renderMenuModal()}
         {renderDeckStatsModal()}
         {renderPlayerDetailsModal()}
         {renderTradeModal()}
@@ -2631,114 +2846,7 @@ export default function App() {
           </div>
         )}
 
-        {/* Kart Önizleme Tooltip */}
-        {previewCard && (
-          <>
-            {/* Arkaplan karartma (sadece mobil tıklandığında veya hover dışında kalıcıysa) */}
-            <div
-              style={{
-                position: 'fixed',
-                inset: 0,
-                zIndex: 999,
-                background: (isMobile || previewLocked) ? 'rgba(0,0,0,0.4)' : 'transparent',
-                pointerEvents: (isMobile || previewLocked) ? 'auto' : 'none'
-              }}
-              onClick={() => { setPreviewCard(null); setPreviewLocked(false); }}
-            />
-            <div
-              className="card-preview-window preview-glow-active"
-              style={{
-                position: 'fixed',
-                left: isMobile ? '50%' : Math.min(mousePos.x + 20, window.innerWidth - 300),
-                top: isMobile ? '50%' : Math.min(mousePos.y + 20, window.innerHeight - 350),
-                transform: isMobile ? 'translate(-50%, -50%)' : 'none',
-                right: 'auto', bottom: 'auto',
-                background: previewCard.type === 'action' ? 'rgba(45, 10, 10, 0.92)' :
-                  previewCard.type === 'money' ? 'rgba(10, 45, 10, 0.92)' :
-                    previewCard.type === 'property' ? 'rgba(45, 40, 10, 0.92)' : 'rgba(0,0,0,0.8)',
-                '--glow-color': previewCard.type === 'action' ? '#E74C3C' :
-                  previewCard.type === 'money' ? '#2ECC71' :
-                    (COLOR_INFO[previewCard.activeColor || previewCard.color]?.hex || '#FFD700'),
-                boxShadow: `0 0 25px var(--glow-color)`
-              }}
-            >
-              <button className="card-preview-close" onClick={() => { setPreviewCard(null); setPreviewLocked(false); }}>✕</button>
-              <CardVisual card={previewCard} />
-
-              <div className="card-preview-info">
-                <div style={{ fontSize: 18, fontWeight: 'bold', color: '#fff', marginBottom: 10, textAlign: 'center' }}>{previewCard.name}</div>
-                <div style={{
-                  color: '#fff',
-                  fontWeight: '900',
-                  marginBottom: 4,
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: 8,
-                  fontSize: 13,
-                  padding: '4px 10px',
-                  borderRadius: '4px',
-                  textShadow: '0 1px 2px rgba(0,0,0,0.5)'
-                }}>
-                  <span style={{ fontSize: 16 }}>
-                    {previewCard.type === 'property' ? '🏠' : previewCard.type === 'action' ? '⚡' : '💰'}
-                  </span>
-                  <span>
-                    {previewCard.type === 'property' ? 'ARAZİ KARTI' : previewCard.type === 'action' ? 'AKSİYON KARTI' : 'NAKİT KARTI'}
-                  </span>
-                </div>
-
-                <div style={{
-                  marginBottom: 8,
-                  background: previewCard.type === 'action' ? 'linear-gradient(90deg, rgba(231, 76, 60, 0.4), transparent)' :
-                    previewCard.type === 'money' ? 'linear-gradient(90deg, rgba(46, 204, 113, 0.4), transparent)' :
-                      'linear-gradient(90deg, rgba(255, 215, 0, 0.3), transparent)',
-                  borderLeft: `4px solid ${previewCard.type === 'action' ? '#E74C3C' : previewCard.type === 'money' ? '#2ECC71' : '#FFD700'}`,
-                  padding: '2px 8px',
-                  borderRadius: '0 4px 4px 0',
-                  fontSize: 10,
-                  display: 'flex',
-                  justifyContent: 'space-between'
-                }}>
-                  <span style={{ color: getRarity(previewCard.key).color }}>
-                    {'★'.repeat(getRarity(previewCard.key).stars)} {getRarity(previewCard.key).label}
-                  </span>
-                </div>
-
-                <div style={{ padding: '4px 0' }}>💰 <b>Bankadaki Değeri:</b> <span style={{ color: '#FFD700' }}>{previewCard.value}M</span></div>
-
-                {previewCard.type === 'property' && (
-                  <>
-                    <div style={{ borderTop: '1px solid rgba(255,255,255,0.1)', paddingTop: 6, marginTop: 4 }}>
-                      🎨 <b>Renk Grubu:</b> {COLOR_INFO[previewCard.activeColor || previewCard.color]?.name || 'Joker'}
-                    </div>
-                    <CardRentPanel previewCard={previewCard} gameState={gameState} />
-                    <div style={{
-                      marginTop: 10, padding: '6px 8px', background: 'rgba(255,255,255,0.05)',
-                      borderRadius: 6, borderLeft: '3px solid #4FC3F7', fontSize: 10.5, color: '#4FC3F7'
-                    }}>
-                      💡 <b>İPUCU:</b> {getDetailedCardTip(previewCard)}
-                    </div>
-                  </>
-                )}
-                {previewCard.type === 'action' && (
-                  <>
-                    <div style={{ marginTop: 4, fontStyle: 'italic', fontSize: 11, color: '#aaa' }}>
-                      Aksiyon kartları stratejik hamleler için kullanılır veya bankaya para olarak yatırılabilir.
-                    </div>
-                    <div style={{
-                      marginTop: 10, padding: '6px 8px', background: 'rgba(255,255,255,0.05)',
-                      borderRadius: 6, borderLeft: '3px solid #4FC3F7', fontSize: 10.5, color: '#4FC3F7'
-                    }}>
-                      💡 <b>NASIL OYNANIR?</b> {getDetailedCardTip(previewCard)}
-                    </div>
-                  </>
-                )}
-
-                <CardProbabilityPanel previewCard={previewCard} gameState={gameState} playerId={playerId} />
-              </div>
-            </div>
-          </>
-        )}
+        {/* Kart Önizleme Tooltip Kaldırıldı */}
 
         {/* Ödeme Yaparken Uçan Kartlar */}
         {payingFlyingCards.map(card => (
@@ -2787,129 +2895,719 @@ export default function App() {
           </div>
         )}
 
-        <div className={`game-main ${rageQuit ? 'rage-quit-active' : ''}`} style={{ display: 'flex', flex: 1, overflow: 'hidden', flexDirection: isMobile ? 'column' : 'row' }}>
-          {/* Sol: Diğer oyuncular */}
-          <div className="players-sidebar" style={{
-            width: isMobile ? '100%' : 260, height: isMobile ? 'auto' : '100%', maxHeight: isMobile ? '200px' : 'none',
-            padding: '20px 10px', overflowY: 'auto', borderRight: isMobile ? 'none' : '1px solid rgba(255,255,255,0.1)', borderBottom: isMobile ? '1px solid rgba(255,255,255,0.1)' : 'none'
+        <div className={`game-main ${rageQuit ? 'rage-quit-active' : ''}`} style={{ display: 'flex', flex: 1, overflowY: isMobile ? 'hidden' : 'auto', overflowX: 'hidden', flexDirection: 'column' }}>
+          {/* Üst: Diğer oyuncular (Mobil ve Masaüstü sütunlu yerleşim) */}
+          <div className="opponents-top-row" style={{
+            display: 'flex',
+            gap: 12,
+            padding: '12px 16px',
+            borderBottom: '1px solid rgba(255,255,255,0.1)',
+            overflowX: 'auto',
+            background: 'rgba(0,0,0,0.12)',
+            zIndex: 10,
+            flexShrink: 0
           }}>
-            <div style={{ fontSize: 10, color: '#666', marginBottom: 8, textTransform: 'uppercase', letterSpacing: 1 }}>Oyuncular</div>
-            <div style={{ display: isMobile ? 'flex' : 'block', gap: 8 }}>
-              {gameState.players.filter(p => p.id !== playerId).map(player => {
-                // Renk uyumunu garantilemek için ana listedeki sırasını buluyoruz
-                const pIdx = gameState.players.findIndex(x => x.id === player.id);
-                const isTargeted = gameState.pendingChallenges.some(ch => (ch.action === 'slydeal' || ch.action === 'dealbreaker' || ch.action === 'debtcollector') && ch.targetId === player.id);
-                return (
-                  // PlayerPanel.jsx dosyasını React.forwardRef ile sarmalamayı unutmayın!
-                  // export const PlayerPanel = React.forwardRef(({...}, ref) => { ... });
-                  <div key={player.id} style={{
-                    minWidth: isMobile ? '200px' : 'auto',
+            {gameState.players.filter(p => p.id !== playerId).map(player => {
+              const pIdx = gameState.players.findIndex(x => x.id === player.id);
+              const playerColor = PLAYER_COLORS[pIdx % PLAYER_COLORS.length];
+              const isTargeted = gameState.pendingChallenges.some(ch => (ch.action === 'slydeal' || ch.action === 'dealbreaker' || ch.action === 'debtcollector') && ch.targetId === player.id);
+              const isCurrent = player.id === gameState.currentPlayerId;
+
+              return (
+                <div 
+                  key={player.id} 
+                  ref={el => (playerPanelRefs.current[player.id] = el)}
+                  onClick={() => setViewingPlayerId(player.id)}
+                  style={{
+                    flex: 1,
+                    minWidth: isMobile ? 260 : 300,
+                    borderRadius: 16,
+                    padding: 12,
+                    background: `linear-gradient(to bottom, ${playerColor}15 0%, rgba(20,20,35,0.6) 100%)`,
+                    border: isCurrent ? `2.5px solid ${playerColor}` : `1px solid ${playerColor}55`,
+                    boxShadow: isCurrent ? `0 0 20px ${playerColor}44` : 'none',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: 10,
                     position: 'relative',
-                    borderRadius: '12px',
-                    boxShadow: (player.id === gameState.currentPlayerId && gameState.turnTimer > 0)
-                      ? `0 0 15px ${remainingTime <= 10 ? '#E74C3C' : '#2ECC71'}`
-                      : 'none',
-                    transition: 'box-shadow 0.3s'
-                  }}>
-                    {isTargeted && <div className="target-crosshair" />}
-                    <PlayerPanel
-                      ref={el => (playerPanelRefs.current[player.id] = el)}
-                      player={player}
-                      isMe={false}
-                      isCurrent={player.id === gameState.currentPlayerId}
-                      onHoverCard={handleCardHover}
-                      onSelectTarget={(id) => setViewingPlayerId(id)}
-                      playerColor={PLAYER_COLORS[pIdx % PLAYER_COLORS.length]}
-                      emotes={emotes.filter(e => e.senderId === player.id)}
-                    />
+                    transition: 'all 0.3s ease',
+                    cursor: 'pointer',
+                    '--player-color': playerColor
+                  }}
+                  className={isCurrent ? 'spotlight-glow' : ''}
+                >
+                  {isTargeted && <div className="target-crosshair" />}
+                  
+                  {/* Oyuncu Üst Bilgi Başlığı (Header) */}
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid rgba(255,255,255,0.1)', paddingBottom: 6 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                      <div style={{ width: 10, height: 10, borderRadius: '50%', background: playerColor, boxShadow: `0 0 8px ${playerColor}` }} />
+                      <span style={{ fontWeight: 800, color: playerColor, fontSize: 13.5, textShadow: '0 1px 2px rgba(0,0,0,0.8)' }}>
+                        {player.name}
+                      </span>
+                      {player.isAFK && <span title="AFK" style={{ fontSize: 13 }}>💤</span>}
+                      {player.connected === false && <span style={{ fontSize: 9, color: '#f44' }}>● Çevrimdışı</span>}
+                    </div>
+                    
+                    <div style={{ display: 'flex', gap: 8, fontSize: 11, fontWeight: 'bold', color: '#ddd' }}>
+                      <span style={{ background: 'rgba(255,255,255,0.08)', padding: '2px 6px', borderRadius: 6 }}>
+                        💰 {player.bankTotal}M
+                      </span>
+                      <span style={{ background: 'rgba(255,255,255,0.08)', padding: '2px 6px', borderRadius: 6 }}>
+                        🃏 x{player.handCount}
+                      </span>
+                    </div>
                   </div>
-                );
-              })}
-            </div>
+
+                  {/* Oyuncu Varlıkları (Mülkler ve Banka Yığını) */}
+                  <div style={{ display: 'flex', gap: 10, flex: 1, minHeight: 76, overflowX: 'auto', paddingBottom: 4 }}>
+                    
+                    {/* Banka Para Kartı Yığını */}
+                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4, flexShrink: 0 }}>
+                      <span style={{ fontSize: 8, color: '#888', fontWeight: 'bold' }}>🏦 KASA</span>
+                      <div style={{ position: 'relative', width: 44, height: 64 }}>
+                        {player.bank?.slice(0, 5).map((c, i) => (
+                          <div key={c.id} style={{
+                            position: 'absolute',
+                            top: i * 4,
+                            left: i * 2,
+                            width: 32,
+                            height: 48,
+                            borderRadius: 4,
+                            background: 'linear-gradient(135deg, #2ECC71, #196F3D)',
+                            border: '1px solid rgba(255,255,255,0.2)',
+                            boxShadow: '0 2px 5px rgba(0,0,0,0.3)',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            fontWeight: 900,
+                            fontSize: 10,
+                            color: '#fff',
+                            zIndex: i
+                          }}>
+                            {c.value}M
+                          </div>
+                        ))}
+                        {(player.bank?.length || 0) > 5 && (
+                          <div style={{
+                            position: 'absolute',
+                            top: 20,
+                            left: 10,
+                            background: 'rgba(0,0,0,0.75)',
+                            color: '#FFD700',
+                            borderRadius: '50%',
+                            width: 20,
+                            height: 20,
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            fontSize: 9,
+                            fontWeight: 900,
+                            zIndex: 10
+                          }}>
+                            +{player.bank.length - 5}
+                          </div>
+                        )}
+                        {(!player.bank || player.bank.length === 0) && (
+                          <div style={{ width: 32, height: 48, borderRadius: 4, border: '1.2px dashed rgba(255,255,255,0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 8, color: '#444' }}>BOŞ</div>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Mülk Sütunları (En fazla 4 yan yana - Mobilde Renkli Noktalar) */}
+                    {isMobile ? (
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 6, justifyContent: 'center', marginLeft: 8 }} onClick={(e) => e.stopPropagation()}>
+                        <span style={{ fontSize: 8, color: '#888', fontWeight: 'bold' }}>ARAZİLER</span>
+                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, maxWidth: '160px' }}>
+                          {Object.entries(player.properties || {}).map(([color, cards]) => {
+                            if (cards.length === 0) return null;
+                            const info = COLOR_INFO[color] || { hex: '#aaa' };
+                            const isComplete = isSetComplete(cards, color);
+                            return (
+                              <div 
+                                key={color}
+                                className={`micro-card-dot ${isComplete ? 'complete-set-glow' : ''}`}
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setModal({ type: 'viewCardDetails', card: cards[0] });
+                                }}
+                                style={{
+                                  width: 14,
+                                  height: 18,
+                                  borderRadius: 3,
+                                  backgroundColor: info.hex,
+                                  border: isComplete ? '1.5px solid #fff' : '1px solid rgba(255,255,255,0.2)',
+                                  boxShadow: isComplete ? `0 0 8px ${info.hex}` : 'none',
+                                  opacity: isComplete ? 1 : 0.5,
+                                  cursor: 'pointer',
+                                  '--glow-color': info.hex
+                                }}
+                                title={`${info.name}: ${cards.length} kart ${isComplete ? '(Tamamlandı)' : ''}`}
+                              />
+                            );
+                          })}
+                          {Object.values(player.properties || {}).flat().length === 0 && (
+                            <span style={{ fontSize: 9, color: '#555', fontStyle: 'italic' }}>BOŞ</span>
+                          )}
+                        </div>
+                      </div>
+                    ) : (
+                      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 44px)', gap: 6 }}>
+                        {Object.entries(player.properties || {}).map(([color, cards]) => {
+                          if (cards.length === 0) return null;
+                          const info = COLOR_INFO[color] || { hex: '#aaa' };
+                          const isComplete = isSetComplete(cards, color);
+                          return (
+                            <div 
+                              key={color} 
+                              style={{ 
+                                display: 'flex', 
+                                flexDirection: 'column', 
+                                position: 'relative', 
+                                width: 44, 
+                                minHeight: 64,
+                                background: isComplete ? `${info.hex}15` : 'transparent',
+                                borderRadius: 4,
+                                padding: 2,
+                                border: isComplete ? `1px solid ${info.hex}` : 'none',
+                                boxSizing: 'border-box'
+                              }}
+                            >
+                              {/* Dikey stacked kartlar */}
+                              {cards.map((c, i) => (
+                                <div 
+                                  key={c.id} 
+                                  className="mini-card-wrapper"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setModal({ type: 'viewCardDetails', card: c });
+                                  }}
+                                  style={{
+                                    marginTop: i > 0 ? -42 : 0, // Dikey üst üste binme
+                                    zIndex: i,
+                                    position: 'relative',
+                                    width: 38,
+                                    height: 52
+                                  }}
+                                >
+                                  {/* Mini View */}
+                                  <div style={{
+                                    width: 38,
+                                    height: 52,
+                                    backgroundColor: '#FFFFFF',
+                                    border: isComplete ? `1.5px solid ${info.hex}` : '1px solid rgba(0,0,0,0.15)',
+                                    borderRadius: 4,
+                                    display: 'flex',
+                                    flexDirection: 'column',
+                                    alignItems: 'center',
+                                    overflow: 'hidden',
+                                    boxShadow: '0 2px 4px rgba(0,0,0,0.2)',
+                                    boxSizing: 'border-box',
+                                    '--glow-color': info.hex
+                                  }} className={`mini-card-face ${isComplete ? 'complete-set-glow' : ''}`}>
+                                    {/* Üst renk çizgisi */}
+                                    <div style={{
+                                      width: '100%',
+                                      height: 8,
+                                      background: c.isWild ? 'linear-gradient(90deg, #E74C3C, #F39C12, #2ECC71, #3498DB)' : info.hex,
+                                      flexShrink: 0
+                                    }} />
+                                    <div style={{
+                                      fontSize: 8,
+                                      fontWeight: 900,
+                                      color: '#333',
+                                      lineHeight: 1,
+                                      marginTop: 4,
+                                      transform: 'scale(0.85)'
+                                    }}>
+                                      {c.isWild ? '★' : (c.value || '')}
+                                    </div>
+                                  </div>
+
+                                  {/* Hover View */}
+                                  <div className="mini-card-hover-view">
+                                    <CardVisual card={c} small />
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
           </div>
 
-          {/* Orta: Log */}
-          <div className="center-panel" style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 16px 4px' }}>
-              <span style={{ fontSize: 11, color: '#aaa', fontWeight: 'bold', letterSpacing: 1 }}>📜 OYUN GÜNLÜĞÜ</span>
-              <span style={{ fontSize: 9, color: '#555', fontStyle: 'italic' }}>Son olaylar</span>
-            </div>
-            <div ref={logRef} className="game-log" style={{
-              flex: 1, overflowY: 'auto', padding: '10px', display: 'flex', flexDirection: 'column', gap: 6,
-              maxHeight: isMobile ? '140px' : '180px', margin: '0 10px 10px',
-              background: 'rgba(0,0,0,0.3)', borderRadius: 12, border: '1px solid rgba(255,255,255,0.05)',
-              boxShadow: 'inset 0 0 20px rgba(0,0,0,0.5)'
-            }}>
-              {gameState.log?.slice(-20).map((entry, i) => {
-                const isSystem = entry.type === 'system';
-                const isImportant = entry.type === 'payment' || entry.type === 'property' || entry.type === 'action';
-                return (
-                  <div key={i} style={{
-                    fontSize: 11, color: isSystem ? '#FFD700' : '#ddd', padding: '8px 12px',
-                    background: isSystem ? 'linear-gradient(90deg, rgba(255, 215, 0, 0.15), transparent)' : isImportant ? 'linear-gradient(90deg, rgba(255, 255, 255, 0.05), transparent)' : 'transparent',
-                    borderRadius: 8, borderLeft: isSystem ? '3px solid #FFD700' : isImportant ? '2px solid rgba(255,255,255,0.3)' : '2px solid transparent',
-                    animation: 'fw-fade-in 0.3s ease-out'
-                  }}>
-                    <div className={isSystem ? 'system-log-blink' : ''} style={{ lineHeight: 1.4 }}>{renderLogMsg(entry)}</div>
-                    <div style={{ fontSize: 8, color: '#666', marginTop: 6, textAlign: 'right' }}>
-                      {new Date(entry.time).toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' })}
+          {/* Orta Panel (Responsive Masa / Log Görünümü) */}
+          {isMobile ? (
+            <div className="center-panel" style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+              {/* Tab Selector (Mobil için) */}
+              <div style={{ display: 'flex', background: 'rgba(0,0,0,0.3)', borderRadius: 8, margin: '8px 10px 4px', padding: 2, flexShrink: 0 }}>
+                <button 
+                  onClick={() => setActiveTab('board')}
+                  style={{
+                    flex: 1,
+                    padding: '6px',
+                    background: activeTab === 'board' ? 'rgba(255,255,255,0.1)' : 'transparent',
+                    border: 'none',
+                    color: activeTab === 'board' ? '#FFD700' : '#aaa',
+                    fontWeight: 'bold',
+                    fontSize: 11,
+                    borderRadius: 6,
+                    cursor: 'pointer'
+                  }}
+                >
+                  🎮 MASA ÜSTÜ
+                </button>
+                <button 
+                  onClick={() => setActiveTab('log')}
+                  style={{
+                    flex: 1,
+                    padding: '6px',
+                    background: activeTab === 'log' ? 'rgba(255,255,255,0.1)' : 'transparent',
+                    border: 'none',
+                    color: activeTab === 'log' ? '#FFD700' : '#aaa',
+                    fontWeight: 'bold',
+                    fontSize: 11,
+                    borderRadius: 6,
+                    cursor: 'pointer'
+                  }}
+                >
+                  📜 OYUN GÜNLÜĞÜ
+                </button>
+              </div>
+
+              {activeTab === 'log' ? (
+                <div ref={logRef} className="game-log" style={{
+                  flex: 1, overflowY: 'auto', padding: '10px', display: 'flex', flexDirection: 'column', gap: 6,
+                  margin: '4px 10px 10px', background: 'rgba(0,0,0,0.3)', borderRadius: 12, border: '1px solid rgba(255,255,255,0.05)',
+                  boxShadow: 'inset 0 0 20px rgba(0,0,0,0.5)'
+                }}>
+                  {gameState.log?.slice(-20).map((entry, i) => {
+                    const isSystem = entry.type === 'system';
+                    const isImportant = entry.type === 'payment' || entry.type === 'property' || entry.type === 'action';
+                    return (
+                      <div key={i} style={{
+                        fontSize: 11, color: isSystem ? '#FFD700' : '#ddd', padding: '8px 12px',
+                        background: isSystem ? 'linear-gradient(90deg, rgba(255, 215, 0, 0.15), transparent)' : isImportant ? 'linear-gradient(90deg, rgba(255, 255, 255, 0.05), transparent)' : 'transparent',
+                        borderRadius: 8, borderLeft: isSystem ? '3px solid #FFD700' : isImportant ? '2px solid rgba(255,255,255,0.3)' : '2px solid transparent',
+                        animation: 'fw-fade-in 0.3s ease-out'
+                      }}>
+                        <div className={isSystem ? 'system-log-blink' : ''} style={{ lineHeight: 1.4 }}>{renderLogMsg(entry)}</div>
+                        <div style={{ fontSize: 8, color: '#666', marginTop: 6, textAlign: 'right' }}>
+                          {new Date(entry.time).toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' })}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              ) : (
+                <div style={{ display: 'flex', gap: 12, padding: 10, flex: 1, overflow: 'hidden' }}>
+                  {/* Sol: Deste ve Son Oynanan (Mobil) */}
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 12, alignItems: 'center', justifyContent: 'center', background: 'rgba(0,0,0,0.18)', padding: '10px 6px', borderRadius: 8, width: 80, flexShrink: 0 }}>
+                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2 }}>
+                      <span style={{ fontSize: 8, color: '#aaa', fontWeight: 'bold' }}>DESTE ({gameState.deckCount})</span>
+                      <div style={{ width: 44, height: 60, borderRadius: 4, border: '1px dashed rgba(255,255,255,0.2)', background: 'rgba(255,255,255,0.02)', display: 'flex', alignItems: 'center', justifyContent: 'center', position: 'relative' }}>
+                        {gameState.deckCount > 0 ? (
+                          <div style={{ width: 38, height: 54, borderRadius: 3, background: 'linear-gradient(135deg, #1f4068, #162447)', border: '1px solid #FFD700', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                            <span style={{ fontSize: 12 }}>🏠</span>
+                          </div>
+                        ) : (
+                          <span style={{ fontSize: 8, color: '#444' }}>BOŞ</span>
+                        )}
+                      </div>
+                    </div>
+
+                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2 }}>
+                      <span style={{ fontSize: 8, color: '#aaa', fontWeight: 'bold' }}>SON OYNANAN</span>
+                      <div style={{ width: 44, height: 60, borderRadius: 4, border: '1px dashed rgba(255,255,255,0.2)', background: 'rgba(255,255,255,0.02)', display: 'flex', alignItems: 'center', justifyContent: 'center', position: 'relative' }}>
+                        {gameState.discard?.length > 0 ? (
+                          <div style={{ transform: 'scale(0.55)', cursor: 'pointer' }}
+                            onClick={() => { setPreviewCard(gameState.discard[gameState.discard.length - 1]); setPreviewLocked(true); }}>
+                            <CardVisual card={gameState.discard[gameState.discard.length - 1]} small />
+                          </div>
+                        ) : (
+                          <span style={{ fontSize: 8, color: '#444' }}>YOK</span>
+                        )}
+                      </div>
                     </div>
                   </div>
-                );
-              })}
-            </div>
 
-            {/* Ortak Masa Ortası Alanı (Central Play Area) */}
-            <div style={{ display: 'flex', gap: 24, padding: '12px 16px', background: 'rgba(0,0,0,0.18)', borderTop: '1px solid rgba(255,255,255,0.06)', borderBottom: '1px solid rgba(255,255,255,0.06)', alignItems: 'center', justifyContent: 'center', transition: 'background 0.3s' }}>
-              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4 }}>
-                <span style={{ fontSize: 9, color: '#aaa', fontWeight: 'bold', letterSpacing: 0.5 }}>🎴 DESTE ({gameState.deckCount})</span>
-                <div style={{ width: 68, height: 96, borderRadius: 6, border: '2px dashed rgba(255,255,255,0.2)', background: 'rgba(255,255,255,0.02)', display: 'flex', alignItems: 'center', justifyContent: 'center', position: 'relative', boxShadow: '0 4px 10px rgba(0,0,0,0.5)' }}>
-                  {gameState.deckCount > 0 ? (
-                    <div style={{ width: 60, height: 88, borderRadius: 5, background: 'linear-gradient(135deg, #1f4068, #162447)', border: '2px solid #FFD700', boxShadow: '0 2px 5px rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'help' }} title="Destedeki Kalan Kart Sayısı">
-                      <span style={{ fontSize: 20 }}>🏠</span>
+                  {/* Sağ: Benim Bankam ve Arazilerim (Mobil) */}
+                  <div data-drop-target="properties" style={{
+                    flex: 1, padding: 8, background: dragOverTarget === 'properties' ? 'rgba(255,215,0,0.08)' : 'rgba(255,255,255,0.02)',
+                    borderRadius: 8, display: 'flex', flexDirection: 'column', overflowY: 'auto'
+                  }}>
+                    <div style={{ fontSize: 9, color: '#aaa', fontWeight: 'bold', marginBottom: 4 }}>BENİM ARAZİLERİM ({myCompleteSets}/{gameState?.winSets || 3} set)</div>
+                    <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                      
+                      {/* Banka Kasa Column */}
+                      <div 
+                        ref={myBankRef}
+                        data-drop-target="bank"
+                        style={{ 
+                          display: 'flex', 
+                          flexDirection: 'column', 
+                          alignItems: 'center', 
+                          gap: 4, 
+                          flexShrink: 0,
+                          width: 44,
+                          minHeight: 64,
+                          background: dragOverTarget === 'bank' ? 'rgba(46,204,113,0.15)' : 'rgba(255,255,255,0.03)',
+                          border: dragOverTarget === 'bank' ? '2.5px dashed #2ECC71' : '1px solid rgba(255,255,255,0.08)',
+                          borderRadius: 6,
+                          padding: 2,
+                          boxSizing: 'border-box',
+                          transition: 'all 0.2s ease'
+                        }}
+                      >
+                        <span style={{ fontSize: 8, color: '#2ECC71', fontWeight: 'bold' }}>🏦 {me.bankTotal}M</span>
+                        <div style={{ position: 'relative', width: 38, height: 52 }}>
+                          {me.bank?.slice(0, 5).map((c, i) => (
+                            <div 
+                              key={c.id} 
+                              className="mini-card-wrapper"
+                              style={{
+                                position: 'absolute',
+                                top: i * 4,
+                                left: i * 2,
+                                width: 32,
+                                height: 48,
+                                zIndex: i
+                              }}
+                            >
+                              <div style={{
+                                width: 32,
+                                height: 48,
+                                borderRadius: 4,
+                                background: 'linear-gradient(135deg, #2ECC71, #196F3D)',
+                                border: '1px solid rgba(255,255,255,0.2)',
+                                boxShadow: '0 2px 5px rgba(0,0,0,0.3)',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                fontWeight: 900,
+                                fontSize: 9,
+                                color: '#fff',
+                              }} className="mini-card-face">
+                                {c.value}M
+                              </div>
+                              <div className="mini-card-hover-view">
+                                <CardVisual card={c} small />
+                              </div>
+                            </div>
+                          ))}
+                          {(!me.bank || me.bank.length === 0) && (
+                            <div style={{ width: 32, height: 48, borderRadius: 4, border: '1.2px dashed rgba(255,255,255,0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 8, color: '#444' }}>BOŞ</div>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Araziler */}
+                      {Object.entries(me.properties || {}).map(([color, cards]) => {
+                        if (cards.length === 0) return null;
+                        const info = COLOR_INFO[color] || { hex: '#aaa' };
+                        const isComplete = isSetComplete(cards, color);
+                        return (
+                          <div 
+                            key={color} 
+                            style={{ 
+                              display: 'flex', 
+                              flexDirection: 'column', 
+                              position: 'relative', 
+                              width: 44, 
+                              minHeight: 64,
+                              background: isComplete ? `${info.hex}15` : 'transparent',
+                              borderRadius: 4,
+                              padding: 2,
+                              border: isComplete ? `1px solid ${info.hex}` : 'none',
+                              boxSizing: 'border-box'
+                            }}
+                          >
+                            {cards.map((c, i) => (
+                              <div 
+                                key={c.id}
+                                className="mini-card-wrapper"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  if (isMyTurn && (c.isWild || c.isDual)) {
+                                    handleFlip(c);
+                                  } else {
+                                    setModal({ type: 'viewCardDetails', card: c });
+                                  }
+                                }}
+                                style={{
+                                  marginTop: i > 0 ? -42 : 0,
+                                  zIndex: i,
+                                  position: 'relative',
+                                  width: 38,
+                                  height: 52
+                                }}
+                              >
+                                <div style={{
+                                  width: 38,
+                                  height: 52,
+                                  backgroundColor: '#FFFFFF',
+                                  border: isComplete ? `1.5px solid ${info.hex}` : '1px solid rgba(0,0,0,0.15)',
+                                  borderRadius: 4,
+                                  display: 'flex',
+                                  flexDirection: 'column',
+                                  alignItems: 'center',
+                                  overflow: 'hidden',
+                                  boxShadow: '0 2px 4px rgba(0,0,0,0.2)',
+                                  boxSizing: 'border-box',
+                                  transition: 'opacity 0.1s',
+                                  '--glow-color': info.hex
+                                }} className={`mini-card-face ${isComplete ? 'complete-set-glow' : ''}`}>
+                                  <div style={{ width: '100%', height: 8, background: c.isWild ? 'linear-gradient(90deg, #E74C3C, #F39C12, #2ECC71, #3498DB)' : info.hex }} />
+                                  <div style={{ fontSize: 8, fontWeight: 900, color: '#333', marginTop: 4, transform: 'scale(0.85)' }}>
+                                    {c.isWild ? '★' : (c.value || '')}
+                                  </div>
+                                </div>
+                                <div className="mini-card-hover-view">
+                                  <CardVisual card={c} small />
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        );
+                      })}
+                      {Object.entries(me.properties || {}).every(([_, cards]) => cards.length === 0) && (
+                        <span style={{ color: '#555', fontSize: 10 }}>Henüz arazi yok</span>
+                      )}
                     </div>
-                  ) : (
-                    <span style={{ fontSize: 10, color: '#444' }}>BOŞ</span>
-                  )}
+                  </div>
+                </div>
+              )}
+            </div>
+          ) : (
+            /* Masaüstü (Regular) Görünüm */
+            <div className="center-panel" style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 16px 4px' }}>
+                <span style={{ fontSize: 11, color: '#aaa', fontWeight: 'bold', letterSpacing: 1 }}>📜 OYUN GÜNLÜĞÜ</span>
+                <button 
+                  onClick={() => setIsLogOpen(!isLogOpen)}
+                  style={{
+                    background: 'rgba(255, 255, 255, 0.08)',
+                    border: '1px solid rgba(255, 255, 255, 0.2)',
+                    borderRadius: 6,
+                    color: '#fff',
+                    cursor: 'pointer',
+                    fontSize: 10,
+                    padding: '3px 8px',
+                    fontWeight: 'bold'
+                  }}
+                >
+                  {isLogOpen ? 'Gizle ✕' : 'Göster 👁️'}
+                </button>
+              </div>
+              {isLogOpen && (
+                <div ref={logRef} className="game-log" style={{
+                  flex: 1, overflowY: 'auto', padding: '10px', display: 'flex', flexDirection: 'column', gap: 6,
+                  maxHeight: '180px', margin: '0 10px 10px',
+                  background: 'rgba(0,0,0,0.3)', borderRadius: 12, border: '1px solid rgba(255,255,255,0.05)',
+                  boxShadow: 'inset 0 0 20px rgba(0,0,0,0.5)'
+                }}>
+                  {gameState.log?.slice(-20).map((entry, i) => {
+                    const isSystem = entry.type === 'system';
+                    const isImportant = entry.type === 'payment' || entry.type === 'property' || entry.type === 'action';
+                    return (
+                      <div key={i} style={{
+                        fontSize: 11, color: isSystem ? '#FFD700' : '#ddd', padding: '8px 12px',
+                        background: isSystem ? 'linear-gradient(90deg, rgba(255, 215, 0, 0.15), transparent)' : isImportant ? 'linear-gradient(90deg, rgba(255, 255, 255, 0.05), transparent)' : 'transparent',
+                        borderRadius: 8, borderLeft: isSystem ? '3px solid #FFD700' : isImportant ? '2px solid rgba(255,255,255,0.3)' : '2px solid transparent',
+                        animation: 'fw-fade-in 0.3s ease-out'
+                      }}>
+                        <div className={isSystem ? 'system-log-blink' : ''} style={{ lineHeight: 1.4 }}>{renderLogMsg(entry)}</div>
+                        <div style={{ fontSize: 8, color: '#666', marginTop: 6, textAlign: 'right' }}>
+                          {new Date(entry.time).toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' })}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+
+              {/* Ortak Masa Ortası Alanı (Central Play Area - Desktop) */}
+              <div style={{ display: 'flex', gap: 24, padding: '12px 16px', background: 'rgba(0,0,0,0.18)', borderTop: '1px solid rgba(255,255,255,0.06)', borderBottom: '1px solid rgba(255,255,255,0.06)', alignItems: 'center', justifyContent: 'center', transition: 'background 0.3s' }}>
+                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4 }}>
+                  <span style={{ fontSize: 9, color: '#aaa', fontWeight: 'bold', letterSpacing: 0.5 }}>🎴 DESTE ({gameState.deckCount})</span>
+                  <div style={{ width: 68, height: 96, borderRadius: 6, border: '2px dashed rgba(255,255,255,0.2)', background: 'rgba(255,255,255,0.02)', display: 'flex', alignItems: 'center', justifyContent: 'center', position: 'relative', boxShadow: '0 4px 10px rgba(0,0,0,0.5)' }}>
+                    {gameState.deckCount > 0 ? (
+                      <div style={{ width: 60, height: 88, borderRadius: 5, background: 'linear-gradient(135deg, #1f4068, #162447)', border: '2px solid #FFD700', boxShadow: '0 2px 5px rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'help' }} title="Destedeki Kalan Kart Sayısı">
+                        <span style={{ fontSize: 20 }}>🏠</span>
+                      </div>
+                    ) : (
+                      <span style={{ fontSize: 10, color: '#444' }}>BOŞ</span>
+                    )}
+                  </div>
+                </div>
+
+                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4 }}>
+                  <span style={{ fontSize: 9, color: '#aaa', fontWeight: 'bold', letterSpacing: 0.5 }}>📤 SON OYNANAN</span>
+                  <div style={{ width: 68, height: 96, borderRadius: 6, border: '2px dashed rgba(255,255,255,0.2)', background: 'rgba(255,255,255,0.02)', display: 'flex', alignItems: 'center', justifyContent: 'center', position: 'relative', boxShadow: '0 4px 10px rgba(0,0,0,0.5)' }}>
+                    {gameState.discard?.length > 0 ? (
+                      <div style={{ transform: 'scale(0.85)', cursor: 'pointer' }}
+                        onClick={() => { setPreviewCard(gameState.discard[gameState.discard.length - 1]); setPreviewLocked(true); }}>
+                        <CardVisual card={gameState.discard[gameState.discard.length - 1]} small />
+                      </div>
+                    ) : (
+                      <span style={{ fontSize: 10, color: '#444' }}>YOK</span>
+                    )}
+                  </div>
                 </div>
               </div>
 
-              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4 }}>
-                <span style={{ fontSize: 9, color: '#aaa', fontWeight: 'bold', letterSpacing: 0.5 }}>📤 SON OYNANAN</span>
-                <div style={{ width: 68, height: 96, borderRadius: 6, border: '2px dashed rgba(255,255,255,0.2)', background: 'rgba(255,255,255,0.02)', display: 'flex', alignItems: 'center', justifyContent: 'center', position: 'relative', boxShadow: '0 4px 10px rgba(0,0,0,0.5)' }}>
-                  {gameState.discard?.length > 0 ? (
-                    <div style={{ transform: 'scale(0.85)', cursor: 'pointer' }}
-                      onMouseEnter={() => handleCardHover(gameState.discard[gameState.discard.length - 1])}
-                      onMouseLeave={() => handleCardHover(null)}
-                      onClick={() => { setPreviewCard(gameState.discard[gameState.discard.length - 1]); setPreviewLocked(true); }}>
-                      <CardVisual card={gameState.discard[gameState.discard.length - 1]} small />
+              {/* Benim arazilerim (Desktop) */}
+              <div data-drop-target="properties" style={{
+                padding: 10, borderTop: '1px solid rgba(255,255,255,0.1)', minHeight: 120,
+                background: dragOverTarget === 'properties' ? 'linear-gradient(to bottom, rgba(255,215,0,0.1), rgba(0,0,0,0.2))' : 'rgba(255,255,255,0.02)',
+                transition: 'background 0.3s ease'
+              }}>
+                <div style={{ fontSize: 11, color: dragOverTarget === 'properties' ? '#FFD700' : '#666', fontWeight: 'bold', marginBottom: 6, transition: 'color 0.2s' }}>BENİM ARAZİLERİM ({myCompleteSets}/{gameState?.winSets || 3} set)</div>
+                <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                  
+                  {/* Banka Kasa Column (Desktop) */}
+                  <div 
+                    ref={myBankRef}
+                    data-drop-target="bank"
+                    style={{ 
+                      display: 'flex', 
+                      flexDirection: 'column', 
+                      alignItems: 'center', 
+                      gap: 4, 
+                      flexShrink: 0,
+                      width: 44,
+                      minHeight: 64,
+                      background: dragOverTarget === 'bank' ? 'rgba(46,204,113,0.15)' : 'rgba(255,255,255,0.03)',
+                      border: dragOverTarget === 'bank' ? '2.5px dashed #2ECC71' : '1px solid rgba(255,255,255,0.08)',
+                      borderRadius: 6,
+                      padding: 2,
+                      boxSizing: 'border-box',
+                      transition: 'all 0.2s ease'
+                    }}
+                  >
+                    <span style={{ fontSize: 8, color: '#2ECC71', fontWeight: 'bold' }}>🏦 {me.bankTotal}M</span>
+                    <div style={{ position: 'relative', width: 38, height: 52 }}>
+                      {me.bank?.slice(0, 5).map((c, i) => (
+                        <div 
+                          key={c.id} 
+                          className="mini-card-wrapper"
+                          style={{
+                            position: 'absolute',
+                            top: i * 4,
+                            left: i * 2,
+                            width: 32,
+                            height: 48,
+                            zIndex: i
+                          }}
+                        >
+                          <div style={{
+                            width: 32,
+                            height: 48,
+                            borderRadius: 4,
+                            background: 'linear-gradient(135deg, #2ECC71, #196F3D)',
+                            border: '1px solid rgba(255,255,255,0.2)',
+                            boxShadow: '0 2px 5px rgba(0,0,0,0.3)',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            fontWeight: 900,
+                            fontSize: 9,
+                            color: '#fff',
+                          }} className="mini-card-face">
+                            {c.value}M
+                          </div>
+                          <div className="mini-card-hover-view">
+                            <CardVisual card={c} small />
+                          </div>
+                        </div>
+                      ))}
+                      {(!me.bank || me.bank.length === 0) && (
+                        <div style={{ width: 32, height: 48, borderRadius: 4, border: '1.2px dashed rgba(255,255,255,0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 8, color: '#444' }}>BOŞ</div>
+                      )}
                     </div>
-                  ) : (
-                    <span style={{ fontSize: 10, color: '#444' }}>YOK</span>
+                  </div>
+
+                  {/* Araziler (Desktop) */}
+                  {Object.entries(me.properties || {}).map(([color, cards]) => {
+                    if (cards.length === 0) return null;
+                    const info = COLOR_INFO[color] || { hex: '#aaa' };
+                    const isComplete = isSetComplete(cards, color);
+                    return (
+                      <div 
+                        key={color} 
+                        style={{ 
+                          display: 'flex', 
+                          flexDirection: 'column', 
+                          position: 'relative', 
+                          width: 44, 
+                          minHeight: 64,
+                          background: isComplete ? `${info.hex}15` : 'transparent',
+                          borderRadius: 4,
+                          padding: 2,
+                          border: isComplete ? `1px solid ${info.hex}` : 'none',
+                          boxSizing: 'border-box'
+                        }}
+                      >
+                        {cards.map((c, i) => (
+                          <div 
+                            key={c.id}
+                            className="mini-card-wrapper"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              if (isMyTurn && (c.isWild || c.isDual)) {
+                                handleFlip(c);
+                              } else {
+                                setModal({ type: 'viewCardDetails', card: c });
+                              }
+                            }}
+                            style={{
+                              marginTop: i > 0 ? -42 : 0,
+                              zIndex: i,
+                              position: 'relative',
+                              width: 38,
+                              height: 52
+                            }}
+                          >
+                            <div style={{
+                              width: 38,
+                              height: 52,
+                              backgroundColor: '#FFFFFF',
+                              border: isComplete ? `1.5px solid ${info.hex}` : '1px solid rgba(0,0,0,0.15)',
+                              borderRadius: 4,
+                              display: 'flex',
+                              flexDirection: 'column',
+                              alignItems: 'center',
+                              overflow: 'hidden',
+                              boxShadow: '0 2px 4px rgba(0,0,0,0.2)',
+                              boxSizing: 'border-box',
+                              transition: 'opacity 0.1s',
+                              '--glow-color': info.hex
+                            }} className={`mini-card-face ${isComplete ? 'complete-set-glow' : ''}`}>
+                              <div style={{ width: '100%', height: 8, background: c.isWild ? 'linear-gradient(90deg, #E74C3C, #F39C12, #2ECC71, #3498DB)' : info.hex }} />
+                              <div style={{ fontSize: 8, fontWeight: 900, color: '#333', marginTop: 4, transform: 'scale(0.85)' }}>
+                                {c.isWild ? '★' : (c.value || '')}
+                              </div>
+                            </div>
+                            <div className="mini-card-hover-view">
+                              <CardVisual card={c} small />
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    );
+                  })}
+                  {Object.entries(me.properties || {}).every(([_, cards]) => cards.length === 0) && (
+                    <span style={{ color: '#555', fontSize: 11 }}>Henüz arazi yok</span>
                   )}
                 </div>
               </div>
             </div>
-
-            {/* Benim arazilerim */}
-            <div data-drop-target="properties" style={{
-              padding: 10, borderTop: '1px solid rgba(255,255,255,0.1)', minHeight: 120,
-              background: dragOverTarget === 'properties' ? 'linear-gradient(to bottom, rgba(255,215,0,0.1), rgba(0,0,0,0.2))' : 'rgba(255,255,255,0.02)',
-              transition: 'background 0.3s ease'
-            }}>
-              <div style={{ fontSize: 11, color: dragOverTarget === 'properties' ? '#FFD700' : '#666', fontWeight: 'bold', marginBottom: 6, transition: 'color 0.2s' }}>BENİM ARAZİLERİM ({myCompleteSets}/{gameState?.winSets || 3} set)</div>
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(160px, 1fr))', gap: 10 }}>
-                {Object.entries(me.properties || {}).map(([color, cards]) => (
-                  cards.length > 0 && (
-                    <FannedPropertySet key={color} color={color} cards={cards} buildings={me.buildings} isOwn onFlip={isMyTurn ? handleFlip : null} onHoverCard={handleCardHover} onClickCard={(c) => { setPreviewCard(c); setPreviewLocked(true); }} />
-                  )
-                ))}
-                {Object.keys(me.properties || {}).length === 0 && (
-                  <span style={{ color: '#555', fontSize: 12 }}>Henüz arazi yok</span>
-                )}
-              </div>
-            </div>
-          </div>
+          )}
         </div>
 
         {/* ALT: El kartları */}
@@ -2920,42 +3618,7 @@ export default function App() {
           boxShadow: '0 -10px 30px rgba(0,0,0,0.5)',
           zIndex: 100
         }}>
-          {/* Banka */}
-          <div ref={myBankRef} data-drop-target="bank" style={{
-            display: 'flex', gap: 8, marginBottom: 16, flexWrap: 'wrap', alignItems: 'center', minHeight: 46,
-            background: dragOverTarget === 'bank' ? 'linear-gradient(135deg, rgba(46,204,113,0.2), rgba(0,0,0,0.4))' : 'linear-gradient(135deg, rgba(255,255,255,0.03), rgba(0,0,0,0.2))',
-            border: dragOverTarget === 'bank' ? '2px dashed #2ECC71' : '1px solid rgba(255,255,255,0.1)',
-            boxShadow: dragOverTarget === 'bank' ? '0 0 15px rgba(46,204,113,0.3)' : 'none',
-            borderRadius: 12, padding: '8px 12px', transition: 'all 0.3s ease'
-          }}>
-            <span style={{ fontSize: 12, color: '#aaa', marginRight: 4, fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: 6 }}>
-              🏦 KASAM <span style={{ color: '#2ECC71', fontSize: 14, display: 'flex', alignItems: 'center', gap: 2 }}>
-                (<AnimatedCounter value={me.bankTotal} color="#2ECC71" />M)
-              </span>
-            </span>
-            <div style={{ position: 'relative', display: 'flex', alignItems: 'center', flex: 1, minWidth: (me.bank?.length || 0) * 25, height: 30 }}>
-              {me.bank?.map((c, i) => (
-                <div key={c.id}
-                  onMouseEnter={() => handleCardHover(c)}
-                  onMouseLeave={() => handleCardHover(null)}
-                  onClick={() => { setPreviewCard(c); setPreviewLocked(true); }}
-                  style={{
-                    background: 'linear-gradient(135deg, #2ECC71, #196F3D)',
-                    color: '#fff', fontWeight: 800, fontSize: 11, padding: '4px 8px',
-                    borderRadius: 6, boxShadow: '0 2px 4px rgba(0,0,0,0.4)',
-                    border: '1px solid rgba(255,255,255,0.2)',
-                    position: 'absolute',
-                    left: i * 25,
-                    transform: `rotate(${(i - ((me.bank?.length || 1) - 1) / 2) * 4}deg)`,
-                    zIndex: i,
-                    cursor: 'pointer'
-                  }}>
-                  {c.value}M
-                </div>
-              ))}
-            </div>
-            {me.bank?.length === 0 && <span style={{ color: '#555', fontSize: 11, fontStyle: 'italic' }}>Banka boş...</span>}
-          </div>
+          {/* Banka Kaldırıldı (Artık araziler yanında sütun olarak yer alıyor) */}
 
           {/* El kartları */}
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8, paddingRight: 4 }}>
@@ -2995,7 +3658,7 @@ export default function App() {
                 return (
                   <motion.div
                     key={card.id}
-                    className={`stacked-card-wrapper ${slapActive ? 'card-bounce-active' : ''}`}
+                    className={`stacked-card-wrapper ${selectedCard?.id === card.id ? 'selected-card' : ''} ${slapActive ? 'card-bounce-active' : ''}`}
                     drag={!isMobile && isMyTurn && !isBlocked && !discardMode} // Mobilde sürüklemeyi kapat, masaüstünde aktif
                     dragElastic={0.2}
                     dragSnapToOrigin={true} // Sürüklenip bırakılmazsa eski yerine yumuşakça döner
@@ -3005,12 +3668,15 @@ export default function App() {
                     onDragEnd={(e, info) => handleDragEnd(e, info, card)}
                     whileDrag={{ scale: 1.15, zIndex: 1000, cursor: 'grabbing', boxShadow: '0 20px 40px rgba(0,0,0,0.5)' }}
                     style={{
-                      marginLeft: idx > 0 ? (isMobile ? 8 : -20) : 0,
-                      zIndex: selectedCard?.id === card.id ? 100 : idx,
+                      marginLeft: idx > 0 ? (isMobile ? -25 : -20) : 0,
+                      zIndex: selectedCard?.id === card.id ? 1000 : idx,
                       position: 'relative',
                       transformOrigin: 'bottom center',
-                      transform: `rotate(${rotateVal}deg) translateY(${translateVal}px)`,
-                      cursor: !isMobile && isMyTurn && !isBlocked && !discardMode ? 'grab' : 'default' // Sadece masaüstünde ve sürüklenebilir kartlarda grab imleci
+                      transform: selectedCard?.id === card.id 
+                        ? `scale(${isMobile ? 1.05 : 1.35}) translateY(${isMobile ? -15 : -35}px) rotate(0deg)`
+                        : `rotate(${rotateVal}deg) translateY(${translateVal}px)`,
+                      cursor: !isMobile && isMyTurn && !isBlocked && !discardMode ? 'grab' : 'default',
+                      transition: 'transform 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275), z-index 0.2s'
                     }}
                     onContextMenu={(e) => {
                       e.preventDefault(); // Varsayılan sağ tık menüsünü engelle
@@ -3042,37 +3708,33 @@ export default function App() {
                       comboClass={cardComboClass}
                     />
 
-                    {/* KART ÜSTÜ HIZLI AKSİYON BUTONLARI (FROSTED OVERLAY) */}
+                    {/* Selected Card Overlay Buttons (Directly on top of the card) */}
                     <AnimatePresence>
                       {selectedCard?.id === card.id && isMyTurn && !isBlocked && !discardMode && (
                         <motion.div
-                          initial={{ opacity: 0, scale: 0.9 }}
-                          animate={{ opacity: 1, scale: 1 }}
-                          exit={{ opacity: 0, scale: 0.9 }}
+                          initial={{ opacity: 0 }}
+                          animate={{ opacity: 1 }}
+                          exit={{ opacity: 0 }}
+                          className="card-overlay-buttons"
                           onClick={(e) => {
-                            e.stopPropagation(); // Kartın click event'ini durdur, overlay'e tıklanınca iptal olmasın
+                            e.stopPropagation();
+                            setSelectedCard(null); // Clicking the overlay background cancels selection
                           }}
                           style={{
                             position: 'absolute',
                             inset: 0,
-                            background: 'rgba(15, 15, 28, 0.88)',
-                            backdropFilter: 'blur(8px)',
-                            borderRadius: 8,
+                            background: 'rgba(10, 10, 20, 0.88)',
+                            backdropFilter: 'blur(6px)',
+                            borderRadius: 12,
                             display: 'flex',
                             flexDirection: 'column',
                             justifyContent: 'center',
                             alignItems: 'center',
                             gap: 10,
-                            zIndex: 100,
-                            padding: '12px 6px',
-                            border: '2px solid #FFD700',
-                            boxShadow: '0 8px 32px rgba(0,0,0,0.6), 0 0 15px rgba(255,215,0,0.2)'
+                            zIndex: 10,
+                            padding: 8
                           }}
                         >
-                          <div style={{ fontSize: 10.5, color: '#FFD700', fontWeight: 'bold', textTransform: 'uppercase', letterSpacing: 0.5, textAlign: 'center', wordBreak: 'break-word', textShadow: '0 1px 3px rgba(0,0,0,0.8)', marginBottom: 4, width: '100%' }}>
-                            {card.name}
-                          </div>
-
                           {/* OYNA */}
                           <button
                             onClick={(e) => {
@@ -3081,21 +3743,14 @@ export default function App() {
                               handleCardAction(card);
                             }}
                             style={{
-                              padding: '8px 6px',
-                              background: 'linear-gradient(135deg, #E67E22, #D35400)',
-                              color: '#fff',
-                              border: 'none',
-                              borderRadius: 6,
-                              cursor: 'pointer',
-                              fontWeight: 800,
-                              fontSize: 11,
-                              width: '90%',
-                              boxShadow: '0 4px 8px rgba(230,126,34,0.3)',
-                              textShadow: '0 1px 2px rgba(0,0,0,0.4)',
-                              transition: 'all 0.1s'
+                              ...btnStyle('linear-gradient(135deg, #E67E22, #D35400)'),
+                              padding: '10px 16px',
+                              fontSize: 12,
+                              borderRadius: 20,
+                              width: '85%',
+                              boxShadow: '0 4px 10px rgba(230,126,34,0.3)',
+                              minHeight: 'auto'
                             }}
-                            onMouseEnter={(e) => e.currentTarget.style.transform = 'scale(1.05)'}
-                            onMouseLeave={(e) => e.currentTarget.style.transform = 'scale(1)'}
                           >
                             🚀 Oyna
                           </button>
@@ -3109,55 +3764,20 @@ export default function App() {
                                 handlePlayCard(card, { asBankMoney: true });
                               }}
                               style={{
-                                padding: '8px 6px',
-                                background: 'linear-gradient(135deg, #27AE60, #1E8449)',
-                                color: '#fff',
-                                border: 'none',
-                                borderRadius: 6,
-                                cursor: 'pointer',
-                                fontWeight: 800,
-                                fontSize: 11,
-                                width: '90%',
-                                boxShadow: '0 4px 8px rgba(39,174,96,0.3)',
-                                textShadow: '0 1px 2px rgba(0,0,0,0.4)',
-                                transition: 'all 0.1s'
+                                ...btnStyle('linear-gradient(135deg, #27AE60, #1E8449)'),
+                                padding: '10px 16px',
+                                fontSize: 12,
+                                borderRadius: 20,
+                                width: '85%',
+                                boxShadow: '0 4px 10px rgba(46,204,113,0.3)',
+                                minHeight: 'auto'
                               }}
-                              onMouseEnter={(e) => e.currentTarget.style.transform = 'scale(1.05)'}
-                              onMouseLeave={(e) => e.currentTarget.style.transform = 'scale(1)'}
                             >
-                              💰 Banka ({card.value}M)
+                              💰 Banka
                             </button>
                           )}
 
-                          {/* DETAYLAR */}
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              sfxClick();
-                              setPreviewCard(card);
-                              setPreviewLocked(true);
-                            }}
-                            style={{
-                              padding: '8px 6px',
-                              background: 'linear-gradient(135deg, #3498DB, #2980B9)',
-                              color: '#fff',
-                              border: 'none',
-                              borderRadius: 6,
-                              cursor: 'pointer',
-                              fontWeight: 800,
-                              fontSize: 11,
-                              width: '90%',
-                              boxShadow: '0 4px 8px rgba(52,152,219,0.3)',
-                              textShadow: '0 1px 2px rgba(0,0,0,0.4)',
-                              transition: 'all 0.1s'
-                            }}
-                            onMouseEnter={(e) => e.currentTarget.style.transform = 'scale(1.05)'}
-                            onMouseLeave={(e) => e.currentTarget.style.transform = 'scale(1)'}
-                          >
-                            🔍 Detaylar
-                          </button>
-
-                          {/* İPTAL/KAPAT */}
+                          {/* IPTAL/KAPAT */}
                           <button
                             onClick={(e) => {
                               e.stopPropagation();
@@ -3165,21 +3785,17 @@ export default function App() {
                               setSelectedCard(null);
                             }}
                             style={{
-                              padding: '6px 6px',
-                              background: 'rgba(255,255,255,0.1)',
-                              border: '1px solid rgba(255,255,255,0.2)',
-                              color: '#ccc',
-                              borderRadius: 6,
-                              cursor: 'pointer',
-                              fontWeight: 700,
-                              fontSize: 10,
-                              width: '90%',
-                              transition: 'all 0.2s'
+                              ...btnStyle('rgba(255,255,255,0.15)'),
+                              border: '1px solid rgba(255,255,255,0.3)',
+                              color: '#fff',
+                              padding: '8px 12px',
+                              fontSize: 12,
+                              borderRadius: 20,
+                              width: '85%',
+                              minHeight: 'auto'
                             }}
-                            onMouseEnter={(e) => { e.currentTarget.style.background = 'rgba(255,255,255,0.2)'; e.currentTarget.style.color = '#fff'; }}
-                            onMouseLeave={(e) => { e.currentTarget.style.background = 'rgba(255,255,255,0.1)'; e.currentTarget.style.color = '#ccc'; }}
                           >
-                            ✕ İptal
+                            ✕ Kapat
                           </button>
                         </motion.div>
                       )}
@@ -3189,32 +3805,8 @@ export default function App() {
               })}
             </div>
           </div>
-
-          {/* Aksiyon butonları */}
           <div style={{ display: 'flex', gap: 10, marginTop: 16, flexWrap: 'wrap', alignItems: 'center', minHeight: 40 }}>
-            {selectedCard && isMyTurn && !discardMode && !isBlocked && (
-              <>
-                <div style={{ fontSize: 12, color: '#FFD700', fontWeight: 'bold', marginRight: 8, background: 'rgba(255,215,0,0.1)', padding: '6px 12px', borderRadius: 8, border: '1px solid rgba(255,215,0,0.3)' }}>
-                  Seçilen: {selectedCard.name}
-                </div>
-                <button onClick={() => { sfxClick(); handleCardAction(selectedCard); }} style={{ ...btnStyle('linear-gradient(135deg, #E67E22, #D35400)'), boxShadow: '0 4px 10px rgba(230,126,34,0.4)', padding: '10px 20px', fontSize: 13 }}>
-                  🚀 Oyna
-                </button>
-                {selectedCard.type !== 'property' && ( // Arazi kartları bankaya konamaz
-                  <button onClick={() => { sfxClick(); handlePlayCard(selectedCard, { asBankMoney: true }); }} style={{ ...btnStyle('linear-gradient(135deg, #27AE60, #1E8449)'), boxShadow: '0 4px 10px rgba(39,174,96,0.4)', padding: '10px 20px', fontSize: 13 }}>
-                    💰 Bankaya Koy ({selectedCard.value}M)
-                  </button>
-                )}
-                <button onClick={() => { sfxClick(); setPreviewCard(selectedCard); setPreviewLocked(true); }} style={{ ...btnStyle('linear-gradient(135deg, #3498DB, #2980B9)'), boxShadow: '0 4px 10px rgba(52,152,219,0.4)', padding: '10px 20px', fontSize: 13 }}>
-                  🔍 Büyüteç / Detaylar
-                </button>
-                <button onClick={() => setSelectedCard(null)} style={{ ...btnStyle('#555'), padding: '10px 16px' }}>
-                  İptal
-                </button>
-              </>
-            )}
-
-            {!selectedCard && isMyTurn && !discardMode && !isBlocked && (
+            {isMyTurn && !discardMode && !isBlocked && (
               <>
                 <div style={{ flex: 1 }} />
                 {gameState.gambleZari && !me.hasGambledThisTurn && gameState.actionsLeft > 0 && (
@@ -3228,7 +3820,7 @@ export default function App() {
                   </button>
                 )}
                 <button onClick={() => { sfxClick(); handleEndTurn(); }} style={{ ...btnStyle('linear-gradient(135deg, #8E44AD, #5B2C6F)'), padding: '10px 24px', boxShadow: '0 4px 10px rgba(142,68,173,0.4)', fontSize: 13 }}>
-                  🛑 Turu Bitir
+                  🏁 Turu Bitir
                 </button>
               </>
             )}
@@ -3251,9 +3843,7 @@ export default function App() {
 
         {/* ---- SOHBET (CHAT) PENCERESİ ---- */}
         <div style={{ position: 'fixed', bottom: isMobile ? 60 : 20, right: 20, zIndex: 1500, width: isMobile ? 280 : 320, display: 'flex', flexDirection: 'column', alignItems: 'flex-end', pointerEvents: 'none' }}>
-          <button onClick={() => setIsChatOpen(!isChatOpen)} style={{ ...btnStyle('#3498DB'), pointerEvents: 'auto', borderRadius: 20, padding: '10px 16px', boxShadow: '0 4px 10px rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', gap: 6 }}>
-            💬 Sohbet {chatMessages.length > 0 ? <span style={{ background: '#E74C3C', borderRadius: '50%', padding: '2px 6px', fontSize: 10 }}>{chatMessages.length}</span> : ''}
-          </button>
+
 
           <AnimatePresence>
             {isChatOpen && (
