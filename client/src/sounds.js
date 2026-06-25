@@ -1,16 +1,36 @@
-// Basit, dosyasız ses efektleri (Web Audio API ile sentezlenir)
+// Akıllı Ses Sistemi (Smart Audio System)
 
 let audioCtx = null;
 let enabled = true;
+let localPlayerId = null;
+let sfxVolume = 0.7;
 
-// localStorage'dan tercih oku
+// Ayarları geri yükle
 try {
   const saved = localStorage.getItem('monopolyDealSound');
   if (saved === 'off') enabled = false;
 } catch (e) { /* ignore */ }
 
+try {
+  const savedSfx = localStorage.getItem('md_sfx_vol');
+  if (savedSfx !== null) sfxVolume = parseFloat(savedSfx);
+} catch (e) { /* ignore */ }
+
 export function isSoundEnabled() {
   return enabled;
+}
+
+export function setLocalPlayerId(id) {
+  localPlayerId = id;
+}
+
+export function getSfxVolume() {
+  return sfxVolume;
+}
+
+export function setSfxVolume(volume) {
+  sfxVolume = parseFloat(volume);
+  try { localStorage.setItem('md_sfx_vol', volume); } catch (e) { /* ignore */ }
 }
 
 let bgmAudio = null;
@@ -22,46 +42,64 @@ export function setSoundEnabled(value) {
   else if (value && bgmAudio) bgmAudio.play().catch(() => { });
 }
 
-function getCtx() {
-  if (!audioCtx) {
-    const AC = window.AudioContext || window.webkitAudioContext;
-    if (!AC) return null;
-    audioCtx = new AC();
+// ── KANAL (POOL) VE THROTTLE (SPAM) SİSTEMİ ──
+const MAX_CHANNELS = 5;
+const audioPool = [];
+for (let i = 0; i < MAX_CHANNELS; i++) {
+  audioPool.push(new Audio());
+}
+let poolIndex = 0;
+
+const lastPlayedTimestamps = {};
+const THROTTLE_MS = 100; // Aynı sesin üst üste çalması için geçmesi gereken min süre (ms)
+
+/**
+ * Akıllı Ses Çalma Fonksiyonu
+ * @param {string} url Ses dosyasının yolu
+ * @param {number} volume Ses seviyesi (0.0 - 1.0)
+ * @param {string} category 'local', 'targeted', 'global'
+ * @param {string} actorId İşlemi yapan oyuncu kimliği
+ * @param {string} targetId İşlemden etkilenen (hedef) oyuncu kimliği
+ */
+function playSmart({ url, volume = 0.5, category = 'global', actorId = null, targetId = null }) {
+  if (!enabled) return;
+
+  // 1. Hedefleme Kontrolü (Targeted Audio)
+  const isMe = localPlayerId && ((actorId === localPlayerId) || (targetId === localPlayerId));
+  
+  if (category === 'local') {
+    // Sadece işlemi yapan duymalı (veya hedef)
+    if (!isMe && actorId) return; // actorId verilmişse ve ben değilsem duyma
+  } else if (category === 'targeted') {
+    // Sadece işlemi yapan ve hedef alınan kişi duyar.
+    if (!isMe && actorId) return; 
   }
-  if (audioCtx.state === 'suspended') audioCtx.resume();
-  return audioCtx;
-}
+  // category === 'global' ise herkes duyar.
 
-// Tek bir "beep" sesi çalar
-function tone(freq, startTime, duration, { type = 'sine', volume = 0.2 } = {}) {
-  const ctx = getCtx();
-  if (!ctx) return;
-  const osc = ctx.createOscillator();
-  const gain = ctx.createGain();
-  osc.type = type;
-  osc.frequency.value = freq;
-  gain.gain.setValueAtTime(volume, ctx.currentTime + startTime);
-  gain.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + startTime + duration);
-  osc.connect(gain);
-  gain.connect(ctx.destination);
-  osc.start(ctx.currentTime + startTime);
-  osc.stop(ctx.currentTime + startTime + duration);
-}
+  // 2. Spam Koruması (Throttling)
+  const now = Date.now();
+  if (lastPlayedTimestamps[url] && (now - lastPlayedTimestamps[url] < THROTTLE_MS)) {
+    return; // Spam! Çalma.
+  }
+  lastPlayedTimestamps[url] = now;
 
-function play(fn) {
-  if (!enabled) return;
-  try { fn(); } catch (e) { /* ignore - autoplay kısıtlamaları vs */ }
-}
-
-// MP3 gibi dış dosyaları çalmak için yardımcı fonksiyon
-function playFile(url, volume = 0.5) {
-  if (!enabled) return;
+  // 3. Pool (Kanal) Kullanarak Çalma
   try {
-    const audio = new Audio(url);
-    audio.volume = volume;
-    audio.play().catch(e => console.warn('Ses çalınamadı (Autoplay kısıtlaması olabilir):', e));
+    const audio = audioPool[poolIndex];
+    audio.src = url;
+    audio.volume = volume * sfxVolume;
+    audio.play().catch(e => console.warn('Ses çalınamadı (Autoplay vs):', e));
+    
+    // Bir sonraki kanala geç (ring buffer)
+    poolIndex = (poolIndex + 1) % MAX_CHANNELS;
   } catch (e) { /* ignore */ }
 }
+
+// Orijinal basit çalma fonksiyonu (geriye dönük uyumluluk için, category=global olarak çalışır)
+function playFile(url, volume = 0.5) {
+  playSmart({ url, volume, category: 'global' });
+}
+
 
 // Arka Plan Müziği (BGM)
 export function playBGM() {
@@ -80,7 +118,6 @@ export function setBgmVolume(volume) {
   try { localStorage.setItem('md_bgm_vol', volume); } catch (e) { }
 }
 
-// Gerilim Müziği Hızlandırıcısı (Biri kazanmaya yaklaşınca)
 export function setBgmTension(isTense) {
   if (bgmAudio) {
     bgmAudio.playbackRate = isTense ? 1.15 : 1.0;
@@ -93,144 +130,136 @@ export function stopBGM() {
 
 // ── SES EFEKTLERİ ──
 
-// Kart oynama - kısa "tık" veya mp3
-export function sfxCardPlay() {
-  playFile('/sounds/card_play.mp3', 0.85);
+// Kart oynama - kısa "tık"
+export function sfxCardPlay({ actorId } = {}) {
+  playSmart({ url: '/sounds/card_play.mp3', volume: 0.85, category: 'local', actorId });
 }
 
-// Kart çekme - hızlı yükselen "hışırtı" veya mp3
-export function sfxCardDraw() {
-  playFile('/sounds/card_draw.mp3', 0.8);
+// Kart çekme - hızlı yükselen "hışırtı"
+export function sfxCardDraw({ actorId } = {}) {
+  playSmart({ url: '/sounds/card_draw.mp3', volume: 0.8, category: 'local', actorId });
 }
 
-// Kart fırlatma (masaya atma) - hızlı alçalan "whoosh"
-export function sfxWhoosh() {
-  playFile('/sounds/whoosh.mp3', 0.7);
+// Kart fırlatma (masaya atma)
+export function sfxWhoosh({ actorId } = {}) {
+  playSmart({ url: '/sounds/whoosh.mp3', volume: 0.7, category: 'local', actorId });
 }
 
-// Kart bankaya konuldu - "ka-ching" benzeri
-export function sfxCoin() {
-  playFile('/sounds/coin.mp3', 0.85);
+// Kart bankaya konuldu
+export function sfxCoin({ actorId } = {}) {
+  // Parayı yatıran oyuncu güçlü duyar, diğerleri izleyici
+  playSmart({ url: '/sounds/coin.mp3', volume: 0.85, category: 'local', actorId });
 }
 
 // Hata / geçersiz hamle
-export function sfxError() {
-  playFile('/sounds/error.mp3', 0.8);
+export function sfxError({ actorId } = {}) {
+  playSmart({ url: '/sounds/error.mp3', volume: 0.8, category: 'local', actorId });
 }
 
-// Sıra sana geçti - dikkat çekici, yükselen melodi
-export function sfxYourTurn() {
-  playFile('/sounds/your-turn.mp3', 0.85);
+// Sıra sana geçti
+export function sfxYourTurn({ targetId } = {}) {
+  playSmart({ url: '/sounds/your-turn.mp3', volume: 0.85, category: 'local', actorId: targetId });
 }
 
 // ── MONOPOLY DEAL KART SESLERİ (MP3) ──
-// Not: Dosyalar /public/sounds/ altına konacak.
-export function sfxActionDealbreaker() { playFile('/sounds/dealbreaker_haciz.mp3', 0.9); }
-export function sfxActionJustSayNo() { playFile('/sounds/justsayno_reddet.mp3', 0.9); }
-export function sfxActionCounterJustSayNo() { playFile('/sounds/justsayno_counter_reddet_reddet.mp3', 0.95); }
-export function sfxActionSlyDeal() { playFile('/sounds/slydeal_tapu.mp3', 0.9); }
-export function sfxActionForcedDeal() { playFile('/sounds/forceddeal_degiskokus.mp3', 0.9); }
-export function sfxActionDebtCollector() { playFile('/sounds/debtcollector_tasilat.mp3', 0.9); }
-export function sfxActionBirthday() { playFile('/sounds/birthday_dogum_gunu.mp3', 0.9); }
-export function sfxActionPassGoTwoDraw() { playFile('/sounds/two-draw_2-kart-cek.mp3', 0.9); }
+export function sfxActionDealbreaker({ actorId, targetId } = {}) { playSmart({ url: '/sounds/dealbreaker_haciz.mp3', volume: 0.9, category: 'targeted', actorId, targetId }); }
+export function sfxActionJustSayNo({ actorId, targetId } = {}) { playSmart({ url: '/sounds/justsayno_reddet.mp3', volume: 0.9, category: 'targeted', actorId, targetId }); }
+export function sfxActionCounterJustSayNo({ actorId, targetId } = {}) { playSmart({ url: '/sounds/justsayno_counter_reddet_reddet.mp3', volume: 0.95, category: 'targeted', actorId, targetId }); }
+export function sfxActionSlyDeal({ actorId, targetId } = {}) { playSmart({ url: '/sounds/slydeal_tapu.mp3', volume: 0.9, category: 'targeted', actorId, targetId }); }
+export function sfxActionForcedDeal({ actorId, targetId } = {}) { playSmart({ url: '/sounds/forceddeal_degiskokus.mp3', volume: 0.9, category: 'targeted', actorId, targetId }); }
+export function sfxActionDebtCollector({ actorId, targetId } = {}) { playSmart({ url: '/sounds/debtcollector_tasilat.mp3', volume: 0.9, category: 'targeted', actorId, targetId }); }
+export function sfxActionBirthday({ actorId } = {}) { playSmart({ url: '/sounds/birthday_dogum_gunu.mp3', volume: 0.9, category: 'global' }); } 
+export function sfxActionPassGoTwoDraw({ actorId } = {}) { playSmart({ url: '/sounds/two-draw_2-kart-cek.mp3', volume: 0.9, category: 'local', actorId }); }
 
-// Kira kartı & ödeme (kiranızı ödeyin)
-export function sfxRentCardPlayed() { playFile('/sounds/rent_kira_karti.mp3', 0.9); }
-export function sfxRentPaymentDue() { playFile('/sounds/rent-paid_kiranizi-odeyin.mp3', 0.9); }
+// Kira kartı & ödeme
+export function sfxRentCardPlayed({ actorId, targetId } = {}) { playSmart({ url: '/sounds/rent_kira_karti.mp3', volume: 0.9, category: 'targeted', actorId, targetId }); }
+export function sfxRentPaymentDue({ actorId, targetId } = {}) { playSmart({ url: '/sounds/rent-paid_kiranizi-odeyin.mp3', volume: 0.9, category: 'targeted', actorId, targetId }); }
 
 // Bankaya para koyma
-export function sfxBankDeposit1M() { playFile('/sounds/bank_deposit_1m.mp3', 0.85); }
-export function sfxBankDeposit2M() { playFile('/sounds/bank_deposit_2m.mp3', 0.85); }
-export function sfxBankDeposit3M() { playFile('/sounds/bank_deposit_3m.mp3', 0.85); }
-export function sfxBankDeposit4M() { playFile('/sounds/bank_deposit_4m.mp3', 0.85); }
-export function sfxBankDeposit5M() { playFile('/sounds/bank_deposit_5m.mp3', 0.85); }
-export function sfxBankDeposit10M() { playFile('/sounds/bank_deposit_10m.mp3', 0.85); }
+export function sfxBankDeposit1M({ actorId } = {}) { playSmart({ url: '/sounds/bank_deposit_1m.mp3', volume: 0.85, category: 'local', actorId }); }
+export function sfxBankDeposit2M({ actorId } = {}) { playSmart({ url: '/sounds/bank_deposit_2m.mp3', volume: 0.85, category: 'local', actorId }); }
+export function sfxBankDeposit3M({ actorId } = {}) { playSmart({ url: '/sounds/bank_deposit_3m.mp3', volume: 0.85, category: 'local', actorId }); }
+export function sfxBankDeposit4M({ actorId } = {}) { playSmart({ url: '/sounds/bank_deposit_4m.mp3', volume: 0.85, category: 'local', actorId }); }
+export function sfxBankDeposit5M({ actorId } = {}) { playSmart({ url: '/sounds/bank_deposit_5m.mp3', volume: 0.85, category: 'local', actorId }); }
+export function sfxBankDeposit10M({ actorId } = {}) { playSmart({ url: '/sounds/bank_deposit_10m.mp3', volume: 0.85, category: 'local', actorId }); }
 
 // Arazi kartı
-export function sfxPropertyPlayed() { playFile('/sounds/property_play.mp3', 0.85); }
-export function sfxJokerPropertyPlayed() { playFile('/sounds/joker_arazi.mp3', 0.9); }
+export function sfxPropertyPlayed({ actorId } = {}) { playSmart({ url: '/sounds/property_play.mp3', volume: 0.85, category: 'local', actorId }); }
+export function sfxJokerPropertyPlayed({ actorId } = {}) { playSmart({ url: '/sounds/joker_arazi.mp3', volume: 0.9, category: 'local', actorId }); }
 
-// İlçe/mahalle (tekil MP3)
-export function sfxStreetPropertyPlayed(slug) {
+export function sfxStreetPropertyPlayed(slug, { actorId } = {}) {
   if (!slug) return;
-  playFile(`/sounds/${slug}.mp3`, 0.9);
+  playSmart({ url: `/sounds/${slug}.mp3`, volume: 0.9, category: 'local', actorId });
 }
 
-export function sfxActionRentAll() { playFile('/sounds/rent_kira_karti.mp3', 0.85); }
+export function sfxActionRentAll({ actorId } = {}) { playSmart({ url: '/sounds/rent_kira_karti.mp3', volume: 0.85, category: 'global' }); } 
 
-// Turun bitti - kısa, alçalan
-export function sfxTurnEnded() {
-  playFile('/sounds/turn_ended.mp3', 0.8);
-}
+// Tur bitti
+export function sfxTurnEnded() { playSmart({ url: '/sounds/turn_ended.mp3', volume: 0.8, category: 'local' }); }
 
 // Reddet! / itiraz uyarısı
-export function sfxAlert() {
-  playFile('/sounds/alert.mp3', 0.85);
-}
+export function sfxAlert({ targetId } = {}) { playSmart({ url: '/sounds/alert.mp3', volume: 0.85, category: 'local', actorId: targetId }); }
 
 // Ödeme isteği geldi
-export function sfxPaymentDue() {
-  playFile('/sounds/payment_due.mp3', 0.85);
-}
+export function sfxPaymentDue({ targetId } = {}) { playSmart({ url: '/sounds/payment_due.mp3', volume: 0.85, category: 'local', actorId: targetId }); }
 
 // Kazanma fanfarı
-export function sfxWin() {
-  playFile('/sounds/win.mp3', 0.9);
-}
+export function sfxWin() { playSmart({ url: '/sounds/win.mp3', volume: 0.9, category: 'global' }); }
 
 // Genel UI tıklama sesi
-export function sfxClick() {
-  playFile('/sounds/click.mp3', 0.7);
-}
+export function sfxClick() { playSmart({ url: '/sounds/click.mp3', volume: 0.7, category: 'local', actorId: localPlayerId }); }
 
 // Ev/Otel inşa etme
-export function sfxBuild() {
-  playFile('/sounds/build.mp3', 0.85);
-}
+export function sfxBuild({ actorId } = {}) { playSmart({ url: '/sounds/build.mp3', volume: 0.85, category: 'local', actorId }); }
 
-// Son 10 saniye tik-tak sesi
-export function sfxTick() {
-  playFile('/sounds/tick.mp3', 0.65);
-}
+// Son 10 saniye tik-tak
+export function sfxTick() { playSmart({ url: '/sounds/tick.mp3', volume: 0.65, category: 'global' }); } 
 
-// --- EMOJİ SESLERİ ---
-export function sfxLaugh() { playFile('/sounds/laugh.mp3', 0.75); }
-export function sfxAngry() { playFile('/sounds/angry.mp3', 0.75); }
-export function sfxChaChing() { playFile('/sounds/cha-ching.mp3', 0.8); }
-export function sfxFire() { playFile('/sounds/fire.mp3', 0.85); }
-export function sfxClap() { playFile('/sounds/clap.mp3', 0.85); }
-export function sfxCry() { playFile('/sounds/cry.mp3', 0.85); }
-export function sfxShock() { playFile('/sounds/shock.mp3', 0.85); }
+// --- EMOJİ SESLERİ --- (Global)
+export function sfxLaugh() { playSmart({ url: '/sounds/laugh.mp3', volume: 0.75, category: 'global' }); }
+export function sfxAngry() { playSmart({ url: '/sounds/angry.mp3', volume: 0.75, category: 'global' }); }
+export function sfxChaChing() { playSmart({ url: '/sounds/cha-ching.mp3', volume: 0.8, category: 'global' }); }
+export function sfxFire() { playSmart({ url: '/sounds/fire.mp3', volume: 0.85, category: 'global' }); }
+export function sfxClap() { playSmart({ url: '/sounds/clap.mp3', volume: 0.85, category: 'global' }); }
+export function sfxCry() { playSmart({ url: '/sounds/cry.mp3', volume: 0.85, category: 'global' }); }
+export function sfxShock() { playSmart({ url: '/sounds/shock.mp3', volume: 0.85, category: 'global' }); }
 
 // Anlaşma Bozucu (Cam Kırılma Sesi)
-export function sfxGlassBreak() { playFile('/sounds/glass.mp3', 0.85); }
+export function sfxGlassBreak({ actorId, targetId } = {}) { playSmart({ url: '/sounds/glass.mp3', volume: 0.85, category: 'targeted', actorId, targetId }); }
 
 // Doğum Günü (Parti Düdüğü)
-export function sfxPartyHorn() { playFile('/sounds/horn.mp3', 0.85); }
+export function sfxPartyHorn() { playSmart({ url: '/sounds/horn.mp3', volume: 0.85, category: 'global' }); }
 
 // Masaya vurunca çalacak bas sarsıntı sesi
-export function sfxTableSlap() {
-  playFile('/sounds/table_slap.mp3', 0.9);
-}
+export function sfxTableSlap() { playSmart({ url: '/sounds/table_slap.mp3', volume: 0.9, category: 'global' }); }
 
 // Kart destesi karıştırma sesi
-export function sfxShuffle() {
-  playFile('/sounds/shuffle.mp3', 0.85);
-}
+export function sfxShuffle() { playSmart({ url: '/sounds/shuffle.mp3', volume: 0.85, category: 'global' }); }
 
 // ── YENİ EKLENEN SES SİSTEMLERİ ──
-export function sfxLobbyJoin() { playFile('/sounds/lobby_join.mp3', 0.8); }
-export function sfxGameStart() { playFile('/sounds/game_start.mp3', 0.85); }
-export function sfxTradeProposed() { playFile('/sounds/trade_proposed.mp3', 0.85); }
-export function sfxTradeAccepted() { playFile('/sounds/trade_accepted.mp3', 0.85); }
-export function sfxTradeRejected() { playFile('/sounds/trade_rejected.mp3', 0.8); }
-export function sfxDiceRoll() { playFile('/sounds/dice_roll.mp3', 0.85); }
-export function sfxCopied() { playFile('/sounds/copied.mp3', 0.85); }
-export function sfxChatSent() { playFile('/sounds/chat_sent.mp3', 0.75); }
-export function sfxRageQuit() { playFile('/sounds/rage_quit.mp3', 0.9); }
-export function sfxUndo() { playFile('/sounds/undo.mp3', 0.8); }
-export function sfxDoubleRent() { playFile('/sounds/double_rent.mp3', 0.9); }
-export function sfxHouse() { playFile('/sounds/house.mp3', 0.85); }
-export function sfxHotel() { playFile('/sounds/hotel.mp3', 0.85); }
-export function sfxDisconnect() { playFile('/sounds/disconnect.mp3', 0.8); }
-export function sfxReconnect() { playFile('/sounds/reconnect.mp3', 0.85); }
+export function sfxLobbyJoin() { playSmart({ url: '/sounds/lobby_join.mp3', volume: 0.8, category: 'global' }); }
+export function sfxGameStart() { playSmart({ url: '/sounds/game_start.mp3', volume: 0.85, category: 'global' }); }
+export function sfxTradeProposed({ actorId, targetId } = {}) { playSmart({ url: '/sounds/trade_proposed.mp3', volume: 0.85, category: 'targeted', actorId, targetId }); }
+export function sfxTradeAccepted({ actorId, targetId } = {}) { playSmart({ url: '/sounds/trade_accepted.mp3', volume: 0.85, category: 'targeted', actorId, targetId }); }
+export function sfxTradeRejected({ actorId, targetId } = {}) { playSmart({ url: '/sounds/trade_rejected.mp3', volume: 0.8, category: 'targeted', actorId, targetId }); }
+export function sfxDiceRoll() { playSmart({ url: '/sounds/dice_roll.mp3', volume: 0.85, category: 'global' }); }
+export function sfxCopied() { playSmart({ url: '/sounds/copied.mp3', volume: 0.85, category: 'local', actorId: localPlayerId }); }
+export function sfxChatSent() { playSmart({ url: '/sounds/chat_sent.mp3', volume: 0.75, category: 'global' }); }
+export function sfxRageQuit() { playSmart({ url: '/sounds/rage_quit.mp3', volume: 0.9, category: 'global' }); }
+export function sfxUndo({ actorId } = {}) { playSmart({ url: '/sounds/undo.mp3', volume: 0.8, category: 'local', actorId }); }
+export function sfxDoubleRent({ actorId, targetId } = {}) { playSmart({ url: '/sounds/double_rent.mp3', volume: 0.9, category: 'targeted', actorId, targetId }); }
+export function sfxHouse({ actorId } = {}) { playSmart({ url: '/sounds/house.mp3', volume: 0.85, category: 'local', actorId }); }
+export function sfxHotel({ actorId } = {}) { playSmart({ url: '/sounds/hotel.mp3', volume: 0.85, category: 'local', actorId }); }
+export function sfxDisconnect() { playSmart({ url: '/sounds/disconnect.mp3', volume: 0.8, category: 'global' }); }
+export function sfxReconnect() { playSmart({ url: '/sounds/reconnect.mp3', volume: 0.85, category: 'global' }); }
+
+// ── EKSTRA EFEKTLER (PLANLANAN YENİ SESLER) ──
+export function sfxJackpot() { playSmart({ url: '/sounds/jackpot.mp3', volume: 0.9, category: 'global' }); }
+export function sfxWompWomp() { playSmart({ url: '/sounds/wompwomp.mp3', volume: 0.9, category: 'global' }); }
+export function sfxCricket() { playSmart({ url: '/sounds/cricket.mp3', volume: 0.85, category: 'global' }); }
+export function sfxSwordClash({ actorId, targetId } = {}) { playSmart({ url: '/sounds/sword_clash.mp3', volume: 0.9, category: 'targeted', actorId, targetId }); }
+export function sfxCrumple({ actorId } = {}) { playSmart({ url: '/sounds/crumple.mp3', volume: 0.85, category: 'local', actorId }); }
+export function sfxHeartbeat() { playSmart({ url: '/sounds/heartbeat.mp3', volume: 0.8, category: 'local', actorId: localPlayerId }); }
+export function sfxBlackMarket({ actorId } = {}) { playSmart({ url: '/sounds/blackmarket.mp3', volume: 0.85, category: 'local', actorId }); }
+export function sfxCoinsCling({ actorId } = {}) { playSmart({ url: '/sounds/coins_cling.mp3', volume: 0.85, category: 'local', actorId }); }
+export function sfxVaultClose({ actorId } = {}) { playSmart({ url: '/sounds/vault_close.mp3', volume: 0.9, category: 'local', actorId }); }

@@ -3,10 +3,31 @@ import { isSetComplete } from '../utils';
 import { COLOR_INFO, SET_SIZES } from '../constants';
 import { AnimatedCounter } from '../AnimatedCounter';
 
+const getPropTotalValue = (player) => {
+  let sum = 0;
+  if (player.properties) {
+    Object.values(player.properties).forEach(cards => {
+      cards.forEach(c => {
+        sum += (c.value || 0);
+      });
+    });
+  }
+  return sum;
+};
+
 const MicroProp = ({ color, cards, buildings, onHoverCard }) => {
   const goal = SET_SIZES[color] || 1;
   const isComplete = isSetComplete(cards, color);
-  const info = COLOR_INFO[color] || { hex: '#aaa', light: '#ccc' };
+  const info = COLOR_INFO[color] || { hex: '#aaa', light: '#ccc', rents: [0] };
+  
+  // Auto Rent Preview Calculation
+  const count = Math.min(cards.length, goal);
+  let rentVal = (info.rents && info.rents[count - 1]) || 0;
+  if (isComplete && buildings && buildings[color]) {
+    if (buildings[color].houses > 0) rentVal += buildings[color].houses * 3;
+    if (buildings[color].hotel) rentVal += 4;
+  }
+
   return (
     <div className="micro-prop-tag" style={{ 
       borderColor: isComplete ? info.hex : 'rgba(255,255,255,0.1)',
@@ -19,6 +40,10 @@ const MicroProp = ({ color, cards, buildings, onHoverCard }) => {
       gap: 6
     }}>
       <div style={{ width: 6, height: 6, borderRadius: '50%', background: info.hex }} />
+      {/* Auto Rent Preview Badge */}
+      <span style={{ fontSize: 9, background: 'rgba(0,0,0,0.4)', padding: '1px 4px', borderRadius: 4, color: '#2ecc71', fontWeight: '900', border: '1px solid rgba(46,204,113,0.15)', marginRight: 2 }} title="Güncel Kira Bedeli">
+        🧾 {rentVal}M
+      </span>
       <div style={{ display: 'flex', gap: 2 }}>
         {cards.map(c => {
           let cardClass = '';
@@ -89,6 +114,9 @@ export const PlayerPanel = React.forwardRef(({ player, isMe, isCurrent, onSelect
     return isSetComplete(cards, color);
   }).length;
 
+  const propTotalValue = getPropTotalValue(player);
+  const netWorth = player.bankTotal + propTotalValue;
+
   // Mülkleri "Tam Setler" ve "Eksik Setler" olarak ikiye ayıralım
   const completeProps = [];
   const incompleteProps = [];
@@ -110,7 +138,7 @@ export const PlayerPanel = React.forwardRef(({ player, isMe, isCurrent, onSelect
       
       {/* Emojileri Render Et */}
       {emotes.map(emote => (
-        <div key={emote.id} className="emote-bubble">{emote.emoji}</div>
+        <div key={emote.id} className="floating-emote">{emote.emoji}</div>
       ))}
  
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8, borderBottom: `1px solid ${playerColor}33`, paddingBottom: 6 }}>
@@ -123,7 +151,11 @@ export const PlayerPanel = React.forwardRef(({ player, isMe, isCurrent, onSelect
           {player.hasJustSayNo && isMe && <span className="shield-badge">🛡️ Kalkan Aktif</span>}
           {player.connected === false && <span style={{ fontSize: 10, color: '#f44' }}>● Çevrimdışı</span>}
         </div>
-        <div style={{ display: 'flex', gap: 10, fontSize: 11, color: '#ddd', fontWeight: 'bold' }}>
+        <div style={{ display: 'flex', gap: 10, fontSize: 11, color: '#ddd', fontWeight: 'bold', alignItems: 'center' }}>
+          {/* Net Worth Tracker Badge */}
+          <span title={`Toplam Servet: ${netWorth}M (Banka: ${player.bankTotal}M + Mülkler: ${propTotalValue}M)`} style={{ background: 'rgba(255, 215, 0, 0.1)', border: '1px solid rgba(255, 215, 0, 0.25)', padding: '2px 6px', borderRadius: 6, color: '#FFD700', fontSize: 10.5, display: 'flex', alignItems: 'center', gap: 2 }}>
+            💎 {netWorth}M
+          </span>
           <span title="Banka" style={{ display: 'flex', alignItems: 'center', gap: 2 }}>
             💰 <AnimatedCounter value={player.bankTotal} />M
           </span>

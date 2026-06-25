@@ -4,6 +4,7 @@ const { Server } = require('socket.io');
 const cors = require('cors');
 const { v4: uuidv4 } = require('uuid');
 const MonopolyDealGame = require('./game');
+const { handleBotAction } = require('./bot');
 const path = require('path');
 
 const app = express();
@@ -58,6 +59,10 @@ function getRoomCode() {
 function broadcastState(roomCode, delay = 0) {
   const room = rooms[roomCode];
   if (!room) return;
+
+  // Bot logic tetiklemesi
+  if (room.game) handleBotAction(room.game);
+
   Object.entries(room.players).forEach(([socketId, player]) => {
     const state = room.game.getState(player.id);
     setTimeout(() => io.to(socketId).emit('gameState', state), delay);
@@ -94,7 +99,9 @@ io.on('connection', (socket) => {
     const roomCode = getRoomCode();
     const playerId = uuidv4();
     const safeSettings = settings || {}; // Eğer ayarlar boş gelirse çökmemesi için boş obje kullan
-    const game = new MonopolyDealGame(roomCode, safeSettings); // Oda ayarlarını game objesine geçir
+    const game = new MonopolyDealGame(roomCode, safeSettings, (eventName) => {
+      if (eventName === 'stateChange') broadcastState(roomCode);
+    });
     rooms[roomCode] = { game, players: {}, host: playerId, isPublic: safeSettings.isPublic || false };
 
     game.addPlayer(playerId, name, safeSettings.avatar || 'avataaars');
@@ -137,6 +144,26 @@ io.on('connection', (socket) => {
     }
     broadcastState(roomCode);
     broadcastPublicRooms();
+  });
+
+  socket.on('addBot', ({ roomCode }, cb) => {
+    const room = rooms[roomCode];
+    if (!room) return cb?.({ ok: false, error: 'Oda bulunamadı' });
+    if (room.host !== socket.data.playerId) return cb?.({ ok: false, error: 'Sadece kurucu bot ekleyebilir' });
+    if (room.game.phase !== 'waiting') return cb?.({ ok: false, error: 'Oyun başladı' });
+    if (room.game.players.length >= 5) return cb?.({ ok: false, error: 'Oda dolu' });
+
+    const botId = 'bot_' + uuidv4().substring(0, 8);
+    const botNumber = room.game.players.filter(p => p.isBot).length + 1;
+    const botName = `Bot ${botNumber}`;
+    const botAvatar = 'bot-avatar'; // Can be used by frontend to show a robot icon
+
+    const ok = room.game.addPlayer(botId, botName, botAvatar, true);
+    if (!ok) return cb?.({ ok: false, error: 'Bot eklenemedi' });
+
+    io.to(roomCode).emit('playerJoined', { name: botName, playerCount: room.game.players.length });
+    broadcastState(roomCode);
+    cb?.({ ok: true });
   });
 
   socket.on('updatePlayerName', ({ roomCode, newName }) => {

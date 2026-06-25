@@ -116,13 +116,24 @@ export function CardVisual({ card, selected, onClick, small, dimmed, onHover, us
       {showImage ? (
         <>
           <img src={imgSrc} alt={displayName} onError={() => setImgFailed(true)} style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover' }} />
+          {dualColors && dualColors.length === 2 && (
+            <>
+              {/* Sol Kalın Şerit */}
+              <div style={{ position: 'absolute', top: 0, left: 0, bottom: small ? '50%' : 0, width: small ? 14 : 20, background: dualColors[0].hex, borderTopLeftRadius: 10, borderBottomLeftRadius: small ? 0 : 10, opacity: 0.95, zIndex: 1 }} />
+              {small && <div style={{ position: 'absolute', top: '50%', left: 0, bottom: 0, width: 14, background: dualColors[1].hex, borderBottomLeftRadius: 10, opacity: 0.95, zIndex: 1 }} />}
+              
+              {/* Sağ Kalın Şerit */}
+              <div style={{ position: 'absolute', top: 0, right: 0, bottom: small ? '50%' : 0, width: small ? 14 : 20, background: small ? dualColors[0].hex : dualColors[1].hex, borderTopRightRadius: 10, borderBottomRightRadius: small ? 0 : 10, opacity: 0.95, zIndex: 1 }} />
+              {small && <div style={{ position: 'absolute', top: '50%', right: 0, bottom: 0, width: 14, background: dualColors[1].hex, borderBottomRightRadius: 10, opacity: 0.95, zIndex: 1 }} />}
+            </>
+          )}
           {typeBadge && (
-            <div style={{ position: 'absolute', top: 3, left: 3, background: 'rgba(0,0,0,0.55)', borderRadius: 5, width: small ? 20 : 26, height: small ? 20 : 26, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: small ? 11 : 15, lineHeight: 1 }}>
+            <div style={{ position: 'absolute', top: 3, left: 3, background: 'rgba(0,0,0,0.55)', borderRadius: 5, width: small ? 20 : 26, height: small ? 20 : 26, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: small ? 11 : 15, lineHeight: 1, zIndex: 2 }}>
               {typeBadge.icon}
             </div>
           )}
           {(isMoney || isProp || isAction) && (
-            <div style={{ position: 'absolute', bottom: 3, right: 3, background: 'rgba(0,0,0,0.65)', color: '#FFD700', fontWeight: 900, fontSize: small ? 12 : 16, padding: '2px 6px', borderRadius: 5, lineHeight: 1.2 }}>
+            <div style={{ position: 'absolute', bottom: 3, right: 3, background: 'rgba(0,0,0,0.65)', color: '#FFD700', fontWeight: 900, fontSize: small ? 12 : 16, padding: '2px 6px', borderRadius: 5, lineHeight: 1.2, zIndex: 2 }}>
               {card.value}M
             </div>
           )}
