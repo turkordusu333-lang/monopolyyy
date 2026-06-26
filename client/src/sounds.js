@@ -1,6 +1,5 @@
 // Akıllı Ses Sistemi (Smart Audio System)
 
-let audioCtx = null;
 let enabled = true;
 let localPlayerId = null;
 let sfxVolume = 0.7;
@@ -16,17 +15,9 @@ try {
   if (savedSfx !== null) sfxVolume = parseFloat(savedSfx);
 } catch (e) { /* ignore */ }
 
-export function isSoundEnabled() {
-  return enabled;
-}
-
-export function setLocalPlayerId(id) {
-  localPlayerId = id;
-}
-
-export function getSfxVolume() {
-  return sfxVolume;
-}
+export function isSoundEnabled() { return enabled; }
+export function setLocalPlayerId(id) { localPlayerId = id; }
+export function getSfxVolume() { return sfxVolume; }
 
 export function setSfxVolume(volume) {
   sfxVolume = parseFloat(volume);
@@ -42,60 +33,55 @@ export function setSoundEnabled(value) {
   else if (value && bgmAudio) bgmAudio.play().catch(() => { });
 }
 
-// ── KANAL (POOL) VE THROTTLE (SPAM) SİSTEMİ ──
-const MAX_CHANNELS = 5;
-const audioPool = [];
-for (let i = 0; i < MAX_CHANNELS; i++) {
-  audioPool.push(new Audio());
-}
-let poolIndex = 0;
+// ── SES ÜST ÜSTE BİNMEYİ ÖNLEME SİSTEMİ ──
+//
+// Her URL için tek bir Audio nesnesi tutulur.
+// Aynı ses tekrar tetiklendiğinde önce durdurulur ve baştan çalınır.
+// Bu sayede aynı ses asla üst üste binmez.
+//
+// Throttle: Bir sesin aynı URL ile arka arkaya çalınabilmesi için
+// geçmesi gereken minimum süre. Bu süre içinde gelen istekler yok sayılır.
 
-const lastPlayedTimestamps = {};
-const THROTTLE_MS = 100; // Aynı sesin üst üste çalması için geçmesi gereken min süre (ms)
+const audioInstances = {}; // url -> Audio
+const lastPlayedTimestamps = {}; // url -> timestamp
+const THROTTLE_MS = 400; // ms — üst üste binmeyi önlemek için yeterli süre
 
 /**
  * Akıllı Ses Çalma Fonksiyonu
- * @param {string} url Ses dosyasının yolu
- * @param {number} volume Ses seviyesi (0.0 - 1.0)
- * @param {string} category 'local', 'targeted', 'global'
- * @param {string} actorId İşlemi yapan oyuncu kimliği
- * @param {string} targetId İşlemden etkilenen (hedef) oyuncu kimliği
+ * @param {string} url       Ses dosyasının yolu
+ * @param {number} volume    Ses seviyesi (0.0 – 1.0)
+ * @param {string} category  'local' | 'targeted' | 'global'
+ * @param {string} actorId   İşlemi yapan oyuncu kimliği
+ * @param {string} targetId  Hedef oyuncu kimliği
  */
 function playSmart({ url, volume = 0.5, category = 'global', actorId = null, targetId = null }) {
   if (!enabled) return;
 
-  // 1. Hedefleme Kontrolü (Targeted Audio)
+  // 1. Hedefleme Kontrolü
   const isMe = localPlayerId && ((actorId === localPlayerId) || (targetId === localPlayerId));
-  
-  if (category === 'local') {
-    // Sadece işlemi yapan duymalı (veya hedef)
-    if (!isMe && actorId) return; // actorId verilmişse ve ben değilsem duyma
-  } else if (category === 'targeted') {
-    // Sadece işlemi yapan ve hedef alınan kişi duyar.
-    if (!isMe && actorId) return; 
-  }
-  // category === 'global' ise herkes duyar.
+  if (category === 'local' && !isMe && actorId) return;
+  if (category === 'targeted' && !isMe && actorId) return;
+  // category === 'global' → herkes duyar
 
-  // 2. Spam Koruması (Throttling)
+  // 2. Throttle — çok hızlı ardışık çağrıları engelle
   const now = Date.now();
-  if (lastPlayedTimestamps[url] && (now - lastPlayedTimestamps[url] < THROTTLE_MS)) {
-    return; // Spam! Çalma.
-  }
+  if (lastPlayedTimestamps[url] && (now - lastPlayedTimestamps[url] < THROTTLE_MS)) return;
   lastPlayedTimestamps[url] = now;
 
-  // 3. Pool (Kanal) Kullanarak Çalma
+  // 3. Per-URL singleton — aynı ses çalıyorsa durdur ve baştan başlat
   try {
-    const audio = audioPool[poolIndex];
-    audio.src = url;
-    audio.volume = volume * sfxVolume;
-    audio.play().catch(e => console.warn('Ses çalınamadı (Autoplay vs):', e));
-    
-    // Bir sonraki kanala geç (ring buffer)
-    poolIndex = (poolIndex + 1) % MAX_CHANNELS;
+    if (!audioInstances[url]) {
+      audioInstances[url] = new Audio(url);
+    }
+    const audio = audioInstances[url];
+    audio.pause();
+    audio.currentTime = 0;
+    audio.volume = Math.min(1, Math.max(0, volume * sfxVolume));
+    audio.play().catch(e => console.warn('Ses çalınamadı:', e));
   } catch (e) { /* ignore */ }
 }
 
-// Orijinal basit çalma fonksiyonu (geriye dönük uyumluluk için, category=global olarak çalışır)
+// Geriye dönük uyumluluk
 function playFile(url, volume = 0.5) {
   playSmart({ url, volume, category: 'global' });
 }

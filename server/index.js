@@ -375,6 +375,71 @@ io.on('connection', (socket) => {
     }
   });
 
+  socket.on('returnToLobby', ({ roomCode }, cb) => {
+    try {
+      const { playerId } = socket.data;
+      const room = rooms[roomCode];
+      if (!room) return cb?.({ ok: false, error: 'Oda bulunamadı' });
+      if (room.host !== playerId) return cb?.({ ok: false, error: 'Sadece host oyunu bitirebilir' });
+
+      // Oyunu sıfırlayıp lobby'ye döndür
+      const safeSettings = room.game.settings || {};
+      const newGame = new MonopolyDealGame(roomCode, safeSettings, (eventName) => {
+        if (eventName === 'stateChange') broadcastState(roomCode);
+      });
+
+      // Mevcut oyuncuları yeni oyuna taşı (bot olmayanlar)
+      room.game.players.forEach(p => {
+        newGame.addPlayer(p.id, p.name, p.avatar || 'avataaars', p.isBot || false);
+      });
+      room.game = newGame;
+
+      // Tüm istemcilere lobby'ye döndüklerini bildir
+      io.to(roomCode).emit('returnedToLobby');
+      broadcastState(roomCode);
+      cb?.({ ok: true });
+      broadcastPublicRooms();
+    } catch (err) {
+      console.error('returnToLobby crash:', err);
+      cb?.({ ok: false, error: 'Sunucu Hatası: ' + err.message });
+    }
+  });
+
+  socket.on('leaveRoom', ({ roomCode }, cb) => {
+    try {
+      const { playerId } = socket.data;
+      const room = rooms[roomCode];
+      if (!room) return cb?.({ ok: true }); // Oda yoksa zaten çıkmış
+
+      // Oyuncuyu oyundan çıkar
+      const playerIdx = room.game.players.findIndex(p => p.id === playerId);
+      if (playerIdx !== -1) {
+        const leavingName = room.game.players[playerIdx].name;
+        room.game.players.splice(playerIdx, 1);
+        room.game.addLog(`${leavingName} odadan ayrıldı`, 'system');
+      }
+
+      // Socket'i odadan çıkar
+      delete room.players[socket.id];
+      socket.leave(roomCode);
+      socket.data.roomCode = null;
+      socket.data.playerId = null;
+
+      // Oda boşaldıysa sil
+      if (Object.keys(room.players).length === 0) {
+        setTimeout(() => { if (rooms[roomCode] && Object.keys(rooms[roomCode].players).length === 0) delete rooms[roomCode]; }, 60000);
+      } else {
+        broadcastState(roomCode);
+      }
+
+      cb?.({ ok: true });
+      broadcastPublicRooms();
+    } catch (err) {
+      console.error('leaveRoom crash:', err);
+      cb?.({ ok: false, error: 'Sunucu Hatası: ' + err.message });
+    }
+  });
+
   socket.on('closeRoom', ({ roomCode }, cb) => {
     try {
       const { playerId } = socket.data;
