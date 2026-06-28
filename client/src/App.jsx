@@ -5896,7 +5896,7 @@ export default function App() {
                       <motion.div
                         key={card.id}
                         className={`stacked-card-wrapper ${isSelected ? 'selected-card' : ''} ${smartHighlightIds.includes(card.id) ? 'smart-glow' : ''}`}
-                        drag={isMyTurn && !isBlocked && !discardMode}
+                        drag={isMyTurn && !isBlocked && !discardMode ? 'y' : false}
                         dragElastic={0.2}
                         dragSnapToOrigin={true}
                         dragTransition={{ bounceStiffness: 600, bounceDamping: 20 }}
