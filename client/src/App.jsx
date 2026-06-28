@@ -263,7 +263,7 @@ export default function App() {
     try {
       const saved = localStorage.getItem('md_db_user');
       return saved ? JSON.parse(saved) : null;
-    } catch(e) { return null; }
+    } catch (e) { return null; }
   });
   const [authUsername, setAuthUsername] = useState('');
   const [authPassword, setAuthPassword] = useState('');
@@ -359,7 +359,7 @@ export default function App() {
     }
   };
   const [payingFlyingCards, setPayingFlyingCards] = useState([]); // Ödeme animasyonu için
-  const [roomSettings, setRoomSettings] = useState({ autoEndTurn: true, turnTimer: 0, winSets: 3, startCards: 5, handLimit: 7, isPublic: true, allowCounterJustSayNo: true, openHands: false, lockWildcards: false, fastChallenge: false, allowTrades: true, extraDealBreakers: 0, streetThugs: false, gambleZari: false, botDifficulty: 'medium', thiefSquirrelEnabled: true });
+  const [roomSettings, setRoomSettings] = useState({ autoEndTurn: true, turnTimer: 0, winSets: 3, startCards: 5, handLimit: 7, isPublic: true, allowCounterJustSayNo: true, openHands: false, lockWildcards: false, fastChallenge: false, allowTrades: false, extraDealBreakers: 0, streetThugs: false, gambleZari: false, botDifficulty: 'hard', thiefSquirrelEnabled: false });
 
   const applyPreset = (preset) => {
     let newSettings = {};
@@ -1015,7 +1015,7 @@ export default function App() {
   };
 
   useEffect(() => {
-    if (logRef.current) logRef.current.scrollTop = logRef.current.scrollHeight;
+    if (logRef.current) logRef.current.scrollTop = 0;
 
     // Yeni bir log geldiğinde aksiyonu analiz et ve gerekirse overlay göster
     if (!gameState?.log?.length) return;
@@ -2103,7 +2103,7 @@ export default function App() {
                 onClick={() => {
                   setIsMenuOpen(false);
                   if (!window.confirm('Odadan ayrılmak istediğinden emin misin?')) return;
-                  socket?.emit('leaveRoom', { roomCode }, () => {});
+                  socket?.emit('leaveRoom', { roomCode }, () => { });
                   handleExit();
                 }}
                 style={{
@@ -2477,15 +2477,15 @@ export default function App() {
                   const isComplete = isSetComplete(cards, color);
                   const setSize = SET_SIZES[color] || 2;
                   return (
-                    <div 
-                      key={color} 
-                      style={{ 
-                        display: 'flex', 
-                        alignItems: 'center', 
-                        gap: 4, 
+                    <div
+                      key={color}
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: 4,
                         background: isComplete ? `${info.hex}25` : 'rgba(255,255,255,0.05)',
                         border: `1px solid ${isComplete ? info.hex : 'rgba(255,255,255,0.1)'}`,
-                        borderRadius: 6, 
+                        borderRadius: 6,
                         padding: '3px 8px',
                         fontSize: 9,
                         fontWeight: 'bold',
@@ -2509,185 +2509,128 @@ export default function App() {
               // Mini arazi renk badge'ları
               const propEntries = Object.entries(p.properties || {}).filter(([, cards]) => cards.length > 0);
               return (
-              <div key={p.id} className="modal-profile-card">
-                <div className="modal-profile-header">
-                  <div className="modal-profile-name">
-                    <img
-                      src={`https://api.dicebear.com/7.x/${p.avatar || 'avataaars'}/svg?seed=${p.name}`}
-                      alt=""
-                      style={{ width: 36, height: 36, borderRadius: '50%', background: 'rgba(255,255,255,0.05)' }}
-                    />
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                      <span>{p.name}</span>
-                      {/* Mini arazi renk badge'ları */}
-                      {propEntries.length > 0 && (
-                        <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
-                          {propEntries.map(([color, cards]) => {
-                            const info = COLOR_INFO[color] || { hex: '#aaa' };
-                            const complete = isSetComplete(cards, color);
-                            const sz = SET_SIZES[color] || 2;
-                            return (
-                              <div key={color} title={`${info.name || color}: ${cards.length}/${sz}${complete ? ' ✓ TAM SET' : ''}`}
-                                style={{
-                                  display: 'flex', alignItems: 'center', gap: 2,
-                                  background: complete ? `${info.hex}30` : 'rgba(255,255,255,0.06)',
-                                  border: complete ? `1px solid ${info.hex}` : `1px solid ${info.hex}55`,
-                                  borderRadius: 5, padding: '2px 5px',
-                                  boxShadow: complete ? `0 0 6px ${info.hex}66` : 'none'
-                                }}>
-                                <div style={{ width: 8, height: 8, borderRadius: '50%', background: info.hex, flexShrink: 0 }} />
-                                <span style={{ fontSize: 9, fontWeight: 900, color: complete ? '#FFD700' : '#ccc' }}>
-                                  {cards.length}/{sz}{complete ? '★' : ''}
-                                </span>
-                              </div>
-                            );
-                          })}
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                  <span style={{ fontSize: 11, color: '#94a3b8', background: 'rgba(255,255,255,0.05)', padding: '2px 8px', borderRadius: 12, alignSelf: 'flex-start' }}>
-                    Banka: {p.bankTotal}M
-                  </span>
-                </div>
-
-                {modal.action === 'debtcollector' && (
-                  <button onClick={() => handlePlayCard(card, { targetId: p.id })} style={{ ...btnStyle('#E74C3C'), width: '100%', padding: '12px 16px', borderRadius: 8, margin: 0 }}>
-                    💸 {p.name}'den 5M Tahsil Et
-                  </button>
-                )}
- 
-                {modal.action === 'thief_squirrel' && (
-                  <button
-                    disabled={p.handCount === 0}
-                    onClick={() => handlePlayCard(card, { targetId: p.id })}
-                    style={{
-                      ...btnStyle(p.handCount === 0 ? '#555' : '#8B4513'),
-                      width: '100%',
-                      padding: '12px 16px',
-                      borderRadius: 8,
-                      margin: 0,
-                      cursor: p.handCount === 0 ? 'not-allowed' : 'pointer',
-                      opacity: p.handCount === 0 ? 0.5 : 1
-                    }}
-                  >
-                    🐿️ {p.name}'dan Kart Çal (Elde {p.handCount || 0} Kart var)
-                  </button>
-                )}
-
-                {modal.action === 'dealbreaker' && (
-                  <div>
-                    <div style={{ color: '#a855f7', fontWeight: 'bold', fontSize: 12, marginBottom: 10 }}>Çalmak istediğiniz tamamlanmış seti seçin:</div>
-                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12 }}>
-                      {Object.entries(p.properties || {}).filter(([color, cards]) => isSetComplete(cards, color)).map(([color, cards]) => {
-                        const info = COLOR_INFO[color] || { hex: '#444', name: color, light: '#666' };
-                        const b = p.buildings?.[color];
-                        return (
-                          <div key={color} style={{ background: 'rgba(0,0,0,0.3)', padding: 12, borderRadius: 10, border: `1.5px solid ${info.hex}`, display: 'flex', flexDirection: 'column', alignItems: 'center', minWidth: 110 }}>
-                            <div style={{ color: info.light || '#fff', fontSize: 10, fontWeight: 900, marginBottom: 6, textTransform: 'uppercase', letterSpacing: 0.5 }}>{info.name} SETİ</div>
-                            
-                            {/* Card Previews */}
-                            <div style={{ display: 'flex', gap: 3, marginBottom: 8 }}>
-                              {cards.map(c => (
-                                <div key={c.id} style={{
-                                  width: 16, height: 22, backgroundColor: '#fff',
-                                  border: `1.2px solid ${info.hex}`, borderRadius: 3,
-                                  display: 'flex', flexDirection: 'column', alignItems: 'center', overflow: 'hidden'
-                                }}>
-                                  <div style={{ width: '100%', height: 3, background: c.isWild ? 'linear-gradient(90deg, #E74C3C, #F39C12, #2ECC71, #3498DB)' : (c.isDual && c.colors ? `linear-gradient(90deg, ${COLOR_INFO[c.colors[0]]?.hex} 0%, ${COLOR_INFO[c.colors[0]]?.hex} 50%, ${COLOR_INFO[c.colors[1]]?.hex} 50%, ${COLOR_INFO[c.colors[1]]?.hex} 100%)` : info.hex) }} />
-                                  <span style={{ fontSize: 6, fontWeight: 900, color: '#333', transform: 'scale(0.8)', marginTop: 2 }}>{c.isWild ? '★' : c.value}</span>
+                <div key={p.id} className="modal-profile-card">
+                  <div className="modal-profile-header">
+                    <div className="modal-profile-name">
+                      <img
+                        src={`https://api.dicebear.com/7.x/${p.avatar || 'avataaars'}/svg?seed=${p.name}`}
+                        alt=""
+                        style={{ width: 36, height: 36, borderRadius: '50%', background: 'rgba(255,255,255,0.05)' }}
+                      />
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                        <span>{p.name}</span>
+                        {/* Mini arazi renk badge'ları */}
+                        {propEntries.length > 0 && (
+                          <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
+                            {propEntries.map(([color, cards]) => {
+                              const info = COLOR_INFO[color] || { hex: '#aaa' };
+                              const complete = isSetComplete(cards, color);
+                              const sz = SET_SIZES[color] || 2;
+                              return (
+                                <div key={color} title={`${info.name || color}: ${cards.length}/${sz}${complete ? ' ✓ TAM SET' : ''}`}
+                                  style={{
+                                    display: 'flex', alignItems: 'center', gap: 2,
+                                    background: complete ? `${info.hex}30` : 'rgba(255,255,255,0.06)',
+                                    border: complete ? `1px solid ${info.hex}` : `1px solid ${info.hex}55`,
+                                    borderRadius: 5, padding: '2px 5px',
+                                    boxShadow: complete ? `0 0 6px ${info.hex}66` : 'none'
+                                  }}>
+                                  <div style={{ width: 8, height: 8, borderRadius: '50%', background: info.hex, flexShrink: 0 }} />
+                                  <span style={{ fontSize: 9, fontWeight: 900, color: complete ? '#FFD700' : '#ccc' }}>
+                                    {cards.length}/{sz}{complete ? '★' : ''}
+                                  </span>
                                 </div>
-                              ))}
-                            </div>
-
-                            {/* Buildings indicator */}
-                            {b && (b.houses > 0 || b.hotel) && (
-                              <div style={{ display: 'flex', gap: 3, marginBottom: 8, background: 'rgba(255,255,255,0.05)', padding: '2px 6px', borderRadius: 4, border: '1px solid rgba(255,255,255,0.1)' }}>
-                                {b.houses > 0 && <span title="Ev" style={{ fontSize: 10 }}>🏠</span>}
-                                {b.hotel && <span title="Otel" style={{ fontSize: 10 }}>🏨</span>}
-                              </div>
-                            )}
-
-                            <button onClick={() => handlePlayCard(card, { targetId: p.id, targetColor: color })} style={{ ...btnStyle('#a855f7'), padding: '6px 14px', fontSize: 11, width: '100%', margin: 0 }}>
-                              💣 ÇAL
-                            </button>
+                              );
+                            })}
                           </div>
-                        );
-                      })}
-                      {Object.entries(p.properties || {}).filter(([color, cards]) => isSetComplete(cards, color)).length === 0 && (
-                        <div style={{ color: '#64748b', fontSize: 12, fontStyle: 'italic', padding: '4px 0' }}>Tamamlanmış mülk seti bulunmuyor.</div>
-                      )}
+                        )}
+                      </div>
                     </div>
+                    <span style={{ fontSize: 11, color: '#94a3b8', background: 'rgba(255,255,255,0.05)', padding: '2px 8px', borderRadius: 12, alignSelf: 'flex-start' }}>
+                      Banka: {p.bankTotal}M
+                    </span>
                   </div>
-                )}
 
-                {modal.action === 'slydeal' && (
-                  <div>
-                    <div style={{ color: '#3b82f6', fontWeight: 'bold', fontSize: 12, marginBottom: 10 }}>Çalmak istediğiniz bağımsız araziyi seçin (Setler Hariç):</div>
-                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-                      {Object.entries(p.properties || {}).flatMap(([color, cards]) =>
-                        !isSetComplete(cards, color) ? cards.map(propCard => {
-                          // Akıllı Uyarı Mantığı (Profitable Glow)
-                          let isProfitable = false;
-                          const me = gameState.players.find(pl => pl.id === playerId);
-                          if (me) {
-                            if (propCard.isWild) isProfitable = true;
-                            else {
-                              const pColors = propCard.isDual ? propCard.colors : [propCard.color];
-                              isProfitable = pColors.some(clr => me.properties?.[clr]?.length > 0);
-                            }
-                          }
+                  {modal.action === 'debtcollector' && (
+                    <button onClick={() => handlePlayCard(card, { targetId: p.id })} style={{ ...btnStyle('#E74C3C'), width: '100%', padding: '12px 16px', borderRadius: 8, margin: 0 }}>
+                      💸 {p.name}'den 5M Tahsil Et
+                    </button>
+                  )}
 
+                  {modal.action === 'thief_squirrel' && (
+                    <button
+                      disabled={p.handCount === 0}
+                      onClick={() => handlePlayCard(card, { targetId: p.id })}
+                      style={{
+                        ...btnStyle(p.handCount === 0 ? '#555' : '#8B4513'),
+                        width: '100%',
+                        padding: '12px 16px',
+                        borderRadius: 8,
+                        margin: 0,
+                        cursor: p.handCount === 0 ? 'not-allowed' : 'pointer',
+                        opacity: p.handCount === 0 ? 0.5 : 1
+                      }}
+                    >
+                      🐿️ {p.name}'dan Kart Çal (Elde {p.handCount || 0} Kart var)
+                    </button>
+                  )}
+
+                  {modal.action === 'dealbreaker' && (
+                    <div>
+                      <div style={{ color: '#a855f7', fontWeight: 'bold', fontSize: 12, marginBottom: 10 }}>Çalmak istediğiniz tamamlanmış seti seçin:</div>
+                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12 }}>
+                        {Object.entries(p.properties || {}).filter(([color, cards]) => isSetComplete(cards, color)).map(([color, cards]) => {
+                          const info = COLOR_INFO[color] || { hex: '#444', name: color, light: '#666' };
+                          const b = p.buildings?.[color];
                           return (
-                            <div
-                              key={propCard.id}
-                              className={isProfitable ? 'profitable-glow' : ''}
-                              onClick={() => handlePlayCard(card, { targetId: p.id, targetColor: color, targetCardId: propCard.id })}
-                              style={{
-                                cursor: 'pointer',
-                                transition: 'all 0.2s ease',
-                                borderRadius: 8,
-                                overflow: 'hidden',
-                                border: '2px solid transparent'
-                              }}
-                              onMouseOver={(e) => {
-                                e.currentTarget.style.transform = 'translateY(-4px) scale(1.05)';
-                                e.currentTarget.style.borderColor = '#3b82f6';
-                              }}
-                              onMouseOut={(e) => {
-                                e.currentTarget.style.transform = 'none';
-                                e.currentTarget.style.borderColor = 'transparent';
-                              }}
-                            >
-                              <CardVisual card={propCard} small />
+                            <div key={color} style={{ background: 'rgba(0,0,0,0.3)', padding: 12, borderRadius: 10, border: `1.5px solid ${info.hex}`, display: 'flex', flexDirection: 'column', alignItems: 'center', minWidth: 110 }}>
+                              <div style={{ color: info.light || '#fff', fontSize: 10, fontWeight: 900, marginBottom: 6, textTransform: 'uppercase', letterSpacing: 0.5 }}>{info.name} SETİ</div>
+
+                              {/* Card Previews */}
+                              <div style={{ display: 'flex', gap: 3, marginBottom: 8 }}>
+                                {cards.map(c => (
+                                  <div key={c.id} style={{
+                                    width: 16, height: 22, backgroundColor: '#fff',
+                                    border: `1.2px solid ${info.hex}`, borderRadius: 3,
+                                    display: 'flex', flexDirection: 'column', alignItems: 'center', overflow: 'hidden'
+                                  }}>
+                                    <div style={{ width: '100%', height: 3, background: c.isWild ? 'linear-gradient(90deg, #E74C3C, #F39C12, #2ECC71, #3498DB)' : (c.isDual && c.colors ? `linear-gradient(90deg, ${COLOR_INFO[c.colors[0]]?.hex} 0%, ${COLOR_INFO[c.colors[0]]?.hex} 50%, ${COLOR_INFO[c.colors[1]]?.hex} 50%, ${COLOR_INFO[c.colors[1]]?.hex} 100%)` : info.hex) }} />
+                                    <span style={{ fontSize: 6, fontWeight: 900, color: '#333', transform: 'scale(0.8)', marginTop: 2 }}>{c.isWild ? '★' : c.value}</span>
+                                  </div>
+                                ))}
+                              </div>
+
+                              {/* Buildings indicator */}
+                              {b && (b.houses > 0 || b.hotel) && (
+                                <div style={{ display: 'flex', gap: 3, marginBottom: 8, background: 'rgba(255,255,255,0.05)', padding: '2px 6px', borderRadius: 4, border: '1px solid rgba(255,255,255,0.1)' }}>
+                                  {b.houses > 0 && <span title="Ev" style={{ fontSize: 10 }}>🏠</span>}
+                                  {b.hotel && <span title="Otel" style={{ fontSize: 10 }}>🏨</span>}
+                                </div>
+                              )}
+
+                              <button onClick={() => handlePlayCard(card, { targetId: p.id, targetColor: color })} style={{ ...btnStyle('#a855f7'), padding: '6px 14px', fontSize: 11, width: '100%', margin: 0 }}>
+                                💣 ÇAL
+                              </button>
                             </div>
                           );
-                        }) : []
-                      )}
-                      {Object.entries(p.properties || {}).every(([c, cards]) => isSetComplete(cards, c) || cards.length === 0) && (
-                        <div style={{ color: '#64748b', fontSize: 12, fontStyle: 'italic', padding: '4px 0' }}>Çalınabilecek bağımsız arsa bulunmuyor.</div>
-                      )}
-                    </div>
-                  </div>
-                )}
-
-                {modal.action === 'forceddeal' && (
-                  <div className="stepper-container">
-                    {/* Step 1 */}
-                    <div className={`step-card ${modal.step !== 2 ? 'active' : 'inactive'}`}>
-                      <div className="step-header" style={{ color: '#e11d48' }}>
-                        <span>①</span> {p.name}'den Alacağınız Kartı Seçin
+                        })}
+                        {Object.entries(p.properties || {}).filter(([color, cards]) => isSetComplete(cards, color)).length === 0 && (
+                          <div style={{ color: '#64748b', fontSize: 12, fontStyle: 'italic', padding: '4px 0' }}>Tamamlanmış mülk seti bulunmuyor.</div>
+                        )}
                       </div>
-                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-                        {Object.entries(p.properties || {}).flatMap(([color, cards]) => {
-                          const isSetDone = isSetComplete(cards, color);
-                          return cards.map(propCard => {
-                            const isSelected = modal.targetCardId === propCard.id;
+                    </div>
+                  )}
 
+                  {modal.action === 'slydeal' && (
+                    <div>
+                      <div style={{ color: '#3b82f6', fontWeight: 'bold', fontSize: 12, marginBottom: 10 }}>Çalmak istediğiniz bağımsız araziyi seçin (Setler Hariç):</div>
+                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+                        {Object.entries(p.properties || {}).flatMap(([color, cards]) =>
+                          !isSetComplete(cards, color) ? cards.map(propCard => {
                             // Akıllı Uyarı Mantığı (Profitable Glow)
                             let isProfitable = false;
                             const me = gameState.players.find(pl => pl.id === playerId);
-                            if (me && !isSetDone) {
+                            if (me) {
                               if (propCard.isWild) isProfitable = true;
                               else {
                                 const pColors = propCard.isDual ? propCard.colors : [propCard.color];
@@ -2698,128 +2641,82 @@ export default function App() {
                             return (
                               <div
                                 key={propCard.id}
-                                className={isSetDone ? '' : (isProfitable && !isSelected ? 'profitable-glow' : '')}
-                                onClick={() => {
-                                  if (isSetDone) {
-                                    showToast("Tamamlanmış bir setten kart alamazsınız!", "warning");
-                                    return;
-                                  }
-                                  setModal({ ...modal, targetId: p.id, targetColor: color, targetCardId: propCard.id, step: 2 });
-                                }}
+                                className={isProfitable ? 'profitable-glow' : ''}
+                                onClick={() => handlePlayCard(card, { targetId: p.id, targetColor: color, targetCardId: propCard.id })}
                                 style={{
-                                  cursor: isSetDone ? 'not-allowed' : 'pointer',
+                                  cursor: 'pointer',
                                   transition: 'all 0.2s ease',
-                                  transform: isSelected ? 'scale(1.08)' : 'none',
-                                  outline: isSelected ? '2.5px solid #e11d48' : 'none',
                                   borderRadius: 8,
                                   overflow: 'hidden',
-                                  boxShadow: isSelected ? '0 0 15px rgba(225,29,72,0.5)' : 'none',
-                                  opacity: isSetDone ? 0.45 : 1,
-                                  filter: isSetDone ? 'grayscale(80%)' : 'none',
-                                  position: 'relative'
+                                  border: '2px solid transparent'
+                                }}
+                                onMouseOver={(e) => {
+                                  e.currentTarget.style.transform = 'translateY(-4px) scale(1.05)';
+                                  e.currentTarget.style.borderColor = '#3b82f6';
+                                }}
+                                onMouseOut={(e) => {
+                                  e.currentTarget.style.transform = 'none';
+                                  e.currentTarget.style.borderColor = 'transparent';
                                 }}
                               >
                                 <CardVisual card={propCard} small />
-                                {isSetDone && (
-                                  <div style={{
-                                    position: 'absolute', inset: 0,
-                                    background: 'rgba(0,0,0,0.6)',
-                                    display: 'flex', alignItems: 'center', justifyContent: 'center',
-                                    fontSize: 8, fontWeight: 900, color: '#fff', textAlign: 'center',
-                                    padding: 2,
-                                    zIndex: 2
-                                  }}>
-                                    🔒 SET
-                                  </div>
-                                )}
                               </div>
                             );
-                          });
-                        })}
-                        {Object.entries(p.properties || {}).every(([c, cards]) => cards.length === 0) && (
-                          <div style={{ color: '#64748b', fontSize: 11, fontStyle: 'italic' }}>Alınabilecek arsa bulunmuyor.</div>
+                          }) : []
+                        )}
+                        {Object.entries(p.properties || {}).every(([c, cards]) => isSetComplete(cards, c) || cards.length === 0) && (
+                          <div style={{ color: '#64748b', fontSize: 12, fontStyle: 'italic', padding: '4px 0' }}>Çalınabilecek bağımsız arsa bulunmuyor.</div>
                         )}
                       </div>
                     </div>
+                  )}
 
-                    {/* Step 2 */}
-                    <div className={`step-card ${modal.step === 2 ? 'active' : 'inactive'}`}>
-                      <div className="step-header" style={{ color: '#10b981', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                        <span><span>②</span> Kendi Kartlarınızdan Vereceğinizi Seçin</span>
-                        {modal.step === 2 && (
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setModal({ ...modal, step: 1, targetId: null, targetColor: null, targetCardId: null });
-                            }}
-                            style={{
-                              background: 'rgba(255,255,255,0.1)',
-                              border: '1px solid rgba(255,255,255,0.2)',
-                              color: '#fff',
-                              borderRadius: 4,
-                              padding: '2px 8px',
-                              fontSize: 10,
-                              cursor: 'pointer',
-                              margin: 0
-                            }}
-                          >
-                            ◀ Geri Dön
-                          </button>
-                        )}
-                      </div>
-                      {modal.step === 2 ? (
-                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, animation: 'toast-in 0.25s ease' }}>
-                          {Object.entries(me?.properties || {}).flatMap(([color, cards]) => {
+                  {modal.action === 'forceddeal' && (
+                    <div className="stepper-container">
+                      {/* Step 1 */}
+                      <div className={`step-card ${modal.step !== 2 ? 'active' : 'inactive'}`}>
+                        <div className="step-header" style={{ color: '#e11d48' }}>
+                          <span>①</span> {p.name}'den Alacağınız Kartı Seçin
+                        </div>
+                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+                          {Object.entries(p.properties || {}).flatMap(([color, cards]) => {
                             const isSetDone = isSetComplete(cards, color);
                             return cards.map(propCard => {
-                              // Akıllı Uyarı Mantığı (Danger Glow)
-                              let isDangerous = false;
-                              if (!isSetDone) {
-                                if (propCard.isWild) isDangerous = true;
+                              const isSelected = modal.targetCardId === propCard.id;
+
+                              // Akıllı Uyarı Mantığı (Profitable Glow)
+                              let isProfitable = false;
+                              const me = gameState.players.find(pl => pl.id === playerId);
+                              if (me && !isSetDone) {
+                                if (propCard.isWild) isProfitable = true;
                                 else {
-                                  const cColors = propCard.isDual ? propCard.colors : [propCard.color];
-                                  isDangerous = cColors.some(clr => p.properties?.[clr]?.length > 0);
+                                  const pColors = propCard.isDual ? propCard.colors : [propCard.color];
+                                  isProfitable = pColors.some(clr => me.properties?.[clr]?.length > 0);
                                 }
                               }
 
                               return (
                                 <div
                                   key={propCard.id}
-                                  className={isSetDone ? '' : (isDangerous ? 'danger-glow' : '')}
+                                  className={isSetDone ? '' : (isProfitable && !isSelected ? 'profitable-glow' : '')}
                                   onClick={() => {
                                     if (isSetDone) {
-                                      showToast("Tamamlanmış bir setten kart veremezsiniz!", "warning");
+                                      showToast("Tamamlanmış bir setten kart alamazsınız!", "warning");
                                       return;
                                     }
-                                    handlePlayCard(card, {
-                                      targetId: modal.targetId,
-                                      targetColor: modal.targetColor,
-                                      targetCardId: modal.targetCardId,
-                                      myColor: color,
-                                      myCardId: propCard.id,
-                                    });
+                                    setModal({ ...modal, targetId: p.id, targetColor: color, targetCardId: propCard.id, step: 2 });
                                   }}
                                   style={{
                                     cursor: isSetDone ? 'not-allowed' : 'pointer',
                                     transition: 'all 0.2s ease',
+                                    transform: isSelected ? 'scale(1.08)' : 'none',
+                                    outline: isSelected ? '2.5px solid #e11d48' : 'none',
                                     borderRadius: 8,
                                     overflow: 'hidden',
-                                    border: '2px solid transparent',
+                                    boxShadow: isSelected ? '0 0 15px rgba(225,29,72,0.5)' : 'none',
                                     opacity: isSetDone ? 0.45 : 1,
                                     filter: isSetDone ? 'grayscale(80%)' : 'none',
                                     position: 'relative'
-                                  }}
-                                  onMouseOver={(e) => {
-                                    if (!isSetDone) {
-                                      e.currentTarget.style.transform = 'translateY(-4px) scale(1.05)';
-                                      e.currentTarget.style.borderColor = '#10b981';
-                                    }
-                                  }}
-                                  onMouseOut={(e) => {
-                                    if (!isSetDone) {
-                                      e.currentTarget.style.transform = 'none';
-                                      e.currentTarget.style.borderColor = 'transparent';
-                                    }
                                   }}
                                 >
                                   <CardVisual card={propCard} small />
@@ -2839,18 +2736,121 @@ export default function App() {
                               );
                             });
                           })}
-                          {Object.entries(me?.properties || {}).every(([c, cards]) => cards.length === 0) && (
-                            <div style={{ color: '#64748b', fontSize: 11, fontStyle: 'italic' }}>Verilebilecek arsanız bulunmuyor.</div>
+                          {Object.entries(p.properties || {}).every(([c, cards]) => cards.length === 0) && (
+                            <div style={{ color: '#64748b', fontSize: 11, fontStyle: 'italic' }}>Alınabilecek arsa bulunmuyor.</div>
                           )}
                         </div>
-                      ) : (
-                        <div style={{ color: '#64748b', fontSize: 12, fontStyle: 'italic' }}>Lütfen önce yukarıdan alacağınız kartı seçin.</div>
-                      )}
+                      </div>
+
+                      {/* Step 2 */}
+                      <div className={`step-card ${modal.step === 2 ? 'active' : 'inactive'}`}>
+                        <div className="step-header" style={{ color: '#10b981', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                          <span><span>②</span> Kendi Kartlarınızdan Vereceğinizi Seçin</span>
+                          {modal.step === 2 && (
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setModal({ ...modal, step: 1, targetId: null, targetColor: null, targetCardId: null });
+                              }}
+                              style={{
+                                background: 'rgba(255,255,255,0.1)',
+                                border: '1px solid rgba(255,255,255,0.2)',
+                                color: '#fff',
+                                borderRadius: 4,
+                                padding: '2px 8px',
+                                fontSize: 10,
+                                cursor: 'pointer',
+                                margin: 0
+                              }}
+                            >
+                              ◀ Geri Dön
+                            </button>
+                          )}
+                        </div>
+                        {modal.step === 2 ? (
+                          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, animation: 'toast-in 0.25s ease' }}>
+                            {Object.entries(me?.properties || {}).flatMap(([color, cards]) => {
+                              const isSetDone = isSetComplete(cards, color);
+                              return cards.map(propCard => {
+                                // Akıllı Uyarı Mantığı (Danger Glow)
+                                let isDangerous = false;
+                                if (!isSetDone) {
+                                  if (propCard.isWild) isDangerous = true;
+                                  else {
+                                    const cColors = propCard.isDual ? propCard.colors : [propCard.color];
+                                    isDangerous = cColors.some(clr => p.properties?.[clr]?.length > 0);
+                                  }
+                                }
+
+                                return (
+                                  <div
+                                    key={propCard.id}
+                                    className={isSetDone ? '' : (isDangerous ? 'danger-glow' : '')}
+                                    onClick={() => {
+                                      if (isSetDone) {
+                                        showToast("Tamamlanmış bir setten kart veremezsiniz!", "warning");
+                                        return;
+                                      }
+                                      handlePlayCard(card, {
+                                        targetId: modal.targetId,
+                                        targetColor: modal.targetColor,
+                                        targetCardId: modal.targetCardId,
+                                        myColor: color,
+                                        myCardId: propCard.id,
+                                      });
+                                    }}
+                                    style={{
+                                      cursor: isSetDone ? 'not-allowed' : 'pointer',
+                                      transition: 'all 0.2s ease',
+                                      borderRadius: 8,
+                                      overflow: 'hidden',
+                                      border: '2px solid transparent',
+                                      opacity: isSetDone ? 0.45 : 1,
+                                      filter: isSetDone ? 'grayscale(80%)' : 'none',
+                                      position: 'relative'
+                                    }}
+                                    onMouseOver={(e) => {
+                                      if (!isSetDone) {
+                                        e.currentTarget.style.transform = 'translateY(-4px) scale(1.05)';
+                                        e.currentTarget.style.borderColor = '#10b981';
+                                      }
+                                    }}
+                                    onMouseOut={(e) => {
+                                      if (!isSetDone) {
+                                        e.currentTarget.style.transform = 'none';
+                                        e.currentTarget.style.borderColor = 'transparent';
+                                      }
+                                    }}
+                                  >
+                                    <CardVisual card={propCard} small />
+                                    {isSetDone && (
+                                      <div style={{
+                                        position: 'absolute', inset: 0,
+                                        background: 'rgba(0,0,0,0.6)',
+                                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                        fontSize: 8, fontWeight: 900, color: '#fff', textAlign: 'center',
+                                        padding: 2,
+                                        zIndex: 2
+                                      }}>
+                                        🔒 SET
+                                      </div>
+                                    )}
+                                  </div>
+                                );
+                              });
+                            })}
+                            {Object.entries(me?.properties || {}).every(([c, cards]) => cards.length === 0) && (
+                              <div style={{ color: '#64748b', fontSize: 11, fontStyle: 'italic' }}>Verilebilecek arsanız bulunmuyor.</div>
+                            )}
+                          </div>
+                        ) : (
+                          <div style={{ color: '#64748b', fontSize: 12, fontStyle: 'italic' }}>Lütfen önce yukarıdan alacağınız kartı seçin.</div>
+                        )}
+                      </div>
                     </div>
-                  </div>
-                )}
-              </div>
-            );
+                  )}
+                </div>
+              );
             })}
           </div>
         </Modal>
@@ -4387,7 +4387,7 @@ export default function App() {
                   <button
                     onClick={() => {
                       if (!window.confirm('Odadan ayrılmak istediğinden emin misin?')) return;
-                      socket?.emit('leaveRoom', { roomCode }, () => {});
+                      socket?.emit('leaveRoom', { roomCode }, () => { });
                       handleExit();
                     }}
                     style={{
@@ -4597,17 +4597,7 @@ export default function App() {
           </div>
         )}
 
-        {/* Canlı Hamle Şeridi (Action Ticker) */}
-        {gameState.log?.length > 0 && (
-          <div className="action-ticker-container">
-            <span style={{ fontSize: 13, textShadow: '0 0 10px rgba(255,215,0,0.5)' }}>📢 SON HAMLE:</span>
-            <div style={{ flex: 1, overflow: 'hidden', position: 'relative' }}>
-              <div className="action-ticker-text" key={gameState.log[gameState.log.length - 1].time}>
-                {gameState.log[gameState.log.length - 1].msg.replace(/\(.*?\)/g, '').trim()}
-              </div>
-            </div>
-          </div>
-        )}
+
 
         {/* Zaman Sınırı Fitil Sayacı (Burning Fuse) */}
         {gameState.turnTimer > 0 && gameState.turnStartTime && !isBlocked && (
@@ -5045,735 +5035,737 @@ export default function App() {
           {/* ═══ ORTA SÜTUN: MASA / ARAZİLER ═══ */}
           <div className="board-col">
 
-          {/* Orta Panel (Responsive Masa / Log Görünümü) */}
-          {isMobile ? (
-            <div className="center-panel" style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'visible' }}>
-              {/* Tab Selector (Mobil için) */}
-              {/* === YENİ 3 SEKMELİ NAVİGASYON === */}
-              <div style={{
-                display: 'flex',
-                background: 'rgba(0,0,0,0.4)',
-                borderRadius: 10,
-                margin: '8px 10px 4px',
-                padding: 3,
-                flexShrink: 0,
-                gap: 2,
-                border: '1px solid rgba(255,255,255,0.06)',
-              }}>
-                {[
-                  { id: 'board', icon: '🎮', label: 'MASA' },
-                  { id: 'players', icon: '👥', label: 'OYUNCULAR' },
-                  { id: 'log', icon: '📜', label: 'LOG' },
-                ].map(tab => (
-                  <button
-                    key={tab.id}
-                    onClick={() => setActiveTab(tab.id)}
-                    style={{
-                      flex: 1,
-                      padding: '7px 4px',
-                      background: activeTab === tab.id
-                        ? 'linear-gradient(135deg, rgba(255,215,0,0.18), rgba(255,215,0,0.08))'
-                        : 'transparent',
-                      border: activeTab === tab.id
-                        ? '1px solid rgba(255,215,0,0.35)'
-                        : '1px solid transparent',
-                      color: activeTab === tab.id ? '#FFD700' : '#666',
-                      fontWeight: 800,
-                      fontSize: 9,
-                      borderRadius: 7,
-                      cursor: 'pointer',
-                      transition: 'all 0.2s',
-                      letterSpacing: 0.4,
-                    }}
-                  >
-                    <div style={{ fontSize: 14, marginBottom: 1 }}>{tab.icon}</div>
-                    {tab.label}
-                  </button>
-                ))}
-              </div>
-
-              {/* === LOG SEKMESİ === */}
-              {activeTab === 'log' && (
-                <div ref={logRef} className="game-log" style={{
-                  flex: 1, overflowY: 'auto', padding: '10px', display: 'flex', flexDirection: 'column', gap: 6,
-                  margin: '4px 10px 10px', background: 'rgba(0,0,0,0.3)', borderRadius: 12, border: '1px solid rgba(255,255,255,0.05)',
-                  boxShadow: 'inset 0 0 20px rgba(0,0,0,0.5)'
+            {/* Orta Panel (Responsive Masa / Log Görünümü) */}
+            {isMobile ? (
+              <div className="center-panel" style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'visible' }}>
+                {/* Tab Selector (Mobil için) */}
+                {/* === YENİ 3 SEKMELİ NAVİGASYON === */}
+                <div style={{
+                  display: 'flex',
+                  background: 'rgba(0,0,0,0.4)',
+                  borderRadius: 10,
+                  margin: '8px 10px 4px',
+                  padding: 3,
+                  flexShrink: 0,
+                  gap: 2,
+                  border: '1px solid rgba(255,255,255,0.06)',
                 }}>
-                  {gameState.log?.slice(-20).map((entry, i) => {
-                    const isSystem = entry.type === 'system';
-                    const isImportant = entry.type === 'payment' || entry.type === 'property' || entry.type === 'action';
-                    return (
-                      <div key={i} style={{
-                        fontSize: 11, color: isSystem ? '#FFD700' : '#ddd', padding: '8px 12px',
-                        background: isSystem ? 'linear-gradient(90deg, rgba(255, 215, 0, 0.15), transparent)' : isImportant ? 'linear-gradient(90deg, rgba(255, 255, 255, 0.05), transparent)' : 'transparent',
-                        borderRadius: 8, borderLeft: isSystem ? '3px solid #FFD700' : isImportant ? '2px solid rgba(255,255,255,0.3)' : '2px solid transparent',
-                        animation: 'fw-fade-in 0.3s ease-out'
-                      }}>
-                        <div className={isSystem ? 'system-log-blink' : ''} style={{ lineHeight: 1.4 }}>{renderLogMsg(entry)}</div>
-                        <div style={{ fontSize: 8, color: '#666', marginTop: 6, textAlign: 'right' }}>
-                          {new Date(entry.time).toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' })}
-                        </div>
-                      </div>
-                    );
-                  })}
+                  {[
+                    { id: 'board', icon: '🎮', label: 'MASA' },
+                    { id: 'players', icon: '👥', label: 'OYUNCULAR' },
+                    { id: 'log', icon: '📜', label: 'LOG' },
+                  ].map(tab => (
+                    <button
+                      key={tab.id}
+                      onClick={() => setActiveTab(tab.id)}
+                      style={{
+                        flex: 1,
+                        padding: '7px 4px',
+                        background: activeTab === tab.id
+                          ? 'linear-gradient(135deg, rgba(255,215,0,0.18), rgba(255,215,0,0.08))'
+                          : 'transparent',
+                        border: activeTab === tab.id
+                          ? '1px solid rgba(255,215,0,0.35)'
+                          : '1px solid transparent',
+                        color: activeTab === tab.id ? '#FFD700' : '#666',
+                        fontWeight: 800,
+                        fontSize: 9,
+                        borderRadius: 7,
+                        cursor: 'pointer',
+                        transition: 'all 0.2s',
+                        letterSpacing: 0.4,
+                      }}
+                    >
+                      <div style={{ fontSize: 14, marginBottom: 1 }}>{tab.icon}</div>
+                      {tab.label}
+                    </button>
+                  ))}
                 </div>
-              )}
 
-              {/* === OYUNCULAR SEKMESİ === */}
-              {activeTab === 'players' && (
-                <div style={{ flex: 1, overflowY: 'auto', padding: '6px 10px 10px', display: 'flex', flexDirection: 'column', gap: 8 }}>
-                  {gameState.players.filter(p => p.id !== playerId).map(player => {
-                    const pIdx = gameState.players.findIndex(x => x.id === player.id);
-                    const playerColor = PLAYER_COLORS[pIdx % PLAYER_COLORS.length];
-                    const isCurrent = player.id === gameState.currentPlayerId;
-                    return (
-                      <div
-                        key={player.id}
-                        style={{
-                          borderRadius: 12,
-                          padding: '10px 12px',
-                          background: `linear-gradient(135deg, ${playerColor}18 0%, rgba(15,12,28,0.85) 100%)`,
-                          border: isCurrent ? `2px solid ${playerColor}` : `1px solid ${playerColor}40`,
-                          boxShadow: isCurrent ? `0 0 12px ${playerColor}44` : 'none',
-                        }}
-                      >
-                        {/* Başlık */}
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
-                          <div style={{ width: 32, height: 32, borderRadius: '50%', border: `2px solid ${playerColor}`, overflow: 'hidden', flexShrink: 0 }}>
-                            <img src={`https://api.dicebear.com/7.x/${player.avatarStyle || 'bottts'}/svg?seed=${player.name}`} alt="" style={{ width: '100%', height: '100%' }} />
-                          </div>
-                          <div style={{ flex: 1 }}>
-                            <div style={{ color: playerColor, fontWeight: 800, fontSize: 13 }}>{player.name} {isCurrent && '▶'}</div>
-                            <div style={{ display: 'flex', gap: 6, marginTop: 2 }}>
-                              <span style={{ fontSize: 10, color: '#2ECC71', fontWeight: 700 }}>💰 {player.bankTotal}M</span>
-                              <span style={{ fontSize: 10, color: '#aaa', fontWeight: 700 }}>🃏 {player.handCount} kart</span>
-                            </div>
-                          </div>
-                        </div>
-                        {/* Mülkler */}
-                        <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-                          {Object.entries(player.properties || {}).filter(([, c]) => c.length > 0).map(([color, cards]) => {
-                            const info = COLOR_INFO[color] || { hex: '#aaa' };
-                            const isComplete = isSetComplete(cards, color);
-                            const setSize = SET_SIZES[color] || 2;
-                            return (
-                              <div key={color} style={{
-                                display: 'flex', flexDirection: 'column', alignItems: 'center', width: 44, position: 'relative',
-                                background: isComplete ? `${info.hex}15` : 'transparent',
-                                borderRadius: 4, padding: 2,
-                                border: isComplete ? `1px solid ${info.hex}` : 'none',
-                                boxSizing: 'border-box'
-                              }}>
-                                {cards.map((c, i) => (
-                                  <div key={c.id} onClick={() => setModal({ type: 'viewCardDetails', card: c })}
-                                    style={{ marginTop: i > 0 ? -42 : 0, zIndex: i, position: 'relative', cursor: 'pointer', width: 38, height: 52 }}
-                                  >
-                                    <div style={{
-                                      width: 38, height: 52, backgroundColor: '#fff',
-                                      border: isComplete ? `1.5px solid ${info.hex}` : '1px solid rgba(0,0,0,0.15)',
-                                      borderRadius: 4, display: 'flex', flexDirection: 'column', alignItems: 'center', overflow: 'hidden',
-                                      boxSizing: 'border-box'
-                                    }} className={`mini-card-face ${isComplete ? 'complete-set-glow' : ''}`}>
-                                      <div style={{ width: '100%', height: 8, background: c.isWild ? 'linear-gradient(90deg, #E74C3C, #F39C12, #2ECC71, #3498DB)' : (c.isDual && c.colors ? `linear-gradient(90deg, ${COLOR_INFO[c.colors[0]]?.hex} 0%, ${COLOR_INFO[c.colors[0]]?.hex} 50%, ${COLOR_INFO[c.colors[1]]?.hex} 50%, ${COLOR_INFO[c.colors[1]]?.hex} 100%)` : info.hex) }} />
-                                      <div style={{ fontSize: 8, fontWeight: 900, color: '#333', marginTop: 4, transform: 'scale(0.85)' }}>{c.isWild ? '★' : (c.value || '')}</div>
-                                    </div>
-                                  </div>
-                                ))}
-                                {/* Set ilerleme etiketi */}
-                                <div style={{
-                                  fontSize: 8, fontWeight: 900,
-                                  color: isComplete ? '#FFD700' : info.hex,
-                                  background: isComplete ? 'rgba(255,215,0,0.15)' : 'rgba(0,0,0,0.45)',
-                                  border: isComplete ? '1px solid rgba(255,215,0,0.4)' : `1px solid ${info.hex}55`,
-                                  borderRadius: 3,
-                                  padding: '1px 4px',
-                                  marginTop: 3,
-                                  letterSpacing: 0.3,
-                                  textShadow: 'none',
-                                  lineHeight: 1.4,
-                                  zIndex: 20,
-                                  position: 'relative'
-                                }}>
-                                  {isComplete ? `✓ ${cards.length}/${setSize}` : `${cards.length}/${setSize}`}
-                                </div>
-                                {/* Rent/Building Status Badge */}
-                                <div style={{
-                                  fontSize: 7.5, fontWeight: 900,
-                                  color: '#2ECC71',
-                                  background: 'rgba(0,0,0,0.6)',
-                                  border: '1px solid rgba(46,204,113,0.3)',
-                                  borderRadius: 3,
-                                  padding: '1px 3px',
-                                  marginTop: 2,
-                                  display: 'flex',
-                                  alignItems: 'center',
-                                  gap: 1.5,
-                                  zIndex: 20,
-                                  position: 'relative',
-                                  justifyContent: 'center',
-                                  width: '100%',
-                                  boxSizing: 'border-box'
-                                }} title="Güncel Kira Getirisi ve Binalar">
-                                  <span>💵{calculateRentClient(player, color)}M</span>
-                                  {isComplete && player.buildings?.[color] && (
-                                    <>
-                                      {player.buildings[color].houses > 0 && <span>🏠</span>}
-                                      {player.buildings[color].hotel && <span>🏨</span>}
-                                    </>
-                                  )}
-                                </div>
-                              </div>
-                            );
-                          })}
-                          {Object.values(player.properties || {}).every(c => c.length === 0) && (
-                            <span style={{ color: '#444', fontSize: 11, fontStyle: 'italic' }}>Henüz arazi yok</span>
-                          )}
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-
-              {/* === MASA SEKMESİ === */}
-              {activeTab === 'board' && (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 8, padding: 8, flex: 1, overflow: 'hidden' }}>
-                  {/* Yeni Yatay Deste ve Son Oynanan (Mobil) */}
-                  <div style={{ display: 'flex', gap: 12, background: 'rgba(0,0,0,0.15)', padding: '6px 12px', borderRadius: 8, alignItems: 'center', flexShrink: 0 }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, flex: 1 }}>
-                      <div style={{ width: 28, height: 38, borderRadius: 4, background: 'linear-gradient(135deg, #1f4068, #162447)', border: '1px solid #FFD700', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 2px 4px rgba(0,0,0,0.5)' }}>
-                        <span style={{ fontSize: 12 }}>🏠</span>
-                      </div>
-                      <span style={{ fontSize: 10, color: '#aaa', fontWeight: 'bold' }}>DESTE ({gameState.deckCount})</span>
-                    </div>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, flex: 1, justifyContent: 'flex-end' }}>
-                      <span style={{ fontSize: 10, color: '#aaa', fontWeight: 'bold' }}>SON OYNANAN</span>
-                      <div style={{ width: 28, height: 38, borderRadius: 4, background: 'rgba(255,255,255,0.05)', border: '1px dashed rgba(255,255,255,0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center', position: 'relative' }}>
-                        {gameState.discard?.length > 0 ? (
-                          <div style={{ transform: 'scale(0.35)', cursor: 'pointer', position: 'absolute' }}
-                            onClick={() => { setPreviewCard(gameState.discard[gameState.discard.length - 1]); setPreviewLocked(true); }}>
-                            <CardVisual card={gameState.discard[gameState.discard.length - 1]} small />
-                          </div>
-                        ) : (
-                          <span style={{ fontSize: 7, color: '#444' }}>YOK</span>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Benim Bankam ve Arazilerim (Mobil) */}
-                  <div data-drop-target="properties" style={{
-                    flex: 1, padding: 8, background: dragOverTarget === 'properties' ? 'rgba(255,215,0,0.08)' : 'rgba(255,255,255,0.02)',
-                    borderRadius: 8, display: 'flex', flexDirection: 'column', overflowY: 'auto'
+                {/* === LOG SEKMESİ === */}
+                {activeTab === 'log' && (
+                  <div ref={logRef} className="game-log" style={{
+                    flex: 1, overflowY: 'auto', padding: '10px', display: 'flex', flexDirection: 'column', gap: 6,
+                    margin: '4px 10px 10px', background: 'rgba(0,0,0,0.3)', borderRadius: 12, border: '1px solid rgba(255,255,255,0.05)',
+                    boxShadow: 'inset 0 0 20px rgba(0,0,0,0.5)'
                   }}>
-                    <div style={{ fontSize: 9, color: '#aaa', fontWeight: 'bold', marginBottom: 4 }}>BENİM ARAZİLERİM ({myCompleteSets}/{gameState?.winSets || 3} set)</div>
-                    <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                    {[...(gameState.log || [])].slice(-20).reverse().map((entry, i) => {
+                      const isSystem = entry.type === 'system';
+                      const isImportant = entry.type === 'payment' || entry.type === 'property' || entry.type === 'action';
+                      return (
+                        <div key={i} style={{
+                          fontSize: 11, color: isSystem ? '#FFD700' : '#ddd', padding: '8px 12px',
+                          background: isSystem ? 'linear-gradient(90deg, rgba(255, 215, 0, 0.15), transparent)' : isImportant ? 'linear-gradient(90deg, rgba(255, 255, 255, 0.05), transparent)' : 'transparent',
+                          borderRadius: 8, borderLeft: isSystem ? '3px solid #FFD700' : isImportant ? '2px solid rgba(255,255,255,0.3)' : '2px solid transparent',
+                          animation: 'fw-fade-in 0.3s ease-out'
+                        }}>
+                          <div className={isSystem ? 'system-log-blink' : ''} style={{ lineHeight: 1.4 }}>{renderLogMsg(entry)}</div>
+                          <div style={{ fontSize: 8, color: '#666', marginTop: 6, textAlign: 'right' }}>
+                            {new Date(entry.time).toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' })}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
 
-                      {/* Banka Kasa Column */}
-                      <div
-                        ref={myBankRef}
-                        data-drop-target="bank"
-                        style={{
-                          display: 'flex',
-                          flexDirection: 'column',
-                          alignItems: 'center',
-                          gap: 4,
-                          flexShrink: 0,
-                          width: 44,
-                          minHeight: 64,
-                          background: dragOverTarget === 'bank' ? 'rgba(46,204,113,0.15)' : 'rgba(255,255,255,0.03)',
-                          border: dragOverTarget === 'bank' ? '2.5px dashed #2ECC71' : '1px solid rgba(255,255,255,0.08)',
-                          borderRadius: 6,
-                          padding: 2,
-                          boxSizing: 'border-box',
-                          transition: 'all 0.2s ease'
-                        }}
-                      >
-                        <span style={{ fontSize: 8, color: '#2ECC71', fontWeight: 'bold' }}>🏦 {me.bankTotal}M</span>
-                        <div style={{ position: 'relative', width: 38, height: 52 }}>
-                          {me.bank?.slice(0, 5).map((c, i) => (
-                            <div
-                              key={c.id}
-                              className="mini-card-wrapper"
-                              style={{
-                                position: 'absolute',
-                                top: i * 4,
-                                left: i * 2,
-                                width: 32,
-                                height: 48,
-                                zIndex: i
-                              }}
-                            >
-                              <div style={{
-                                width: 32,
-                                height: 48,
-                                borderRadius: 4,
-                                background: 'linear-gradient(135deg, #2ECC71, #196F3D)',
-                                border: '1px solid rgba(255,255,255,0.2)',
-                                boxShadow: '0 2px 5px rgba(0,0,0,0.3)',
-                                display: 'flex',
-                                alignItems: 'center',
-                                justifyContent: 'center',
-                                fontWeight: 900,
-                                fontSize: 9,
-                                color: '#fff',
-                              }} className="mini-card-face">
-                                {c.value}M
-                              </div>
-                              <div className="mini-card-hover-view">
-                                <CardVisual card={c} small />
+                {/* === OYUNCULAR SEKMESİ === */}
+                {activeTab === 'players' && (
+                  <div style={{ flex: 1, overflowY: 'auto', padding: '6px 10px 10px', display: 'flex', flexDirection: 'column', gap: 8 }}>
+                    {gameState.players.filter(p => p.id !== playerId).map(player => {
+                      const pIdx = gameState.players.findIndex(x => x.id === player.id);
+                      const playerColor = PLAYER_COLORS[pIdx % PLAYER_COLORS.length];
+                      const isCurrent = player.id === gameState.currentPlayerId;
+                      return (
+                        <div
+                          key={player.id}
+                          style={{
+                            borderRadius: 12,
+                            padding: '10px 12px',
+                            background: `linear-gradient(135deg, ${playerColor}18 0%, rgba(15,12,28,0.85) 100%)`,
+                            border: isCurrent ? `2px solid ${playerColor}` : `1px solid ${playerColor}40`,
+                            boxShadow: isCurrent ? `0 0 12px ${playerColor}44` : 'none',
+                          }}
+                        >
+                          {/* Başlık */}
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+                            <div style={{ width: 32, height: 32, borderRadius: '50%', border: `2px solid ${playerColor}`, overflow: 'hidden', flexShrink: 0 }}>
+                              <img src={`https://api.dicebear.com/7.x/${player.avatarStyle || 'bottts'}/svg?seed=${player.name}`} alt="" style={{ width: '100%', height: '100%' }} />
+                            </div>
+                            <div style={{ flex: 1 }}>
+                              <div style={{ color: playerColor, fontWeight: 800, fontSize: 13 }}>{player.name} {isCurrent && '▶'}</div>
+                              <div style={{ display: 'flex', gap: 6, marginTop: 2 }}>
+                                <span style={{ fontSize: 10, color: '#2ECC71', fontWeight: 700 }}>💰 {player.bankTotal}M</span>
+                                <span style={{ fontSize: 10, color: '#aaa', fontWeight: 700 }}>🃏 {player.handCount} kart</span>
                               </div>
                             </div>
-                          ))}
-                          {(!me.bank || me.bank.length === 0) && (
-                            <div style={{ width: 32, height: 48, borderRadius: 4, border: '1.2px dashed rgba(255,255,255,0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 8, color: '#444' }}>BOŞ</div>
+                          </div>
+                          {/* Mülkler */}
+                          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                            {Object.entries(player.properties || {}).filter(([, c]) => c.length > 0).map(([color, cards]) => {
+                              const info = COLOR_INFO[color] || { hex: '#aaa' };
+                              const isComplete = isSetComplete(cards, color);
+                              const setSize = SET_SIZES[color] || 2;
+                              return (
+                                <div key={color} style={{
+                                  display: 'flex', flexDirection: 'column', alignItems: 'center', width: 44, position: 'relative',
+                                  background: isComplete ? `${info.hex}15` : 'transparent',
+                                  borderRadius: 4, padding: 2,
+                                  border: isComplete ? `1px solid ${info.hex}` : 'none',
+                                  boxSizing: 'border-box'
+                                }}>
+                                  {cards.map((c, i) => (
+                                    <div key={c.id} onClick={() => setModal({ type: 'viewCardDetails', card: c })}
+                                      style={{ marginTop: i > 0 ? -42 : 0, zIndex: i, position: 'relative', cursor: 'pointer', width: 38, height: 52 }}
+                                    >
+                                      <div style={{
+                                        width: 38, height: 52, backgroundColor: '#fff',
+                                        border: isComplete ? `1.5px solid ${info.hex}` : '1px solid rgba(0,0,0,0.15)',
+                                        borderRadius: 4, display: 'flex', flexDirection: 'column', alignItems: 'center', overflow: 'hidden',
+                                        boxSizing: 'border-box'
+                                      }} className={`mini-card-face ${isComplete ? 'complete-set-glow' : ''}`}>
+                                        <div style={{ width: '100%', height: 8, background: c.isWild ? 'linear-gradient(90deg, #E74C3C, #F39C12, #2ECC71, #3498DB)' : (c.isDual && c.colors ? `linear-gradient(90deg, ${COLOR_INFO[c.colors[0]]?.hex} 0%, ${COLOR_INFO[c.colors[0]]?.hex} 50%, ${COLOR_INFO[c.colors[1]]?.hex} 50%, ${COLOR_INFO[c.colors[1]]?.hex} 100%)` : info.hex) }} />
+                                        <div style={{ fontSize: 8, fontWeight: 900, color: '#333', marginTop: 4, transform: 'scale(0.85)' }}>{c.isWild ? '★' : (c.value || '')}</div>
+                                      </div>
+                                    </div>
+                                  ))}
+                                  {/* Set ilerleme etiketi */}
+                                  <div style={{
+                                    fontSize: 8, fontWeight: 900,
+                                    color: isComplete ? '#FFD700' : info.hex,
+                                    background: isComplete ? 'rgba(255,215,0,0.15)' : 'rgba(0,0,0,0.45)',
+                                    border: isComplete ? '1px solid rgba(255,215,0,0.4)' : `1px solid ${info.hex}55`,
+                                    borderRadius: 3,
+                                    padding: '1px 4px',
+                                    marginTop: 3,
+                                    letterSpacing: 0.3,
+                                    textShadow: 'none',
+                                    lineHeight: 1.4,
+                                    zIndex: 20,
+                                    position: 'relative'
+                                  }}>
+                                    {isComplete ? `✓ ${cards.length}/${setSize}` : `${cards.length}/${setSize}`}
+                                  </div>
+                                  {/* Rent/Building Status Badge */}
+                                  <div style={{
+                                    fontSize: 7.5, fontWeight: 900,
+                                    color: '#2ECC71',
+                                    background: 'rgba(0,0,0,0.6)',
+                                    border: '1px solid rgba(46,204,113,0.3)',
+                                    borderRadius: 3,
+                                    padding: '1px 3px',
+                                    marginTop: 2,
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    gap: 1.5,
+                                    zIndex: 20,
+                                    position: 'relative',
+                                    justifyContent: 'center',
+                                    width: '100%',
+                                    boxSizing: 'border-box'
+                                  }} title="Güncel Kira Getirisi ve Binalar">
+                                    <span>💵{calculateRentClient(player, color)}M</span>
+                                    {isComplete && player.buildings?.[color] && (
+                                      <>
+                                        {player.buildings[color].houses > 0 && <span>🏠</span>}
+                                        {player.buildings[color].hotel && <span>🏨</span>}
+                                      </>
+                                    )}
+                                  </div>
+                                </div>
+                              );
+                            })}
+                            {Object.values(player.properties || {}).every(c => c.length === 0) && (
+                              <span style={{ color: '#444', fontSize: 11, fontStyle: 'italic' }}>Henüz arazi yok</span>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+
+                {/* === MASA SEKMESİ === */}
+                {activeTab === 'board' && (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 8, padding: 8, flex: 1, overflow: 'hidden' }}>
+                    {/* Yeni Yatay Deste ve Son Oynanan (Mobil) */}
+                    <div style={{ display: 'flex', gap: 12, background: 'rgba(0,0,0,0.15)', padding: '6px 12px', borderRadius: 8, alignItems: 'center', flexShrink: 0 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8, flex: 1 }}>
+                        <div style={{ width: 28, height: 38, borderRadius: 4, background: 'linear-gradient(135deg, #1f4068, #162447)', border: '1px solid #FFD700', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 2px 4px rgba(0,0,0,0.5)' }}>
+                          <span style={{ fontSize: 12 }}>🏠</span>
+                        </div>
+                        <span style={{ fontSize: 10, color: '#aaa', fontWeight: 'bold' }}>DESTE ({gameState.deckCount})</span>
+                      </div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8, flex: 1, justifyContent: 'flex-end' }}>
+                        <span style={{ fontSize: 10, color: '#aaa', fontWeight: 'bold' }}>SON OYNANAN</span>
+                        <div style={{ width: 28, height: 38, borderRadius: 4, background: 'rgba(255,255,255,0.05)', border: '1px dashed rgba(255,255,255,0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center', position: 'relative' }}>
+                          {gameState.discard?.length > 0 ? (
+                            <div style={{ transform: 'scale(0.35)', cursor: 'pointer', position: 'absolute' }}
+                              onClick={() => { setPreviewCard(gameState.discard[gameState.discard.length - 1]); setPreviewLocked(true); }}>
+                              <CardVisual card={gameState.discard[gameState.discard.length - 1]} small />
+                            </div>
+                          ) : (
+                            <span style={{ fontSize: 7, color: '#444' }}>YOK</span>
                           )}
                         </div>
                       </div>
+                    </div>
 
-                      {/* Araziler (Mobil) */}
-                      {Object.entries(me.properties || {}).map(([color, cards]) => {
-                        if (cards.length === 0) return null;
-                        const info = COLOR_INFO[color] || { hex: '#aaa' };
-                        const isComplete = isSetComplete(cards, color);
-                        const setSize = SET_SIZES[color] || 2;
-                        return (
-                          <div
-                            key={color}
-                            style={{
-                              display: 'flex',
-                              flexDirection: 'column',
-                              alignItems: 'center',
-                              position: 'relative',
-                              width: 44,
-                              minHeight: 64,
-                              background: isComplete ? `${info.hex}15` : 'transparent',
-                              borderRadius: 4,
-                              padding: 2,
-                              border: isComplete ? `1px solid ${info.hex}` : 'none',
-                              boxSizing: 'border-box'
-                            }}
-                          >
-                            {cards.map((c, i) => (
+                    {/* Benim Bankam ve Arazilerim (Mobil) */}
+                    <div data-drop-target="properties" style={{
+                      flex: 1, padding: 8, background: dragOverTarget === 'properties' ? 'rgba(255,215,0,0.08)' : 'rgba(255,255,255,0.02)',
+                      borderRadius: 8, display: 'flex', flexDirection: 'column', overflowY: 'auto'
+                    }}>
+                      <div style={{ fontSize: 9, color: '#aaa', fontWeight: 'bold', marginBottom: 4 }}>BENİM ARAZİLERİM ({myCompleteSets}/{gameState?.winSets || 3} set)</div>
+                      <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+
+                        {/* Banka Kasa Column */}
+                        <div
+                          ref={myBankRef}
+                          data-drop-target="bank"
+                          style={{
+                            display: 'flex',
+                            flexDirection: 'column',
+                            alignItems: 'center',
+                            gap: 4,
+                            flexShrink: 0,
+                            width: 44,
+                            minHeight: 64,
+                            background: dragOverTarget === 'bank' ? 'rgba(46,204,113,0.15)' : 'rgba(255,255,255,0.03)',
+                            border: dragOverTarget === 'bank' ? '2.5px dashed #2ECC71' : '1px solid rgba(255,255,255,0.08)',
+                            borderRadius: 6,
+                            padding: 2,
+                            boxSizing: 'border-box',
+                            transition: 'all 0.2s ease'
+                          }}
+                        >
+                          <span style={{ fontSize: 8, color: '#2ECC71', fontWeight: 'bold' }}>🏦 {me.bankTotal}M</span>
+                          <div style={{ position: 'relative', width: 38, height: 52 }}>
+                            {me.bank?.slice(0, 5).map((c, i) => (
                               <div
                                 key={c.id}
                                 className="mini-card-wrapper"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  if (isMyTurn && (c.isWild || c.isDual)) {
-                                    handleFlip(c);
-                                  } else {
-                                    setModal({ type: 'viewCardDetails', card: c });
-                                  }
-                                }}
                                 style={{
-                                  marginTop: i > 0 ? -42 : 0,
-                                  zIndex: i,
-                                  position: 'relative',
-                                  width: 38,
-                                  height: 52
+                                  position: 'absolute',
+                                  top: i * 4,
+                                  left: i * 2,
+                                  width: 32,
+                                  height: 48,
+                                  zIndex: i
                                 }}
                               >
                                 <div style={{
-                                  width: 38,
-                                  height: 52,
-                                  backgroundColor: '#FFFFFF',
-                                  border: isComplete ? `1.5px solid ${info.hex}` : '1px solid rgba(0,0,0,0.15)',
+                                  width: 32,
+                                  height: 48,
                                   borderRadius: 4,
+                                  background: 'linear-gradient(135deg, #2ECC71, #196F3D)',
+                                  border: '1px solid rgba(255,255,255,0.2)',
+                                  boxShadow: '0 2px 5px rgba(0,0,0,0.3)',
                                   display: 'flex',
-                                  flexDirection: 'column',
                                   alignItems: 'center',
-                                  overflow: 'hidden',
-                                  boxShadow: '0 2px 4px rgba(0,0,0,0.2)',
-                                  boxSizing: 'border-box',
-                                  transition: 'opacity 0.1s',
-                                  '--glow-color': info.hex
-                                }} className={`mini-card-face ${isComplete ? 'complete-set-glow' : ''}`}>
-                                  <div style={{ width: '100%', height: 8, background: c.isWild ? 'linear-gradient(90deg, #E74C3C, #F39C12, #2ECC71, #3498DB)' : (c.isDual && c.colors ? `linear-gradient(90deg, ${COLOR_INFO[c.colors[0]]?.hex} 0%, ${COLOR_INFO[c.colors[0]]?.hex} 50%, ${COLOR_INFO[c.colors[1]]?.hex} 50%, ${COLOR_INFO[c.colors[1]]?.hex} 100%)` : info.hex) }} />
-                                  <div style={{ fontSize: 8, fontWeight: 900, color: '#333', marginTop: 4, transform: 'scale(0.85)' }}>
-                                    {c.isWild ? '★' : (c.value || '')}
-                                  </div>
+                                  justifyContent: 'center',
+                                  fontWeight: 900,
+                                  fontSize: 9,
+                                  color: '#fff',
+                                }} className="mini-card-face">
+                                  {c.value}M
                                 </div>
                                 <div className="mini-card-hover-view">
                                   <CardVisual card={c} small />
                                 </div>
                               </div>
                             ))}
-                            {/* Set ilerleme etiketi (Mobil) */}
-                            <div style={{
-                              fontSize: 8, fontWeight: 900,
-                              color: isComplete ? '#FFD700' : info.hex,
-                              background: isComplete ? 'rgba(255,215,0,0.15)' : 'rgba(0,0,0,0.45)',
-                              border: isComplete ? '1px solid rgba(255,215,0,0.4)' : `1px solid ${info.hex}55`,
-                              borderRadius: 3,
-                              padding: '1px 4px',
-                              marginTop: 3,
-                              lineHeight: 1.4,
-                              zIndex: 20,
-                              position: 'relative'
-                            }}>
-                              {isComplete ? `✓ ${cards.length}/${setSize}` : `${cards.length}/${setSize}`}
-                            </div>
-                            {/* Rent/Building Status Badge (Mobil) */}
-                            <div style={{
-                              fontSize: 7.5, fontWeight: 900,
-                              color: '#2ECC71',
-                              background: 'rgba(0,0,0,0.6)',
-                              border: '1px solid rgba(46,204,113,0.3)',
-                              borderRadius: 3,
-                              padding: '1px 3px',
-                              marginTop: 2,
-                              display: 'flex',
-                              alignItems: 'center',
-                              gap: 1.5,
-                              zIndex: 20,
-                              position: 'relative',
-                              justifyContent: 'center',
-                              width: '100%',
-                              boxSizing: 'border-box'
-                            }} title="Güncel Kira Getirisi ve Binalar">
-                              <span>💵{calculateRentClient(me, color)}M</span>
-                              {isComplete && me.buildings?.[color] && (
-                                <>
-                                  {me.buildings[color].houses > 0 && <span>🏠</span>}
-                                  {me.buildings[color].hotel && <span>🏨</span>}
-                                </>
-                              )}
-                            </div>
-                          </div>
-                        );
-                      })}
-                      {Object.entries(me.properties || {}).every(([_, cards]) => cards.length === 0) && (
-                        <span style={{ color: '#555', fontSize: 10 }}>Henüz arazi yok</span>
-                      )}
-                    </div>
-                  </div>
-                </div>
-              )}
-            </div>
-
-          ) : (
-            /* Masaüstü (Regular) Görünüm — Log artık log-col'da */
-            <div className="center-panel" style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'visible' }}>
-
-              {/* Ortak Masa Ortası Alanı (Central Play Area - Desktop) */}
-              <div style={{ display: 'flex', gap: 24, padding: '12px 16px', background: 'rgba(0,0,0,0.18)', borderTop: '1px solid rgba(255,255,255,0.06)', borderBottom: '1px solid rgba(255,255,255,0.06)', alignItems: 'center', justifyContent: 'center', transition: 'background 0.3s' }}>
-                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4 }}>
-                  <span style={{ fontSize: 9, color: '#aaa', fontWeight: 'bold', letterSpacing: 0.5 }}>🎴 DESTE ({gameState.deckCount})</span>
-                  <div style={{ width: 68, height: 96, borderRadius: 6, border: '2px dashed rgba(255,255,255,0.2)', background: 'rgba(255,255,255,0.02)', display: 'flex', alignItems: 'center', justifyContent: 'center', position: 'relative', boxShadow: '0 4px 10px rgba(0,0,0,0.5)' }}>
-                    {gameState.deckCount > 0 ? (
-                      <div style={{ width: 60, height: 88, borderRadius: 5, background: 'linear-gradient(135deg, #1f4068, #162447)', border: '2px solid #FFD700', boxShadow: '0 2px 5px rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'help' }} title="Destedeki Kalan Kart Sayısı">
-                        <span style={{ fontSize: 20 }}>🏠</span>
-                      </div>
-                    ) : (
-                      <span style={{ fontSize: 10, color: '#444' }}>BOŞ</span>
-                    )}
-                  </div>
-                </div>
-
-                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4 }}>
-                  <span style={{ fontSize: 9, color: '#aaa', fontWeight: 'bold', letterSpacing: 0.5 }}>📤 SON OYNANAN</span>
-                  <div style={{ width: 68, height: 96, borderRadius: 6, border: '2px dashed rgba(255,255,255,0.2)', background: 'rgba(255,255,255,0.02)', display: 'flex', alignItems: 'center', justifyContent: 'center', position: 'relative', boxShadow: '0 4px 10px rgba(0,0,0,0.5)' }}>
-                    {gameState.discard?.length > 0 ? (
-                      <div style={{ transform: 'scale(0.85)', cursor: 'pointer' }}
-                        onClick={() => { setPreviewCard(gameState.discard[gameState.discard.length - 1]); setPreviewLocked(true); }}>
-                        <CardVisual card={gameState.discard[gameState.discard.length - 1]} small />
-                      </div>
-                    ) : (
-                      <span style={{ fontSize: 10, color: '#444' }}>YOK</span>
-                    )}
-                  </div>
-                </div>
-              </div>
-
-              {/* Benim arazilerim (Desktop) */}
-              <div data-drop-target="properties" style={{
-                padding: 10, borderTop: '1px solid rgba(255,255,255,0.1)', minHeight: 120,
-                background: dragOverTarget === 'properties' ? 'linear-gradient(to bottom, rgba(255,215,0,0.1), rgba(0,0,0,0.2))' : 'rgba(255,255,255,0.02)',
-                transition: 'background 0.3s ease'
-              }}>
-                <div style={{ fontSize: 11, color: dragOverTarget === 'properties' ? '#FFD700' : '#666', fontWeight: 'bold', marginBottom: 6, transition: 'color 0.2s' }}>BENİM ARAZİLERİM ({myCompleteSets}/{gameState?.winSets || 3} set)</div>
-                <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-
-                  {/* Banka Kasa Column (Desktop) */}
-                  <div
-                    ref={myBankRef}
-                    data-drop-target="bank"
-                    style={{
-                      display: 'flex',
-                      flexDirection: 'column',
-                      alignItems: 'center',
-                      gap: 4,
-                      flexShrink: 0,
-                      width: 44,
-                      minHeight: 64,
-                      background: dragOverTarget === 'bank' ? 'rgba(46,204,113,0.15)' : 'rgba(255,255,255,0.03)',
-                      border: dragOverTarget === 'bank' ? '2.5px dashed #2ECC71' : '1px solid rgba(255,255,255,0.08)',
-                      borderRadius: 6,
-                      padding: 2,
-                      boxSizing: 'border-box',
-                      transition: 'all 0.2s ease'
-                    }}
-                  >
-                    <span style={{ fontSize: 8, color: '#2ECC71', fontWeight: 'bold' }}>🏦 {me.bankTotal}M</span>
-                    <div style={{ position: 'relative', width: 38, height: 52 }}>
-                      {me.bank?.slice(0, 5).map((c, i) => (
-                        <div
-                          key={c.id}
-                          className="mini-card-wrapper"
-                          style={{
-                            position: 'absolute',
-                            top: i * 4,
-                            left: i * 2,
-                            width: 32,
-                            height: 48,
-                            zIndex: i
-                          }}
-                        >
-                          <div style={{
-                            width: 32,
-                            height: 48,
-                            borderRadius: 4,
-                            background: 'linear-gradient(135deg, #2ECC71, #196F3D)',
-                            border: '1px solid rgba(255,255,255,0.2)',
-                            boxShadow: '0 2px 5px rgba(0,0,0,0.3)',
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'center',
-                            fontWeight: 900,
-                            fontSize: 9,
-                            color: '#fff',
-                          }} className="mini-card-face">
-                            {c.value}M
-                          </div>
-                          <div className="mini-card-hover-view">
-                            <CardVisual card={c} small />
+                            {(!me.bank || me.bank.length === 0) && (
+                              <div style={{ width: 32, height: 48, borderRadius: 4, border: '1.2px dashed rgba(255,255,255,0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 8, color: '#444' }}>BOŞ</div>
+                            )}
                           </div>
                         </div>
-                      ))}
-                      {(!me.bank || me.bank.length === 0) && (
-                        <div style={{ width: 32, height: 48, borderRadius: 4, border: '1.2px dashed rgba(255,255,255,0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 8, color: '#444' }}>BOŞ</div>
+
+                        {/* Araziler (Mobil) */}
+                        {Object.entries(me.properties || {}).map(([color, cards]) => {
+                          if (cards.length === 0) return null;
+                          const info = COLOR_INFO[color] || { hex: '#aaa' };
+                          const isComplete = isSetComplete(cards, color);
+                          const setSize = SET_SIZES[color] || 2;
+                          return (
+                            <div
+                              key={color}
+                              style={{
+                                display: 'flex',
+                                flexDirection: 'column',
+                                alignItems: 'center',
+                                position: 'relative',
+                                width: 44,
+                                minHeight: 64,
+                                background: isComplete ? `${info.hex}15` : 'transparent',
+                                borderRadius: 4,
+                                padding: 2,
+                                border: isComplete ? `1px solid ${info.hex}` : 'none',
+                                boxSizing: 'border-box'
+                              }}
+                            >
+                              {cards.map((c, i) => (
+                                <div
+                                  key={c.id}
+                                  className="mini-card-wrapper"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    if (isMyTurn && (c.isWild || c.isDual)) {
+                                      handleFlip(c);
+                                    } else {
+                                      setModal({ type: 'viewCardDetails', card: c });
+                                    }
+                                  }}
+                                  style={{
+                                    marginTop: i > 0 ? -42 : 0,
+                                    zIndex: i,
+                                    position: 'relative',
+                                    width: 38,
+                                    height: 52
+                                  }}
+                                >
+                                  <div style={{
+                                    width: 38,
+                                    height: 52,
+                                    backgroundColor: '#FFFFFF',
+                                    border: isComplete ? `1.5px solid ${info.hex}` : '1px solid rgba(0,0,0,0.15)',
+                                    borderRadius: 4,
+                                    display: 'flex',
+                                    flexDirection: 'column',
+                                    alignItems: 'center',
+                                    overflow: 'hidden',
+                                    boxShadow: '0 2px 4px rgba(0,0,0,0.2)',
+                                    boxSizing: 'border-box',
+                                    transition: 'opacity 0.1s',
+                                    '--glow-color': info.hex
+                                  }} className={`mini-card-face ${isComplete ? 'complete-set-glow' : ''}`}>
+                                    <div style={{ width: '100%', height: 8, background: c.isWild ? 'linear-gradient(90deg, #E74C3C, #F39C12, #2ECC71, #3498DB)' : (c.isDual && c.colors ? `linear-gradient(90deg, ${COLOR_INFO[c.colors[0]]?.hex} 0%, ${COLOR_INFO[c.colors[0]]?.hex} 50%, ${COLOR_INFO[c.colors[1]]?.hex} 50%, ${COLOR_INFO[c.colors[1]]?.hex} 100%)` : info.hex) }} />
+                                    <div style={{ fontSize: 8, fontWeight: 900, color: '#333', marginTop: 4, transform: 'scale(0.85)' }}>
+                                      {c.isWild ? '★' : (c.value || '')}
+                                    </div>
+                                  </div>
+                                  <div className="mini-card-hover-view">
+                                    <CardVisual card={c} small />
+                                  </div>
+                                </div>
+                              ))}
+                              {/* Set ilerleme etiketi (Mobil) */}
+                              <div style={{
+                                fontSize: 8, fontWeight: 900,
+                                color: isComplete ? '#FFD700' : info.hex,
+                                background: isComplete ? 'rgba(255,215,0,0.15)' : 'rgba(0,0,0,0.45)',
+                                border: isComplete ? '1px solid rgba(255,215,0,0.4)' : `1px solid ${info.hex}55`,
+                                borderRadius: 3,
+                                padding: '1px 4px',
+                                marginTop: 3,
+                                lineHeight: 1.4,
+                                zIndex: 20,
+                                position: 'relative'
+                              }}>
+                                {isComplete ? `✓ ${cards.length}/${setSize}` : `${cards.length}/${setSize}`}
+                              </div>
+                              {/* Rent/Building Status Badge (Mobil) */}
+                              <div style={{
+                                fontSize: 7.5, fontWeight: 900,
+                                color: '#2ECC71',
+                                background: 'rgba(0,0,0,0.6)',
+                                border: '1px solid rgba(46,204,113,0.3)',
+                                borderRadius: 3,
+                                padding: '1px 3px',
+                                marginTop: 2,
+                                display: 'flex',
+                                alignItems: 'center',
+                                gap: 1.5,
+                                zIndex: 20,
+                                position: 'relative',
+                                justifyContent: 'center',
+                                width: '100%',
+                                boxSizing: 'border-box'
+                              }} title="Güncel Kira Getirisi ve Binalar">
+                                <span>💵{calculateRentClient(me, color)}M</span>
+                                {isComplete && me.buildings?.[color] && (
+                                  <>
+                                    {me.buildings[color].houses > 0 && <span>🏠</span>}
+                                    {me.buildings[color].hotel && <span>🏨</span>}
+                                  </>
+                                )}
+                              </div>
+                            </div>
+                          );
+                        })}
+                        {Object.entries(me.properties || {}).every(([_, cards]) => cards.length === 0) && (
+                          <span style={{ color: '#555', fontSize: 10 }}>Henüz arazi yok</span>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+            ) : (
+              /* Masaüstü (Regular) Görünüm — Log artık log-col'da */
+              <div className="center-panel" style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'visible' }}>
+
+                {/* Ortak Masa Ortası Alanı (Central Play Area - Desktop) */}
+                <div style={{ display: 'flex', gap: 24, padding: '12px 16px', background: 'rgba(0,0,0,0.18)', borderTop: '1px solid rgba(255,255,255,0.06)', borderBottom: '1px solid rgba(255,255,255,0.06)', alignItems: 'center', justifyContent: 'center', transition: 'background 0.3s' }}>
+                  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4 }}>
+                    <span style={{ fontSize: 9, color: '#aaa', fontWeight: 'bold', letterSpacing: 0.5 }}>🎴 DESTE ({gameState.deckCount})</span>
+                    <div style={{ width: 68, height: 96, borderRadius: 6, border: '2px dashed rgba(255,255,255,0.2)', background: 'rgba(255,255,255,0.02)', display: 'flex', alignItems: 'center', justifyContent: 'center', position: 'relative', boxShadow: '0 4px 10px rgba(0,0,0,0.5)' }}>
+                      {gameState.deckCount > 0 ? (
+                        <div style={{ width: 60, height: 88, borderRadius: 5, background: 'linear-gradient(135deg, #1f4068, #162447)', border: '2px solid #FFD700', boxShadow: '0 2px 5px rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'help' }} title="Destedeki Kalan Kart Sayısı">
+                          <span style={{ fontSize: 20 }}>🏠</span>
+                        </div>
+                      ) : (
+                        <span style={{ fontSize: 10, color: '#444' }}>BOŞ</span>
                       )}
                     </div>
                   </div>
 
-                  {/* Araziler (Desktop) */}
-                  {Object.entries(me.properties || {}).map(([color, cards]) => {
-                    if (cards.length === 0) return null;
-                    const info = COLOR_INFO[color] || { hex: '#aaa' };
-                    const isComplete = isSetComplete(cards, color);
-                    const setSize = SET_SIZES[color] || 2;
-                    return (
-                      <div
-                        key={color}
-                        style={{
-                          display: 'flex',
-                          flexDirection: 'column',
-                          alignItems: 'center',
-                          position: 'relative',
-                          width: 44,
-                          minHeight: 64,
-                          background: isComplete ? `${info.hex}15` : 'transparent',
-                          borderRadius: 4,
-                          padding: 2,
-                          border: isComplete ? `1px solid ${info.hex}` : 'none',
-                          boxSizing: 'border-box'
-                        }}
-                      >
-                        {cards.map((c, i) => (
+                  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4 }}>
+                    <span style={{ fontSize: 9, color: '#aaa', fontWeight: 'bold', letterSpacing: 0.5 }}>📤 SON OYNANAN</span>
+                    <div style={{ width: 68, height: 96, borderRadius: 6, border: '2px dashed rgba(255,255,255,0.2)', background: 'rgba(255,255,255,0.02)', display: 'flex', alignItems: 'center', justifyContent: 'center', position: 'relative', boxShadow: '0 4px 10px rgba(0,0,0,0.5)' }}>
+                      {gameState.discard?.length > 0 ? (
+                        <div style={{ transform: 'scale(0.85)', cursor: 'pointer' }}
+                          onClick={() => { setPreviewCard(gameState.discard[gameState.discard.length - 1]); setPreviewLocked(true); }}>
+                          <CardVisual card={gameState.discard[gameState.discard.length - 1]} small />
+                        </div>
+                      ) : (
+                        <span style={{ fontSize: 10, color: '#444' }}>YOK</span>
+                      )}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Benim arazilerim (Desktop) */}
+                <div data-drop-target="properties" style={{
+                  padding: 10, borderTop: '1px solid rgba(255,255,255,0.1)', minHeight: 120,
+                  background: dragOverTarget === 'properties' ? 'linear-gradient(to bottom, rgba(255,215,0,0.1), rgba(0,0,0,0.2))' : 'rgba(255,255,255,0.02)',
+                  transition: 'background 0.3s ease'
+                }}>
+                  <div style={{ fontSize: 11, color: dragOverTarget === 'properties' ? '#FFD700' : '#666', fontWeight: 'bold', marginBottom: 6, transition: 'color 0.2s' }}>BENİM ARAZİLERİM ({myCompleteSets}/{gameState?.winSets || 3} set)</div>
+                  <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+
+                    {/* Banka Kasa Column (Desktop) */}
+                    <div
+                      ref={myBankRef}
+                      data-drop-target="bank"
+                      style={{
+                        display: 'flex',
+                        flexDirection: 'column',
+                        alignItems: 'center',
+                        gap: 4,
+                        flexShrink: 0,
+                        width: 44,
+                        minHeight: 64,
+                        background: dragOverTarget === 'bank' ? 'rgba(46,204,113,0.15)' : 'rgba(255,255,255,0.03)',
+                        border: dragOverTarget === 'bank' ? '2.5px dashed #2ECC71' : '1px solid rgba(255,255,255,0.08)',
+                        borderRadius: 6,
+                        padding: 2,
+                        boxSizing: 'border-box',
+                        transition: 'all 0.2s ease'
+                      }}
+                    >
+                      <span style={{ fontSize: 8, color: '#2ECC71', fontWeight: 'bold' }}>🏦 {me.bankTotal}M</span>
+                      <div style={{ position: 'relative', width: 38, height: 52 }}>
+                        {me.bank?.slice(0, 5).map((c, i) => (
                           <div
                             key={c.id}
                             className="mini-card-wrapper"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              if (isMyTurn && (c.isWild || c.isDual)) {
-                                handleFlip(c);
-                              } else {
-                                setModal({ type: 'viewCardDetails', card: c });
-                              }
-                            }}
                             style={{
-                              marginTop: i > 0 ? -42 : 0,
-                              zIndex: i,
-                              position: 'relative',
-                              width: 38,
-                              height: 52
+                              position: 'absolute',
+                              top: i * 4,
+                              left: i * 2,
+                              width: 32,
+                              height: 48,
+                              zIndex: i
                             }}
                           >
                             <div style={{
-                              width: 38,
-                              height: 52,
-                              backgroundColor: '#FFFFFF',
-                              border: isComplete ? `1.5px solid ${info.hex}` : '1px solid rgba(0,0,0,0.15)',
+                              width: 32,
+                              height: 48,
                               borderRadius: 4,
+                              background: 'linear-gradient(135deg, #2ECC71, #196F3D)',
+                              border: '1px solid rgba(255,255,255,0.2)',
+                              boxShadow: '0 2px 5px rgba(0,0,0,0.3)',
                               display: 'flex',
-                              flexDirection: 'column',
                               alignItems: 'center',
-                              overflow: 'hidden',
-                              boxShadow: '0 2px 4px rgba(0,0,0,0.2)',
-                              boxSizing: 'border-box',
-                              transition: 'opacity 0.1s',
-                              '--glow-color': info.hex
-                            }} className={`mini-card-face ${isComplete ? 'complete-set-glow' : ''}`}>
-                              <div style={{ width: '100%', height: 8, background: c.isWild ? 'linear-gradient(90deg, #E74C3C, #F39C12, #2ECC71, #3498DB)' : (c.isDual && c.colors ? `linear-gradient(90deg, ${COLOR_INFO[c.colors[0]]?.hex} 0%, ${COLOR_INFO[c.colors[0]]?.hex} 50%, ${COLOR_INFO[c.colors[1]]?.hex} 50%, ${COLOR_INFO[c.colors[1]]?.hex} 100%)` : info.hex) }} />
-                              <div style={{ fontSize: 8, fontWeight: 900, color: '#333', marginTop: 4, transform: 'scale(0.85)' }}>
-                                {c.isWild ? '★' : (c.value || '')}
-                              </div>
+                              justifyContent: 'center',
+                              fontWeight: 900,
+                              fontSize: 9,
+                              color: '#fff',
+                            }} className="mini-card-face">
+                              {c.value}M
                             </div>
                             <div className="mini-card-hover-view">
                               <CardVisual card={c} small />
                             </div>
                           </div>
                         ))}
-                        {/* Set ilerleme etiketi */}
-                        <div style={{
-                          fontSize: 8, fontWeight: 900,
-                          color: isComplete ? '#FFD700' : info.hex,
-                          background: isComplete ? 'rgba(255,215,0,0.15)' : 'rgba(0,0,0,0.45)',
-                          border: isComplete ? '1px solid rgba(255,215,0,0.4)' : `1px solid ${info.hex}55`,
-                          borderRadius: 3,
-                          padding: '1px 4px',
-                          marginTop: 3,
-                          letterSpacing: 0.3,
-                          textShadow: 'none',
-                          lineHeight: 1.4,
-                          zIndex: 20,
-                          position: 'relative'
-                        }}>
-                          {isComplete ? `✓ ${cards.length}/${setSize}` : `${cards.length}/${setSize}`}
-                        </div>
-                        {/* Rent/Building Status Badge (Desktop) */}
-                        <div style={{
-                          fontSize: 7.5, fontWeight: 900,
-                          color: '#2ECC71',
-                          background: 'rgba(0,0,0,0.6)',
-                          border: '1px solid rgba(46,204,113,0.3)',
-                          borderRadius: 3,
-                          padding: '1px 3px',
-                          marginTop: 2,
-                          display: 'flex',
-                          alignItems: 'center',
-                          gap: 1.5,
-                          zIndex: 20,
-                          position: 'relative',
-                          justifyContent: 'center',
-                          width: '100%',
-                          boxSizing: 'border-box'
-                        }} title="Güncel Kira Getirisi ve Binalar">
-                          <span>💵{calculateRentClient(me, color)}M</span>
-                          {isComplete && me.buildings?.[color] && (
-                            <>
-                              {me.buildings[color].houses > 0 && <span>🏠</span>}
-                              {me.buildings[color].hotel && <span>🏨</span>}
-                            </>
-                          )}
-                        </div>
+                        {(!me.bank || me.bank.length === 0) && (
+                          <div style={{ width: 32, height: 48, borderRadius: 4, border: '1.2px dashed rgba(255,255,255,0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 8, color: '#444' }}>BOŞ</div>
+                        )}
                       </div>
-                    );
-                  })}
-                  {Object.entries(me.properties || {}).every(([_, cards]) => cards.length === 0) && (
-                    <span style={{ color: '#555', fontSize: 11 }}>Henüz arazi yok</span>
-                  )}
+                    </div>
+
+                    {/* Araziler (Desktop) */}
+                    {Object.entries(me.properties || {}).map(([color, cards]) => {
+                      if (cards.length === 0) return null;
+                      const info = COLOR_INFO[color] || { hex: '#aaa' };
+                      const isComplete = isSetComplete(cards, color);
+                      const setSize = SET_SIZES[color] || 2;
+                      return (
+                        <div
+                          key={color}
+                          style={{
+                            display: 'flex',
+                            flexDirection: 'column',
+                            alignItems: 'center',
+                            position: 'relative',
+                            width: 44,
+                            minHeight: 64,
+                            background: isComplete ? `${info.hex}15` : 'transparent',
+                            borderRadius: 4,
+                            padding: 2,
+                            border: isComplete ? `1px solid ${info.hex}` : 'none',
+                            boxSizing: 'border-box'
+                          }}
+                        >
+                          {cards.map((c, i) => (
+                            <div
+                              key={c.id}
+                              className="mini-card-wrapper"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                if (isMyTurn && (c.isWild || c.isDual)) {
+                                  handleFlip(c);
+                                } else {
+                                  setModal({ type: 'viewCardDetails', card: c });
+                                }
+                              }}
+                              style={{
+                                marginTop: i > 0 ? -42 : 0,
+                                zIndex: i,
+                                position: 'relative',
+                                width: 38,
+                                height: 52
+                              }}
+                            >
+                              <div style={{
+                                width: 38,
+                                height: 52,
+                                backgroundColor: '#FFFFFF',
+                                border: isComplete ? `1.5px solid ${info.hex}` : '1px solid rgba(0,0,0,0.15)',
+                                borderRadius: 4,
+                                display: 'flex',
+                                flexDirection: 'column',
+                                alignItems: 'center',
+                                overflow: 'hidden',
+                                boxShadow: '0 2px 4px rgba(0,0,0,0.2)',
+                                boxSizing: 'border-box',
+                                transition: 'opacity 0.1s',
+                                '--glow-color': info.hex
+                              }} className={`mini-card-face ${isComplete ? 'complete-set-glow' : ''}`}>
+                                <div style={{ width: '100%', height: 8, background: c.isWild ? 'linear-gradient(90deg, #E74C3C, #F39C12, #2ECC71, #3498DB)' : (c.isDual && c.colors ? `linear-gradient(90deg, ${COLOR_INFO[c.colors[0]]?.hex} 0%, ${COLOR_INFO[c.colors[0]]?.hex} 50%, ${COLOR_INFO[c.colors[1]]?.hex} 50%, ${COLOR_INFO[c.colors[1]]?.hex} 100%)` : info.hex) }} />
+                                <div style={{ fontSize: 8, fontWeight: 900, color: '#333', marginTop: 4, transform: 'scale(0.85)' }}>
+                                  {c.isWild ? '★' : (c.value || '')}
+                                </div>
+                              </div>
+                              <div className="mini-card-hover-view">
+                                <CardVisual card={c} small />
+                              </div>
+                            </div>
+                          ))}
+                          {/* Set ilerleme etiketi */}
+                          <div style={{
+                            fontSize: 8, fontWeight: 900,
+                            color: isComplete ? '#FFD700' : info.hex,
+                            background: isComplete ? 'rgba(255,215,0,0.15)' : 'rgba(0,0,0,0.45)',
+                            border: isComplete ? '1px solid rgba(255,215,0,0.4)' : `1px solid ${info.hex}55`,
+                            borderRadius: 3,
+                            padding: '1px 4px',
+                            marginTop: 3,
+                            letterSpacing: 0.3,
+                            textShadow: 'none',
+                            lineHeight: 1.4,
+                            zIndex: 20,
+                            position: 'relative'
+                          }}>
+                            {isComplete ? `✓ ${cards.length}/${setSize}` : `${cards.length}/${setSize}`}
+                          </div>
+                          {/* Rent/Building Status Badge (Desktop) */}
+                          <div style={{
+                            fontSize: 7.5, fontWeight: 900,
+                            color: '#2ECC71',
+                            background: 'rgba(0,0,0,0.6)',
+                            border: '1px solid rgba(46,204,113,0.3)',
+                            borderRadius: 3,
+                            padding: '1px 3px',
+                            marginTop: 2,
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: 1.5,
+                            zIndex: 20,
+                            position: 'relative',
+                            justifyContent: 'center',
+                            width: '100%',
+                            boxSizing: 'border-box'
+                          }} title="Güncel Kira Getirisi ve Binalar">
+                            <span>💵{calculateRentClient(me, color)}M</span>
+                            {isComplete && me.buildings?.[color] && (
+                              <>
+                                {me.buildings[color].houses > 0 && <span>🏠</span>}
+                                {me.buildings[color].hotel && <span>🏨</span>}
+                              </>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
+                    {Object.entries(me.properties || {}).every(([_, cards]) => cards.length === 0) && (
+                      <span style={{ color: '#555', fontSize: 11 }}>Henüz arazi yok</span>
+                    )}
+                  </div>
                 </div>
               </div>
-            </div>
-          )}
+            )}
 
-          {!isMobile && (
-            <div 
-              className="log-col" 
-              style={{ 
-                width: isLogOpen ? 260 : 50, 
-                transition: 'width 0.3s cubic-bezier(0.165, 0.84, 0.44, 1)',
-                display: 'flex',
-                flexDirection: 'column',
-                overflow: 'hidden',
-                padding: isLogOpen ? 12 : '12px 6px',
-                background: isLogOpen ? 'rgba(0, 0, 0, 0.25)' : 'rgba(0, 0, 0, 0.15)',
-                borderLeft: '1px solid rgba(255, 255, 255, 0.08)',
-                height: '100%',
-                boxSizing: 'border-box'
-              }}
-            >
-              <div style={{ 
-                display: 'flex', 
-                flexDirection: isLogOpen ? 'row' : 'column',
-                justifyContent: 'space-between', 
-                alignItems: 'center', 
-                marginBottom: isLogOpen ? 10 : 0, 
-                paddingBottom: isLogOpen ? 8 : 0, 
-                borderBottom: isLogOpen ? '1px solid rgba(255,255,255,0.07)' : 'none',
-                gap: 8,
-                width: '100%'
-              }}>
-                {isLogOpen ? (
-                  <>
-                    <span style={{ fontSize: 10, color: '#aaa', fontWeight: 'bold', letterSpacing: 1 }}>📜 OYUN GEÇMİŞİ</span>
+            {!isMobile && (
+              <div
+                className="log-col"
+                style={{
+                  width: isLogOpen ? 260 : 50,
+                  transition: 'width 0.3s cubic-bezier(0.165, 0.84, 0.44, 1)',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  overflow: 'hidden',
+                  padding: isLogOpen ? 12 : '12px 6px',
+                  background: isLogOpen ? 'rgba(0, 0, 0, 0.25)' : 'rgba(0, 0, 0, 0.15)',
+                  borderLeft: '1px solid rgba(255, 255, 255, 0.08)',
+                  height: '100%',
+                  boxSizing: 'border-box'
+                }}
+              >
+                <div style={{
+                  display: 'flex',
+                  flexDirection: isLogOpen ? 'row' : 'column',
+                  justifyContent: 'space-between',
+                  alignItems: 'center',
+                  marginBottom: isLogOpen ? 10 : 0,
+                  paddingBottom: isLogOpen ? 8 : 0,
+                  borderBottom: isLogOpen ? '1px solid rgba(255,255,255,0.07)' : 'none',
+                  gap: 8,
+                  width: '100%'
+                }}>
+                  {isLogOpen ? (
+                    <>
+                      <span style={{ fontSize: 10, color: '#aaa', fontWeight: 'bold', letterSpacing: 1 }}>📜 OYUN GEÇMİŞİ</span>
+                      <button
+                        onClick={() => { setIsLogOpen(false); sfxClick(); }}
+                        style={{
+                          background: 'rgba(255,255,255,0.08)',
+                          border: '1px solid rgba(255,255,255,0.15)',
+                          borderRadius: 6,
+                          color: '#fff',
+                          cursor: 'pointer',
+                          fontSize: 9,
+                          padding: '3px 8px',
+                          fontWeight: 'bold',
+                          margin: 0
+                        }}
+                      >
+                        ✕
+                      </button>
+                    </>
+                  ) : (
                     <button
-                      onClick={() => { setIsLogOpen(false); sfxClick(); }}
-                      style={{ 
-                        background: 'rgba(255,255,255,0.08)', 
-                        border: '1px solid rgba(255,255,255,0.15)', 
-                        borderRadius: 6, 
-                        color: '#fff', 
-                        cursor: 'pointer', 
-                        fontSize: 9, 
-                        padding: '3px 8px', 
+                      onClick={() => { setIsLogOpen(true); sfxClick(); }}
+                      title="Log Geçmişini Aç"
+                      style={{
+                        background: 'rgba(255,215,0,0.1)',
+                        border: '1px solid rgba(255,215,0,0.25)',
+                        borderRadius: 8,
+                        color: '#FFD700',
+                        cursor: 'pointer',
+                        fontSize: 14,
+                        width: 36,
+                        height: 36,
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
                         fontWeight: 'bold',
-                        margin: 0
+                        margin: '0 auto',
+                        boxShadow: '0 2px 8px rgba(0,0,0,0.3)'
                       }}
                     >
-                      ✕
+                      📜
                     </button>
-                  </>
-                ) : (
-                  <button
-                    onClick={() => { setIsLogOpen(true); sfxClick(); }}
-                    title="Log Geçmişini Aç"
-                    style={{ 
-                      background: 'rgba(255,215,0,0.1)', 
-                      border: '1px solid rgba(255,215,0,0.25)', 
-                      borderRadius: 8, 
-                      color: '#FFD700', 
-                      cursor: 'pointer', 
-                      fontSize: 14, 
-                      width: 36,
-                      height: 36,
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      fontWeight: 'bold',
-                      margin: '0 auto',
-                      boxShadow: '0 2px 8px rgba(0,0,0,0.3)'
-                    }}
-                  >
-                    📜
-                  </button>
+                  )}
+                </div>
+                {isLogOpen && (
+                  <div ref={logRef} className="game-log" style={{ overflowY: 'auto', flex: 1, display: 'flex', flexDirection: 'column', gap: 5, width: '100%' }}>
+                    {[...(gameState.log || [])].slice(-30).reverse().map((entry, i) => {
+                      const isSystem = entry.type === 'system';
+                      const isImportant = entry.type === 'payment' || entry.type === 'property' || entry.type === 'action';
+                      return (
+                        <div key={i} style={{
+                          width: '100%',
+                          boxSizing: 'border-box',
+                          fontSize: 10, color: isSystem ? '#FFD700' : '#ccc', padding: '6px 8px',
+                          background: isSystem ? 'rgba(255,215,0,0.1)' : isImportant ? 'rgba(255,255,255,0.04)' : 'transparent',
+                          borderRadius: 6, borderLeft: isSystem ? '2px solid #FFD700' : isImportant ? '2px solid rgba(255,255,255,0.2)' : '2px solid transparent',
+                          animation: 'fw-fade-in 0.3s ease-out'
+                        }}>
+                          <div className={isSystem ? 'system-log-blink' : ''} style={{ lineHeight: 1.4, wordBreak: 'break-word' }}>{renderLogMsg(entry)}</div>
+                          <div style={{ fontSize: 8, color: '#555', marginTop: 3, textAlign: 'right' }}>
+                            {new Date(entry.time).toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' })}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
                 )}
               </div>
-              {isLogOpen && (
-                <div ref={logRef} className="game-log" style={{ overflowY: 'auto', flex: 1, display: 'flex', flexDirection: 'column', gap: 5 }}>
-                  {gameState.log?.slice(-30).map((entry, i) => {
-                    const isSystem = entry.type === 'system';
-                    const isImportant = entry.type === 'payment' || entry.type === 'property' || entry.type === 'action';
-                    return (
-                      <div key={i} style={{
-                        fontSize: 10, color: isSystem ? '#FFD700' : '#ccc', padding: '6px 8px',
-                        background: isSystem ? 'rgba(255,215,0,0.1)' : isImportant ? 'rgba(255,255,255,0.04)' : 'transparent',
-                        borderRadius: 6, borderLeft: isSystem ? '2px solid #FFD700' : isImportant ? '2px solid rgba(255,255,255,0.2)' : '2px solid transparent',
-                        animation: 'fw-fade-in 0.3s ease-out'
-                      }}>
-                        <div className={isSystem ? 'system-log-blink' : ''} style={{ lineHeight: 1.4, wordBreak: 'break-word' }}>{renderLogMsg(entry)}</div>
-                        <div style={{ fontSize: 8, color: '#555', marginTop: 3, textAlign: 'right' }}>
-                          {new Date(entry.time).toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' })}
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
-          )}
+            )}
           </div>
         </div>
 
@@ -5974,11 +5966,11 @@ export default function App() {
                                 padding: 4
                               }}
                             >
-                              <button onClick={(e) => { e.stopPropagation(); handleCardAction(card); }} style={{ ...btnStyle('linear-gradient(135deg, #E67E22, #D35400)'), fontSize: 10, padding: '4px 8px', borderRadius: 4 }}>🚀 Oyna</button>
+                              <button onClick={(e) => { e.stopPropagation(); handleCardAction(card); }} style={{ ...btnStyle('linear-gradient(135deg, #E67E22, #D35400)'), fontSize: 10, padding: '12px 22px', borderRadius: 4 }}>🚀 Oyna</button>
                               {card.type !== 'property' && (
-                                <button onClick={(e) => { e.stopPropagation(); handlePlayCard(card, { asBankMoney: true }); }} style={{ ...btnStyle('linear-gradient(135deg, #27AE60, #1E8449)'), fontSize: 8, padding: '4px 8px', borderRadius: 4 }}>💰 Banka</button>
+                                <button onClick={(e) => { e.stopPropagation(); handlePlayCard(card, { asBankMoney: true }); }} style={{ ...btnStyle('linear-gradient(135deg, #27AE60, #1E8449)'), fontSize: 8, padding: '12px 22px', borderRadius: 4 }}>💰 Banka</button>
                               )}
-                              <button onClick={(e) => { e.stopPropagation(); setSelectedCard(null); }} style={{ ...btnStyle('rgba(255,255,255,0.15)'), fontSize: 10, padding: '4px 8px', borderRadius: 4 }}>Kapat✕</button>
+                              <button onClick={(e) => { e.stopPropagation(); setSelectedCard(null); }} style={{ ...btnStyle('rgba(255,255,255,0.15)'), fontSize: 10, padding: '12px 22px', borderRadius: 4 }}>Kapat✕</button>
                             </motion.div>
                           )}
                         </AnimatePresence>

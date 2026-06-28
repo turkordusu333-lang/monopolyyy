@@ -104,7 +104,7 @@ export function CardVisual({ card, selected, onClick, small, dimmed, onHover, us
       onClick={handleClick}
       onMouseEnter={() => onHover && onHover(card)}
       onMouseLeave={() => onHover && onHover(null)}
-      className={`${shaking ? "card-shake" : ""} ${usable ? "usable-card" : ""} ${isRare ? "holo-wrapper" : ""} ${comboClass || ""} ${isFlipping ? "card-flip-3d" : ""}`}
+      className={`card-visual ${selected ? "selected-card" : ""} ${shaking ? "card-shake" : ""} ${usable ? "usable-card" : ""} ${isRare ? "holo-wrapper" : ""} ${comboClass || ""} ${isFlipping ? "card-flip-3d" : ""}`}
       style={{
         width: w, height: h,
         background: getCardBg(),

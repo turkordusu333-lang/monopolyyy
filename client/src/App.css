@@ -6,7 +6,30 @@
 
 body {
   font-family: 'Outfit', 'Inter', 'Segoe UI', system-ui, sans-serif;
-  background: #080d21;
+  background: radial-gradient(circle at 50% 50%, #0c1533 0%, #050815 100%);
+  min-height: 100vh;
+}
+
+/* ── Card Visual Transitions and Hover Effects ── */
+.card-visual {
+  transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275) !important;
+}
+
+.card-visual:not(.selected-card):hover {
+  transform: translateY(-10px) scale(1.04) !important;
+  box-shadow: 0 16px 30px rgba(0, 0, 0, 0.4), 0 0 15px rgba(255, 255, 255, 0.15) !important;
+  z-index: 50;
+}
+
+/* ── Input focus states ── */
+input {
+  outline: none;
+  transition: border-color 0.25s ease, box-shadow 0.25s ease !important;
+}
+
+input:focus {
+  border-color: #ffd700 !important;
+  box-shadow: 0 0 10px rgba(255, 215, 0, 0.2), inset 0 1px 1px rgba(255, 255, 255, 0.05) !important;
 }
 
 ::-webkit-scrollbar {
