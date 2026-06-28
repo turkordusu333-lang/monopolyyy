@@ -1777,18 +1777,22 @@ input:checked+.switch-toggle::after {
 
 /* ── Interactive Player Profiles inside modals ── */
 .modal-profile-card {
-  background: rgba(255, 255, 255, 0.02);
-  border: 1px solid rgba(255, 255, 255, 0.06);
-  border-radius: 14px;
-  padding: 16px;
+  background: rgba(255, 255, 255, 0.03);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 16px;
+  padding: 18px;
   margin-bottom: 16px;
-  transition: all 0.25s ease;
+  transition: all 0.3s cubic-bezier(0.165, 0.84, 0.44, 1);
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15), inset 0 1px 0 rgba(255, 255, 255, 0.05);
 }
 
 .modal-profile-card:hover {
-  background: rgba(255, 255, 255, 0.04);
-  border-color: rgba(255, 215, 0, 0.25);
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
+  background: rgba(255, 255, 255, 0.06);
+  border-color: rgba(255, 215, 0, 0.35);
+  box-shadow: 0 12px 36px rgba(0, 0, 0, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.1);
+  transform: translateY(-2px);
 }
 
 .modal-profile-header {
@@ -1896,14 +1900,14 @@ input:checked+.switch-toggle::after {
 
 .profitable-glow {
   animation: glow-profitable 1.5s infinite ease-in-out !important;
-  transform: translateY(-8px) scale(1.02) !important;
-  z-index: 10;
+  border-color: #3b82f6 !important;
+  box-shadow: 0 0 12px rgba(59, 130, 246, 0.6);
 }
 
 .danger-glow {
   animation: glow-danger 1.5s infinite ease-in-out !important;
-  transform: translateY(-8px) scale(1.02) !important;
-  z-index: 10;
+  border-color: #ef4444 !important;
+  box-shadow: 0 0 12px rgba(239, 68, 68, 0.6);
 }
 
 .hand-blurred-container>div::-webkit-scrollbar {
