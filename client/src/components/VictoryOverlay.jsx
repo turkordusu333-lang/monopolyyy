@@ -68,10 +68,13 @@ function Confetti() {
   ));
 }
 
-export function VictoryOverlay({ winnerName, isHost, players, onReturnToLobby, onNewGame, onExit, history = [] }) {
+export function VictoryOverlay({ winnerName, myPlayerId, isHost, players, onReturnToLobby, onNewGame, onExit, history = [] }) {
   const [timeLeft, setTimeLeft] = useState(15);
   const winner = players.find(p => p.name === winnerName);
   const winnerCompleteSets = winner ? Object.entries(winner.properties || {}).filter(([color, cards]) => isSetComplete(cards, color)) : [];
+
+  const me = players.find(p => p.id === myPlayerId);
+  const isMeWinner = me && me.name === winnerName;
 
   useEffect(() => { sfxWin(); }, []);
 
@@ -115,15 +118,23 @@ export function VictoryOverlay({ winnerName, isHost, players, onReturnToLobby, o
   return (
     <div style={{
       position: 'fixed', inset: 0, zIndex: 150,
-      background: 'radial-gradient(circle at center, rgba(30,15,55,0.96), rgba(8,4,16,0.99))',
+      background: isMeWinner 
+        ? 'radial-gradient(circle at center, rgba(30,15,55,0.96), rgba(8,4,16,0.99))'
+        : 'radial-gradient(circle at center, rgba(40,12,12,0.96), rgba(8,4,8,0.99))',
       display: 'flex', alignItems: 'center', justifyContent: 'center',
       animation: 'fw-fade-in 0.4s ease-out',
       overflowY: 'auto',
       padding: '20px 10px',
       boxSizing: 'border-box'
     }}>
-      <Confetti />
-      <Fireworks />
+      {isMeWinner ? (
+        <>
+          <Confetti />
+          <Fireworks />
+        </>
+      ) : (
+        <div className="defeat-shatter-lines" />
+      )}
 
       <div style={{
         position: 'relative',
@@ -147,13 +158,27 @@ export function VictoryOverlay({ winnerName, isHost, players, onReturnToLobby, o
       }}>
         {/* Banner Header */}
         <div style={{ textAlign: 'center', borderBottom: '1px solid rgba(255,255,255,0.06)', paddingBottom: '20px' }}>
-          <div style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(255, 215, 0, 0.1)', border: '1px solid rgba(255, 215, 0, 0.2)', padding: '6px 16px', borderRadius: '20px', gap: '8px', marginBottom: '10px' }}>
-            <span style={{ fontSize: '18px' }}>👑</span>
-            <span style={{ fontSize: '12px', fontWeight: 900, color: '#FFD700', letterSpacing: '2px', textTransform: 'uppercase' }}>Oyun Sonuçlandı</span>
-          </div>
-          <h1 style={{ margin: 0, fontSize: '36px', fontWeight: 950, background: 'linear-gradient(135deg, #FFF 30%, #FFD700 100%)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', textShadow: '0 2px 20px rgba(255,215,0,0.2)' }}>
-            ZAFER {winnerName.toUpperCase()}'İN!
-          </h1>
+          {isMeWinner ? (
+            <>
+              <div style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(255, 215, 0, 0.1)', border: '1px solid rgba(255, 215, 0, 0.2)', padding: '6px 16px', borderRadius: '20px', gap: '8px', marginBottom: '10px' }}>
+                <span style={{ fontSize: '18px' }}>👑</span>
+                <span style={{ fontSize: '12px', fontWeight: 900, color: '#FFD700', letterSpacing: '2px', textTransform: 'uppercase' }}>Oyun Sonuçlandı</span>
+              </div>
+              <h1 style={{ margin: 0, fontSize: '36px', fontWeight: 950, background: 'linear-gradient(135deg, #FFF 30%, #FFD700 100%)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', textShadow: '0 2px 20px rgba(255,215,0,0.2)' }}>
+                ZAFER {winnerName.toUpperCase()}'İN!
+              </h1>
+            </>
+          ) : (
+            <>
+              <div style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(239, 68, 68, 0.1)', border: '1px solid rgba(239, 68, 68, 0.2)', padding: '6px 16px', borderRadius: '20px', gap: '8px', marginBottom: '10px' }}>
+                <span style={{ fontSize: '18px' }}>💀</span>
+                <span style={{ fontSize: '12px', fontWeight: 900, color: '#f87171', letterSpacing: '2px', textTransform: 'uppercase' }}>BOZGUN</span>
+              </div>
+              <h1 style={{ margin: 0, fontSize: '36px', fontWeight: 950, background: 'linear-gradient(135deg, #FFF 30%, #f87171 100%)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent', textShadow: '0 2px 20px rgba(239,68,68,0.2)' }}>
+                MAĞLUBİYET!
+              </h1>
+            </>
+          )}
         </div>
 
         {/* İki Sütunlu İçerik */}

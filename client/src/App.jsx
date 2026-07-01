@@ -14,7 +14,7 @@ import {
   sfxDisconnect, sfxReconnect,
   sfxFire,
   sfxJackpot, sfxWompWomp, sfxCricket, sfxSwordClash, sfxCrumple, sfxHeartbeat, sfxBlackMarket, sfxCoinsCling, sfxVaultClose, sfxCry, sfxShock, sfxClap,
-  setSfxVolume, getSfxVolume
+  setSfxVolume, getSfxVolume, stopAllSFX
 } from './sounds';
 
 import { THEMES, COLOR_INFO, PLAYER_COLORS, SET_SIZES, ACTION_STYLE, CARD_TOTAL_COUNTS } from './constants';
@@ -56,8 +56,516 @@ const btnStyle = (bg) => ({
 
 const ACTION_NAMES = { rent: 'Kira', birthday: 'Doğum Günüm!', debtcollector: 'Borç Tahsildarı', slydeal: 'Sinsi Anlaşma', forceddeal: 'Zorunlu Anlaşma', dealbreaker: 'Anlaşma Bozucu', thief_squirrel: 'Hırsız Sincap' };
 
+// ── TRANSLATIONS DICTIONARY ──
+const TRANSLATIONS = {
+  tr: {
+    username: "Kullanıcı Adı",
+    login: "Giriş Yap",
+    changeUsername: "Kullanıcı Adı Değiştir",
+    newUsername: "Yeni Kullanıcı Adı",
+    change: "Değiştir",
+    pleaseEnterUsername: "Lütfen kullanıcı adı girin",
+    lobbyTitle: "Kart Oyunu Lobisi",
+    lobbySub: "Oda oluşturma, aktif odalara katılma veya lobi ayarları.",
+    roomListTab: "ODA LİSTESİ",
+    createRoomTab: "ODA OLUŞTUR",
+    myRoomTab: "ODAM",
+    error: "Hata",
+    roomHost: "Oda Kurucusu",
+    roomSettings: "Oda Ayarları",
+    allSettings: "Tüm Ayarlar",
+    getReady: "Hazır Ol!",
+    readyStatus: "Hazır Durumu",
+    startGame: "Oyunu Başlat",
+    waitingPlayers: "Bekleyen Oyuncular",
+    playersCount: "Oyuncu",
+    cancel: "İptal",
+    confirm: "Onayla",
+    close: "Kapat",
+    leaveRoom: "Odadan Ayrıl",
+    createRoomBtn: "Oda Kur",
+    quickJoin: "Hızlı Katıl",
+    noActiveRooms: "Aktif oda yok, yeni bir oda oluşturabilirsiniz.",
+    loadingStats: "Kullanıcı istatistikleri yükleniyor...",
+    points: "Puan:",
+    wins: "Zaferler:",
+    turnTimer: "Tur Süresi",
+    fastChallengeTimer: "Hızlı İtiraz Süresi",
+    setsToWin: "Kazanılacak Set Sayısı",
+    maxPlayers: "Maksimum Oyuncu",
+    handLimit: "El Kart Sınırı",
+    thiefSquirrel: "Hırsız Sincap Kartı",
+    on: "Açık",
+    off: "Kapalı",
+    ready: "Hazır",
+    notReady: "Hazır Değil",
+    remainingTurnTime: "Kalan Tur Süresi:",
+    seconds: "saniye",
+    yourTurn: "SIRA SENDE",
+    turnOf: "SIRA: ",
+    paused: "DURDURULDU",
+    history: "Geçmiş",
+    discard: "Iskarta",
+    deck: "Deste",
+    table3d: "3D Masa",
+    blackMarket: "Karaborsa",
+    endGame: "Oyunu Bitir",
+    menu: "⚙️ MENÜ",
+    sound: "Ses",
+    music: "Müzik",
+    sfx: "Ses Efektleri",
+    roomLabel: "Oda:",
+    showMyHand: "👁️ KARTLARIM",
+    hideMyHand: "👁️ ELİ GİZLE",
+    endTurn: "Turunu Bitir",
+    drawingCard: "Kart Çekiliyor...",
+    timeLimitReached: "Süre sınırına ulaşıldı!",
+    myProperties: "BENİM ARAZİLERİM",
+    myBank: "BENİM KASAM",
+    sets: "set",
+    noPropertiesYet: "henüz arazi yok",
+    empty: "BOŞ",
+    none: "YOK",
+    showTopbar: "▼ ÜST BARI GÖSTER",
+    hideTopbar: "Barı Gizle",
+    payUp: "Ödeme Yap",
+    selectPayCards: "Lütfen borcunuzu ödemek için kart seçin.",
+    remainingDebt: "Kalan Borç:",
+    autoSelect: "Otomatik Seç",
+    completePayment: "Ödemeyi Tamamla",
+    flipProperty: "Mülkü Çevir",
+    whichColorFlip: "Hangi renge çevirmek istersiniz?",
+    deckStats: "🎴 Deste Kalan Kart İstatistikleri",
+    unknownCardPool: "Bilinmeyen Kart Havuzu",
+    unknownCardPoolDesc: "Bu panel; elinizdeki, ortadaki ve ıskartadaki kartları hesaplayarak desteden çekilme ihtimallerini gösterir.",
+    bankVault: "Banka Kasası",
+    propertyCards: "Mülk Kartları",
+    selectSlyTarget: "Sinsi Anlaşma Hedefi Seç",
+    selectForcedTargets: "Zorunlu Anlaşma Hedefleri Seç",
+    selectYourProp: "Kendi mülkünü seç:",
+    selectTheirProp: "Rakip mülkünü seç:",
+    selected: "Seçilenler:",
+    select: "Seç",
+    clear: "Temizle",
+    challenge: "İtiraz Et!",
+    dontChallenge: "İtiraz Etme (Öde)",
+    challengeWindow: "Rakibin Hamlesine İtiraz Süresi",
+    cardDetails: "Kart Detayları",
+    bankValue: "Banka Değeri:",
+    propertyColor: "Mülk Rengi:",
+    discardCards: "Kartları At",
+    handLimitWarning: "Elinizde en fazla 7 kart olmalıdır.",
+    handLimitAction: "El limiti aşıldı! Atılacak kartları seçin.",
+    rageQuit: "Öfke Patlaması (Rage Quit)",
+    soundOn: "Mute",
+    soundOff: "Unmute",
+    details: "Detay",
+    activeLobbies: "AKTİF LOBİLER",
+    noRoomsFound: "Oda bulunamadı.",
+    roomCode: "Oda Kodu",
+    roomStatus: "Oda Durumu",
+    roomAction: "Aksiyon",
+    roomPublic: "Herkese Açık",
+    roomPrivate: "Özel (Sadece Davet)",
+    join: "Katıl",
+    createRoomHeader: "Yeni Oyun Odası Oluştur",
+    roomRules: "Oda Kuralları & Limitleri",
+    lobbySettings: "Lobi & Oyuncu Ayarları",
+  },
+  en: {
+    username: "Username",
+    login: "Log In",
+    changeUsername: "Change Username",
+    newUsername: "New Username",
+    change: "Change",
+    pleaseEnterUsername: "Please enter username",
+    lobbyTitle: "Card Game Lobby",
+    lobbySub: "Create a room, join active rooms, or adjust lobby settings.",
+    roomListTab: "ROOM LIST",
+    createRoomTab: "CREATE ROOM",
+    myRoomTab: "MY ROOM",
+    error: "Error",
+    roomHost: "Room Host",
+    roomSettings: "Room Settings",
+    allSettings: "All Settings",
+    getReady: "Ready Up!",
+    readyStatus: "Ready Status",
+    startGame: "Start Game",
+    waitingPlayers: "Waiting Players",
+    playersCount: "Players",
+    cancel: "Cancel",
+    confirm: "Confirm",
+    close: "Close",
+    leaveRoom: "Leave Room",
+    createRoomBtn: "Create Room",
+    quickJoin: "Quick Join",
+    noActiveRooms: "No active rooms, feel free to create one.",
+    loadingStats: "Loading player statistics...",
+    points: "Points:",
+    wins: "Wins:",
+    turnTimer: "Turn Timer",
+    fastChallengeTimer: "Fast Challenge",
+    setsToWin: "Sets to Win",
+    maxPlayers: "Max Players",
+    handLimit: "Hand Limit",
+    thiefSquirrel: "Thief Squirrel Card",
+    on: "On",
+    off: "Off",
+    ready: "Ready",
+    notReady: "Not Ready",
+    remainingTurnTime: "Remaining Time:",
+    seconds: "seconds",
+    yourTurn: "YOUR TURN",
+    turnOf: "TURN: ",
+    paused: "PAUSED",
+    history: "History",
+    discard: "Discard",
+    deck: "Deck",
+    table3d: "3D Table",
+    blackMarket: "Black Market",
+    endGame: "End Game",
+    menu: "⚙️ MENU",
+    sound: "Sound",
+    music: "Music",
+    sfx: "SFX",
+    roomLabel: "Room:",
+    showMyHand: "👁️ MY CARDS",
+    hideMyHand: "👁️ HIDE HAND",
+    endTurn: "End Turn",
+    drawingCard: "Drawing...",
+    timeLimitReached: "Time limit reached!",
+    myProperties: "MY PROPERTIES",
+    myBank: "MY BANK",
+    sets: "sets",
+    noPropertiesYet: "no properties yet",
+    empty: "EMPTY",
+    none: "NONE",
+    showTopbar: "▼ SHOW TOPBAR",
+    hideTopbar: "Hide Bar",
+    payUp: "Pay Debt",
+    selectPayCards: "Please select cards to pay your debt.",
+    remainingDebt: "Remaining Debt:",
+    autoSelect: "Auto Select",
+    completePayment: "Pay Debt",
+    flipProperty: "Flip Property",
+    whichColorFlip: "Which color do you want to flip to?",
+    deckStats: "🎴 Deck Remaining Card Statistics",
+    unknownCardPool: "Unknown Card Pool",
+    unknownCardPoolDesc: "This panel calculates remaining cards in the deck by subtracting visible cards from hands, bank vault, and discard pile.",
+    bankVault: "Bank Vault",
+    propertyCards: "Property Cards",
+    selectSlyTarget: "Select Sly Deal Target",
+    selectForcedTargets: "Select Forced Deal Targets",
+    selectYourProp: "Select your property:",
+    selectTheirProp: "Select opponent's property:",
+    selected: "Selected:",
+    select: "Select",
+    clear: "Clear",
+    challenge: "Challenge!",
+    dontChallenge: "Pay (No Challenge)",
+    challengeWindow: "Opponent Action Challenge Window",
+    cardDetails: "Card Details",
+    bankValue: "Bank Value:",
+    propertyColor: "Property Color:",
+    discardCards: "Discard Cards",
+    handLimitWarning: "You must have at most 7 cards in your hand.",
+    handLimitAction: "Hand limit exceeded! Select cards to discard.",
+    rageQuit: "Rage Quit",
+    soundOn: "Mute",
+    soundOff: "Unmute",
+    details: "Details",
+    activeLobbies: "ACTIVE LOBBIES",
+    noRoomsFound: "No active rooms.",
+    roomCode: "Room Code",
+    roomStatus: "Status",
+    roomAction: "Action",
+    roomPublic: "Public",
+    roomPrivate: "Private (Invite Only)",
+    join: "Join",
+    createRoomHeader: "Create New Game Room",
+    roomRules: "Room Rules & Limits",
+    lobbySettings: "Lobby & User Settings",
+  }
+};
+
+const getColorName = (color, lang) => {
+  if (lang === 'en') {
+    const enNames = {
+      brown: 'Brown',
+      lightblue: 'Light Blue',
+      pink: 'Pink',
+      orange: 'Orange',
+      red: 'Red',
+      yellow: 'Yellow',
+      green: 'Green',
+      blue: 'Dark Blue',
+      railroad: 'Railroad',
+      utility: 'Utility'
+    };
+    return enNames[color] || color;
+  }
+  return COLOR_INFO[color]?.name || color;
+};
+
+const translateCard = (card, lang) => {
+  if (!card) return { name: '', description: '' };
+  if (lang !== 'en') {
+    return { name: card.name, description: card.description || '' };
+  }
+
+  let name = card.name;
+  let description = card.description || '';
+
+  if (card.type === 'money') {
+    name = `${card.value}M`;
+    description = `Bank value: ${card.value}M`;
+  } else if (card.type === 'property') {
+    if (card.isWild) {
+      name = 'WILD CARD';
+      description = 'Can be used as any property color group. Cannot be put in bank vault.';
+    } else if (card.isDual) {
+      const colorsTranslated = card.colors.map(c => {
+        const names = { brown: 'Brown', lightblue: 'Light Blue', pink: 'Pink', orange: 'Orange', red: 'Red', yellow: 'Yellow', green: 'Green', blue: 'Dark Blue', railroad: 'Railroad', utility: 'Utility' };
+        return names[c] || c;
+      });
+      name = colorsTranslated.join(' / ');
+      description = `Dual property card. Tap/Click to flip active color between: ${colorsTranslated.join(', ')}`;
+    } else {
+      const propertyEnNames = {
+        'KASIMPAŞA': 'KASIMPASA',
+        'DOLAPDERE': 'DOLAPDERE',
+        'SULTANAHMET': 'SULTANAHMET',
+        'KARAKÖY': 'KARAKOY',
+        'SİRKECİ': 'SIRKECI',
+        'BEY OĞLU': 'BEYOGLU',
+        'TAKSİM': 'TAKSIM',
+        'BEŞİKTAŞ': 'BESIKTAS',
+        'HARBİYE': 'HARBIYE',
+        'MECİDİYEKÖY': 'MECIDIYEKOY',
+        'ŞİŞLİ': 'SISLI',
+        'ERENKÖY': 'ERENKOY',
+        'CADDEBOSTAN': 'CADDEBOSTAN',
+        'BOSTANCI': 'BOSTANCI',
+        'TEŞVİKİYE': 'TESVIKIYE',
+        'MAÇKA': 'MACKA',
+        'NİŞANTAŞI': 'NISANTASI',
+        'BEBEK': 'BEBEK',
+        'LEVENT': 'LEVENT',
+        'ETİLER': 'ETILER',
+        'YENİKÖY': 'YENIKOY',
+        'TARABYA': 'TARABYA',
+        'KADIKÖY VAPUR İSKELESİ': 'KADIKOY FERRY TERMINAL',
+        'KABATAŞ VAPUR İSKELESİ': 'KABATAS FERRY TERMINAL',
+        'HAYDARPAŞA TREN İSTASYONU': 'HAYDARPASA TRAIN STATION',
+        'SİRKECİ TREN İSTASYONU': 'SIRKECI TRAIN STATION',
+        'ELEKTRİK İDARESİ': 'ELECTRIC COMPANY',
+        'SU İDARESİ': 'WATER WORKS'
+      };
+      name = propertyEnNames[card.name] || card.name;
+      description = `Property Card. Rent for full set: ${COLOR_INFO[card.color]?.rents?.map(r => r + 'M').join(', ') || ''}`;
+    }
+  } else if (card.type === 'action') {
+    switch (card.action) {
+      case 'passgo':
+        name = 'PASS GO';
+        description = 'Draw 2 extra cards from the deck.';
+        break;
+      case 'dealbreaker':
+        name = 'DEAL BREAKER';
+        description = 'Steal a completed property set from an opponent, including any House/Hotel on it.';
+        break;
+      case 'justsayno':
+        name = 'JUST SAY NO';
+        description = 'Block any action card played against you.';
+        break;
+      case 'slydeal':
+        name = 'SLY DEAL';
+        description = 'Steal a single property card from an opponent (cannot be part of a completed set).';
+        break;
+      case 'forceddeal':
+        name = 'FORCED DEAL';
+        description = 'Swap one of your properties with an opponent\'s property (cannot be part of a completed set).';
+        break;
+      case 'debtcollector':
+        name = 'DEBT COLLECTOR';
+        description = 'Demand 5M from any player.';
+        break;
+      case 'birthday':
+        name = 'ITS MY BIRTHDAY';
+        description = 'Demand 2M from every player.';
+        break;
+      case 'house':
+        name = 'HOUSE';
+        description = 'Add to any completed property set (except Railroads & Utilities) to increase rent by 3M.';
+        break;
+      case 'hotel':
+        name = 'HOTEL';
+        description = 'Add to a property set that already has a House to increase rent by 4M. House stays.';
+        break;
+      case 'doublerent':
+        name = 'DOUBLE RENT';
+        description = 'Double the rent amount. Must be played together with a Rent card.';
+        break;
+      case 'thief_squirrel':
+        name = 'THIEF SQUIRREL';
+        description = 'Steal a random card from an opponent\'s hand.';
+        break;
+      case 'rent':
+        name = 'RENT';
+        if (card.colors && Array.isArray(card.colors)) {
+          const colorNames = card.colors.map(c => {
+            const names = { brown: 'Brown', lightblue: 'Light Blue', pink: 'Pink', orange: 'Orange', red: 'Red', yellow: 'Yellow', green: 'Green', blue: 'Dark Blue', railroad: 'Railroad', utility: 'Utility' };
+            return names[c] || c;
+          });
+          description = `Collect rent for ${colorNames.join('/')} from all players.`;
+        } else {
+          description = 'Collect rent for active colors from all players.';
+        }
+        break;
+      case 'rent_all':
+        name = 'ANY RENT';
+        description = 'Collect rent for a color of your choice from any single player.';
+        break;
+      default:
+        break;
+    }
+  }
+
+  return { name, description };
+};
+
+const translateLog = (logText, lang) => {
+  if (lang !== 'en') return logText;
+  if (!logText) return '';
+
+  let t = logText;
+
+  t = t.replace(/Oyun başladı!\s*🎲\s*İlk oyuncu:\s*(.+)/i, 'Game started! 🎲 First player: $1');
+  t = t.replace(/(.+) desteden (\d+) yeni kart çekti\.\s*\(Deste:\s*(\d+)\)/i, '$1 drew $2 cards from the deck. (Deck: $3)');
+  t = t.replace(/⚠️\s*DİKKAT:\s*Destede sadece (\d+) kart kaldı!/i, '⚠️ ATTENTION: Only $1 cards left in the deck!');
+  t = t.replace(/(.+) elindeki (.+) (\d+)M olarak kasaya koydu\.\s*\(Güncel Kasa:\s*(\d+)M\)/i, (match, player, type, val, currentBank) => {
+    return `${player} deposited ${val}M into the bank vault. (Current Vault: ${currentBank}M)`;
+  });
+  t = t.replace(/(.+),\s*(.+) grubuna "(.+)" arazisini ekledi\./i, (match, player, color, prop) => {
+    const enColor = {
+      'kahverengi': 'Brown', 'açık mavi': 'Light Blue', 'pembe': 'Pink', 'turuncu': 'Orange',
+      'kırmızı': 'Red', 'sarı': 'Yellow', 'yeşil': 'Green', 'lacivert': 'Dark Blue',
+      'demir yolları': 'Railroad', 'kamu hizmetleri': 'Utility'
+    }[color.toLowerCase()] || color;
+    return `${player} added property "${prop}" to ${enColor} group.`;
+  });
+  t = t.replace(/(.+) "(.+)" arazisini (.+) rengine çevirdi\./i, (match, player, prop, color) => {
+    const enColor = {
+      'kahverengi': 'Brown', 'açık mavi': 'Light Blue', 'pembe': 'Pink', 'turuncu': 'Orange',
+      'kırmızı': 'Red', 'sarı': 'Yellow', 'yeşil': 'Green', 'lacivert': 'Dark Blue',
+      'demir yolları': 'Railroad', 'kamu hizmetleri': 'Utility'
+    }[color.toLowerCase()] || color;
+    return `${player} flipped property "${prop}" to ${enColor}.`;
+  });
+  t = t.replace(/(.+) "Geç Go!" oynadı, 2 kart çekti/i, '$1 played "Pass Go" and drew 2 cards');
+  t = t.replace(/(.+) "Doğum Günüm!" oynadı! Herkes 2M ödeyecek\s*\(itiraz süresi\)/i, '$1 played "It\'s My Birthday!"! Everyone pays 2M (challenge window)');
+  t = t.replace(/(.+) "Borç Tahsildarı" oynadı, (.+)'dan 5M istiyor\s*\(itiraz süresi\)/i, '$1 played "Debt Collector", demanding 5M from $2 (challenge window)');
+  t = t.replace(/(.+) "Hırsız Sincap" oynadı!\s*(.+)'ın elinden rastgele bir kart çalma girişimi\s*\(itiraz süresi\)/i, '$1 played "Thief Squirrel"! Attempting to steal a card from $2 (challenge window)');
+  t = t.replace(/(.+) "Joker Kira" oynadı!\s*(.+) hedef seçildi ve (\d+)M ödeyecek\s*\(itiraz süresi\)/i, '$1 played "Wild Rent"! $2 is targeted and must pay $3M (challenge window)');
+  t = t.replace(/(.+),\s*(.+) kirası topluyor\s*(\(2X\))?\s*\(itiraz süresi\)/i, (match, player, color, double) => {
+    const enColor = {
+      'kahverengi': 'Brown', 'açık mavi': 'Light Blue', 'pembe': 'Pink', 'turuncu': 'Orange',
+      'kırmızı': 'Red', 'sarı': 'Yellow', 'yeşil': 'Green', 'lacivert': 'Dark Blue',
+      'demir yolları': 'Railroad', 'kamu hizmetleri': 'Utility'
+    }[color.toLowerCase()] || color;
+    return `${player} is collecting ${enColor} rent ${double ? ' (2X)' : ''} (challenge window)`;
+  });
+  t = t.replace(/(.+) "Sinsi Anlaşma" kullandı!\s*(.+)'ın "(.+)" arazisini çalmak istiyor\s*\(itiraz süresi\)/i, '$1 played "Sly Deal", targeting $2\'s property "$3" (challenge window)');
+  t = t.replace(/(.+) zorunlu takas başlattı!\s*(.+) ile arazi değiş-tokuşu istiyor\./i, '$1 initiated a Forced Deal, requesting a trade with $2.');
+  t = t.replace(/(.+) "Anlaşma Bozucu" oynadı!\s*(.+)'ın tamamlanmış (.+) setini çalmak istiyor\s*\(itiraz süresi\)/i, (match, player, target, color) => {
+    const enColor = {
+      'kahverengi': 'Brown', 'açık mavi': 'Light Blue', 'pembe': 'Pink', 'turuncu': 'Orange',
+      'kırmızı': 'Red', 'sarı': 'Yellow', 'yeşil': 'Green', 'lacivert': 'Dark Blue',
+      'demir yolları': 'Railroad', 'kamu hizmetleri': 'Utility'
+    }[color.toLowerCase()] || color;
+    return `${player} played "Deal Breaker", targeting $2\'s completed ${enColor} set (challenge window)`;
+  });
+  t = t.replace(/(.+) muazzam bir yatırım yaptı!\s*(.+) setine bir (.+) kartı ekledi\./i, (match, player, color, building) => {
+    const enColor = {
+      'kahverengi': 'Brown', 'açık mavi': 'Light Blue', 'pembe': 'Pink', 'turuncu': 'Orange',
+      'kırmızı': 'Red', 'sarı': 'Yellow', 'yeşil': 'Green', 'lacivert': 'Dark Blue',
+      'demir yolları': 'Railroad', 'kamu hizmetleri': 'Utility'
+    }[color.toLowerCase()] || color;
+    const enBuilding = building === 'ev' ? 'House' : 'Hotel';
+    return `${player} made a major investment! Added a ${enBuilding} to their completed ${enColor} set.`;
+  });
+  t = t.replace(/(.+) "Reddet!" oynadı!\s*Hamle geçersiz/i, '$1 played "Just Say No!" Action blocked.');
+  t = t.replace(/(.+) "Reddet!" oynadı!\s*Hamle yine geçerli/i, '$1 played "Just Say No!" Action is still valid.');
+  t = t.replace(/(.+) "(.+)" hamlesini Reddet! ile durdurdu/i, '$1 blocked "$2" action with Just Say No!');
+  t = t.replace(/(.+) "(.+)" arazisini (.+)'dan aldı!/i, '$1 took property "$2" from $3!');
+  t = t.replace(/(.+),\s*"(.+)" ile\s*(.+)'ın "(.+)" arazisini takas etti!/i, '$1 swapped "$2" with $3\'s property "$4"!');
+  t = t.replace(/(.+)\s*(.+)'ın\s*(.+) setini çaldı!/i, (match, player, target, color) => {
+    const enColor = {
+      'kahverengi': 'Brown', 'açık mavi': 'Light Blue', 'pembe': 'Pink', 'turuncu': 'Orange',
+      'kırmızı': 'Red', 'sarı': 'Yellow', 'yeşil': 'Green', 'lacivert': 'Dark Blue',
+      'demir yolları': 'Railroad', 'kamu hizmetleri': 'Utility'
+    }[color.toLowerCase()] || color;
+    return `${player} stole ${target}'s completed ${enColor} set!`;
+  });
+  t = t.replace(/(.+),\s*(.+)'ın elinden rastgele bir kart çaldı!/i, '$1 stole a random card from $2\'s hand!');
+  t = t.replace(/(.+),\s*(.+)'ın elinden kart çalmaya çalıştı ama hedef oyuncunun eli boş çıktı!/i, '$1 tried to steal from $2, but target hand was empty!');
+  t = t.replace(/(.+) ödeyecek hiçbir şeyi yok,\s*(.+) bu sefer boş döndü/i, '$1 has nothing to pay, $2 returns empty-handed');
+  t = t.replace(/\[BOT\]\s*(.+) borcunu ödeyemedi,\s*tüm varlıklarına el konuldu!/i, '[BOT] $1 could not pay debt, all assets seized!');
+  t = t.replace(/\[BOT\]\s*(.+) otomatik olarak (\d+)M ödedi\./i, '[BOT] $1 automatically paid $2M.');
+  t = t.replace(/(.+),\s*(.+)'a (\d+)M ödedi\.\s*\(Kalan Kasası:\s*(\d+)M\)/i, '$1 paid $3M to $2. (Remaining Vault: $4M)');
+  t = t.replace(/(.+),\s*(.+) ile barışçıl bir takas yapmak istiyor!\s*🤝/i, '$1 wants to trade with $2! 🤝');
+  t = t.replace(/(.+),\s*takas teklifini reddetti\.\s*❌/i, '$1 rejected the trade offer. ❌');
+  t = t.replace(/(.+) ve\s*(.+) takas yaptı!\s*🤝/i, '$1 and $2 completed a trade! 🤝');
+  t = t.replace(/(.+),\s*(.+) kartını atarak elini düzenledi\./i, '$1 discarded "$2" to adjust hand.');
+  t = t.replace(/(.+) pas geçti, sıra\s*(.+)'ye geçti\./i, '$1 passed, turn goes to $2.');
+  t = t.replace(/(.+) pas geçti, sıra\s*(.+)'a geçti\./i, '$1 passed, turn goes to $2.');
+  t = t.replace(/(.+) pas geçti, sıra\s*(.+)'e geçti\./i, '$1 passed, turn goes to $2.');
+  t = t.replace(/(.+) pas geçti, sıra\s*(.+)'u geçti\./i, '$1 passed, turn goes to $2.');
+  t = t.replace(/(.+) pas geçti, sıra\s*(.+)'i geçti\./i, '$1 passed, turn goes to $2.');
+  t = t.replace(/(.+) süre sınırı nedeniyle elindeki kartları ıskartaya attı ve sırasını bitirdi\./i, '$1 timed out, discarded cards to hand limit, and ended turn.');
+  t = t.replace(/(.+) zaman aşımına uğradı, sıra\s*(.+)'ye geçti\./i, '$1 timed out, turn goes to $2.');
+  t = t.replace(/(.+) zaman aşımına uğradı, sıra\s*(.+)'a geçti\./i, '$1 timed out, turn goes to $2.');
+  t = t.replace(/(.+) zaman aşımına uğradı, sıra\s*(.+)'e geçti\./i, '$1 timed out, turn goes to $2.');
+  t = t.replace(/(.+) zaman aşımına uğradı, sıra\s*(.+)'u geçti\./i, '$1 timed out, turn goes to $2.');
+  t = t.replace(/(.+) zaman aşımına uğradı, sıra\s*(.+)'i geçti\./i, '$1 timed out, turn goes to $2.');
+  t = t.replace(/(.+) oyuna geri döndü, bağlantı sağlandı\./i, '$1 reconnected to the game.');
+  t = t.replace(/(.+) oyundan çıktı veya bağlantısı koptu\./i, '$1 disconnected or left the game.');
+  t = t.replace(/itiraz süresi doldu/i, 'challenge window expired');
+  t = t.replace(/itiraz edilmedi, hamle uygulanıyor/i, 'no challenge, applying action');
+
+  return t;
+};
+
 // ---- GELİŞMİŞ İPUCU ÜRETİCİ ----
-const getDetailedCardTip = (card) => {
+const getDetailedCardTip = (card, lang) => {
+  if (lang === 'en') {
+    if (card.type === 'money') return `Instantly adds ${card.value}M cash to your bank vault. Keeping money in your vault is always good to avoid losing properties for payments.`;
+    if (card.type === 'property') {
+      if (card.isWild) return 'Very Powerful! You can change it to any color to quickly complete missing sets.';
+      if (card.isDual) return 'Flexible dual-color card. You can flip its active color to complete different sets depending on the state of the board.';
+      const cName = { brown: 'Brown', lightblue: 'Light Blue', pink: 'Pink', orange: 'Orange', red: 'Red', yellow: 'Yellow', green: 'Green', blue: 'Dark Blue', railroad: 'Railroad', utility: 'Utility' }[card.activeColor || card.color] || card.color;
+      return `Play this property card on the board. You need ${SET_SIZES[card.activeColor || card.color] || 3} cards to complete the ${cName} set. Rent increases massively when the set is complete.`;
+    }
+    if (card.type === 'action') {
+      const tips = {
+        passgo: 'Draw 2 extra cards from the deck for free. Be careful not to exceed the hand limit of 7 cards by the end of your turn.',
+        dealbreaker: 'THE MOST BRUTAL CARD IN THE GAME! Steal an opponent\'s completed set (including House/Hotel) in one move.',
+        slydeal: 'Slyly steal a single property card from an opponent (cannot be part of a completed set).',
+        forceddeal: 'Force-swap one of your useless properties with a valuable property of an opponent (cannot be part of a completed set).',
+        debtcollector: 'Hurt an opponent of your choice. They must pay you 5M cash instantly.',
+        birthday: 'It\'s your birthday! EVERY player on the table must give you 2M cash as a gift.',
+        justsayno: 'The ultimate defense card! Blocks any theft, rent, or swap targeting you. Can also be deposited in the bank for 4M.',
+        rent: 'Collect rent for your active properties from all players. The more properties in the set, the more they pay.',
+        doublerent: 'Play together with any Rent card to double the rent value. Perfect for bankrupting opponents!',
+        house: 'Build on any completed set to permanently increase rent value by 3M.',
+        hotel: 'Build on a set that already has a House to permanently increase rent by an additional 4M. The House stays.',
+        thief_squirrel: 'Cute but deadly! Steal a random card from an opponent\'s hand and add it to yours.'
+      };
+      return tips[card.action] || 'Use this action card for strategic advantage, or deposit it into your bank.';
+    }
+    return 'Use this card strategically, or put it in the bank.';
+  }
+
   if (card.type === 'money') return `Banka kasanıza anında ${card.value}M nakit ekler. Ödemeler için arazilerinizi kaybetmemek adına kasanızda para tutmak her zaman iyidir.`;
   if (card.type === 'property') {
     if (card.isWild) return 'Çok Güçlü! İstediğiniz renge dönüştürerek eksik setlerinizi hızla tamamlayabilirsiniz.';
@@ -121,9 +629,37 @@ const getCardComboClass = (card, hand) => {
   return '';
 };
 
+// ---- ANIMATED BANK BALANCE TICKER ----
+const BankTicker = ({ value }) => {
+  const [displayValue, setDisplayValue] = React.useState(value);
+  React.useEffect(() => {
+    let start = displayValue;
+    const end = value;
+    if (start === end) return;
+    const range = end - start;
+    let current = start;
+    const increment = range > 0 ? 1 : -1;
+    const stepTime = Math.abs(Math.floor(180 / range)) || 15;
+    const timer = setInterval(() => {
+      current += increment;
+      setDisplayValue(current);
+      if (current === end) {
+        clearInterval(timer);
+      }
+    }, stepTime);
+    return () => clearInterval(timer);
+  }, [value]);
+  return <span>{displayValue}M</span>;
+};
+
 // ---- İÇ İÇE GEÇMİŞ (YELPAZE) ARAZİ GÖRÜNÜMÜ ----
 const FannedPropertySet = ({ color, cards, buildings, isOwn, onFlip, onHoverCard }) => {
-  const info = COLOR_INFO[color] || { hex: '#fff', name: color };
+  const lang = localStorage.getItem('md_lang') || 'tr';
+  const infoRaw = COLOR_INFO[color] || { hex: '#fff', name: color };
+  const info = {
+    ...infoRaw,
+    name: getColorName(color, lang)
+  };
   const isComplete = isSetComplete(cards, color);
 
   // Kira hesabı (bileşen içinde)
@@ -150,10 +686,10 @@ const FannedPropertySet = ({ color, cards, buildings, isOwn, onFlip, onHoverCard
         {info.name} {isComplete && '★'}
       </div>
       <div style={{ fontSize: 10, color: isComplete ? '#FFD700' : 'rgba(255,255,255,0.5)', fontWeight: 700, marginBottom: 10, textAlign: 'center' }}>
-        {cards.length}/{setSize} kart
+        {cards.length}/{setSize} {lang === 'en' ? 'cards' : 'kart'}
         {isComplete && (
           <span style={{ marginLeft: 6, background: 'rgba(255,215,0,0.2)', border: '1px solid rgba(255,215,0,0.4)', borderRadius: 4, padding: '1px 5px', fontSize: 10, color: '#FFD700' }}>
-            Kira: {totalRent}M
+            {lang === 'en' ? 'Rent:' : 'Kira:'} {totalRent}M
           </span>
         )}
       </div>
@@ -182,7 +718,7 @@ const FannedPropertySet = ({ color, cards, buildings, isOwn, onFlip, onHoverCard
               }
             }}
           >
-            <CardVisual card={c} small />
+            <CardVisual card={c} small lang={lang} />
           </div>
         ))}
       </div>
@@ -223,6 +759,9 @@ const FannedPropertySet = ({ color, cards, buildings, isOwn, onFlip, onHoverCard
 
 // ---- MAIN APP ----
 export default function App() {
+  const [lang, setLang] = useState(localStorage.getItem('md_lang') || 'tr');
+  const t = (key) => TRANSLATIONS[lang]?.[key] || TRANSLATIONS['tr']?.[key] || key;
+
   const AVATAR_STYLES = ['avataaars', 'bottts', 'fun-emoji', 'micah', 'lorelei'];
   const [myAvatarStyle, setMyAvatarStyle] = useState(localStorage.getItem('md_avatar') || 'avataaars');
   const [socket, setSocket] = useState(null);
@@ -246,14 +785,83 @@ export default function App() {
   const [handHidden, setHandHidden] = useState(false);
   const [slapActive, setSlapActive] = useState(false);
   const [isLogOpen, setIsLogOpen] = useState(true);
-  const [activeTab, setActiveTab] = useState('board'); // board, log
+  const [showTurnFlash, setShowTurnFlash] = useState(false);
+  const [showShield, setShowShield] = useState(false);
+  const [showSparks, setShowSparks] = useState(false);
+  const [showScratch, setShowScratch] = useState(false);
+  const [profilePlayer, setProfilePlayer] = useState(null);
+  const [zoomedCard, setZoomedCard] = useState(null);
+
   const [isHeaderOpen, setIsHeaderOpen] = useState(true);
   const [isMenuOpen, setIsMenuOpen] = useState(false);
+
+  const renderActionPoints = (actionsLeft) => {
+    const dots = [];
+    const total = 3;
+    for (let i = 0; i < total; i++) {
+      if (i < actionsLeft) {
+        dots.push(
+          <span key={i} style={{
+            display: 'inline-block',
+            width: 7,
+            height: 7,
+            borderRadius: '50%',
+            backgroundColor: '#FFD700',
+            boxShadow: '0 0 6px #FFD700',
+            marginLeft: 2,
+            verticalAlign: 'middle'
+          }} />
+        );
+      } else {
+        dots.push(
+          <span key={i} style={{
+            display: 'inline-block',
+            width: 7,
+            height: 7,
+            borderRadius: '50%',
+            backgroundColor: 'rgba(255, 255, 255, 0.2)',
+            border: '0.5px solid rgba(255, 255, 255, 0.4)',
+            marginLeft: 2,
+            verticalAlign: 'middle'
+          }} />
+        );
+      }
+    }
+    return (
+      <span style={{
+        display: 'inline-flex',
+        alignItems: 'center',
+        marginLeft: 4,
+        background: 'rgba(0,0,0,0.4)',
+        padding: '1px 4px',
+        borderRadius: 4,
+        border: '0.5px solid rgba(255,215,0,0.3)',
+        fontSize: '7px',
+        color: '#FFD700',
+        fontWeight: 'bold',
+        verticalAlign: 'middle'
+      }}>
+        {dots}
+      </span>
+    );
+  };
 
   useEffect(() => {
     const handleResize = () => setIsMobile(window.innerWidth < 768);
     window.addEventListener('resize', handleResize);
-    return () => window.removeEventListener('resize', handleResize);
+    
+    // Load Google Fonts Plus Jakarta Sans dynamically
+    const link = document.createElement('link');
+    link.href = 'https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800;900&display=swap';
+    link.rel = 'stylesheet';
+    document.head.appendChild(link);
+
+    return () => {
+      window.removeEventListener('resize', handleResize);
+      try {
+        document.head.removeChild(link);
+      } catch (e) {}
+    };
   }, []);
 
   const [themeSelected, setThemeSelected] = useState('default');
@@ -269,13 +877,24 @@ export default function App() {
   const [authPassword, setAuthPassword] = useState('');
   const [authMode, setAuthMode] = useState('login');
   const [leaderboard, setLeaderboard] = useState([]);
+  const [lobbyTab, setLobbyTab] = useState('create'); // 'create', 'join', 'public'
 
   useEffect(() => {
     if (dbUser) {
-      setMyName(dbUser.displayName || dbUser.username);
+      setMyName(dbUser.displayName || dbUser.display_name || dbUser.username);
       if (dbUser.avatar) setMyAvatarStyle(dbUser.avatar);
     }
   }, [dbUser]);
+
+  const syncUserStats = useCallback((username) => {
+    if (!socket || !username) return;
+    socket.emit('getUserInfo', { username }, (res) => {
+      if (res && res.ok && res.user) {
+        setDbUser(res.user);
+        localStorage.setItem('md_db_user', JSON.stringify(res.user));
+      }
+    });
+  }, [socket]);
 
   const handleDbRegister = (username, password) => {
     if (!socket) return;
@@ -283,7 +902,7 @@ export default function App() {
       if (res.ok) {
         setDbUser(res.user);
         localStorage.setItem('md_db_user', JSON.stringify(res.user));
-        setMyName(res.user.display_name || res.user.username);
+        setMyName(res.user.displayName || res.user.display_name || res.user.username);
         if (res.user.avatar) setMyAvatarStyle(res.user.avatar);
         showToast('Kayıt Başarılı! Hoş geldiniz.', 'success');
         setModal(null);
@@ -299,7 +918,7 @@ export default function App() {
       if (res.ok) {
         setDbUser(res.user);
         localStorage.setItem('md_db_user', JSON.stringify(res.user));
-        setMyName(res.user.display_name || res.user.username);
+        setMyName(res.user.displayName || res.user.display_name || res.user.username);
         if (res.user.avatar) setMyAvatarStyle(res.user.avatar);
         showToast('Giriş Başarılı! Hoş geldiniz.', 'success');
         setModal(null);
@@ -359,14 +978,14 @@ export default function App() {
     }
   };
   const [payingFlyingCards, setPayingFlyingCards] = useState([]); // Ödeme animasyonu için
-  const [roomSettings, setRoomSettings] = useState({ autoEndTurn: true, turnTimer: 0, winSets: 3, startCards: 5, handLimit: 7, isPublic: true, allowCounterJustSayNo: true, openHands: false, lockWildcards: false, fastChallenge: false, allowTrades: false, extraDealBreakers: 0, streetThugs: false, gambleZari: false, botDifficulty: 'hard', thiefSquirrelEnabled: false });
+  const [roomSettings, setRoomSettings] = useState({ autoEndTurn: true, turnTimer: 30, winSets: 3, startCards: 5, handLimit: 7, isPublic: true, allowCounterJustSayNo: true, openHands: false, lockWildcards: false, fastChallenge: false, allowTrades: false, extraDealBreakers: 0, streetThugs: false, gambleZari: false, botDifficulty: 'hard', thiefSquirrelEnabled: false });
 
   const applyPreset = (preset) => {
     let newSettings = {};
     if (preset === 'classic') {
       newSettings = {
         autoEndTurn: true,
-        turnTimer: 0,
+        turnTimer: 30,
         winSets: 3,
         startCards: 5,
         handLimit: 7,
@@ -456,6 +1075,7 @@ export default function App() {
   const [showDebug, setShowDebug] = useState(false); // Debug ekranı açık/kapalı durumu
   const [showDeckStats, setShowDeckStats] = useState(false); // Deste istatistik modalı
   const [now, setNow] = useState(Date.now()); // Canlı tur süresi sayacı için
+  const stateReceivedTimeRef = useRef(Date.now()); // Sunucudan gelen gameState'in yerel varış zamanı
   const prevTurnAlertRef = useRef(null); // Süre dolduğunda çalacak alarm için
   const [mousePos, setMousePos] = useState({ x: 0, y: 0 }); // Dinamik önizleme ekranı için
   const [chatMessages, setChatMessages] = useState([]);
@@ -527,14 +1147,17 @@ export default function App() {
 
   // ---- HIZLI REDDET GERİ SAYIMI ----
   useEffect(() => {
-    if (gameState?.fastChallenge && gameState?.challengeStartTime && gameState?.myPendingChallenge) {
+    if (gameState?.fastChallenge && gameState?.challengeStartTime && gameState?.myPendingChallenge && gameState?.serverTime) {
       const inv = setInterval(() => {
-        const rem = 15 - Math.floor((Date.now() - gameState.challengeStartTime) / 1000);
+        const clientElapsedSinceUpdate = Date.now() - stateReceivedTimeRef.current;
+        const currentServerTime = gameState.serverTime + clientElapsedSinceUpdate;
+        const elapsedChallengeTime = currentServerTime - gameState.challengeStartTime;
+        const rem = 15 - Math.floor(elapsedChallengeTime / 1000);
         setChallengeTime(rem > 0 ? rem : 0);
       }, 1000);
       return () => clearInterval(inv);
     }
-  }, [gameState?.fastChallenge, gameState?.challengeStartTime, gameState?.myPendingChallenge]);
+  }, [gameState?.fastChallenge, gameState?.challengeStartTime, gameState?.myPendingChallenge, gameState?.serverTime]);
 
   // ---- YERLEŞİK TÜRKÇE SESLENDİRME (TTS) - DEVRE DIŞI ----
   const playTurkishVoice = useCallback((text) => {
@@ -545,6 +1168,14 @@ export default function App() {
   const showToast = useCallback((text, kind = 'info', duration = 2500) => {
     const id = Date.now() + Math.random();
     setToasts(prev => [...prev, { id, text, kind }]);
+    
+    // 📳 Haptic Feedback (Dokunsal Geri Bildirim)
+    if (navigator.vibrate) {
+      if (kind === 'turn') navigator.vibrate([200, 100, 200]);
+      else if (kind === 'error') navigator.vibrate([80, 50, 80]);
+      else if (kind === 'success') navigator.vibrate(50);
+    }
+
     setTimeout(() => {
       setToasts(prev => prev.filter(t => t.id !== id));
     }, duration);
@@ -588,11 +1219,13 @@ export default function App() {
     setMoneyParticles(prev => [...prev, ...newParts]);
     setTimeout(() => { setMoneyParticles(prev => prev.filter(p => !newParts.includes(p))); }, 1600);
   }, []);
-
   // ---- SÜRE BİTİMİ UYARI SESİ & OTOMATİK TUR ATLATMA ----
   useEffect(() => {
-    if (isMyTurn && !isBlocked && gameState?.turnTimer > 0 && gameState?.turnStartTime) {
-      const remaining = gameState.turnTimer - Math.floor((now - gameState.turnStartTime) / 1000);
+    if (isMyTurn && !isBlocked && gameState?.turnTimer > 0 && gameState?.turnStartTime && gameState?.serverTime) {
+      const clientElapsedSinceUpdate = Date.now() - stateReceivedTimeRef.current;
+      const currentServerTime = gameState.serverTime + clientElapsedSinceUpdate;
+      const elapsedTurnTime = currentServerTime - gameState.turnStartTime;
+      const remaining = gameState.turnTimer - Math.floor(elapsedTurnTime / 1000);
 
       // SÜRE AZALDI TİK-TAK SESİ
       if (remaining > 0 && remaining <= 10) {
@@ -612,27 +1245,12 @@ export default function App() {
         playTurkishVoice("Süren doldu! Turunu otomatik geçiriyorum.");
         showToast("Süreniz doldu! Otomatik geçiliyor...", "error");
 
-        // Otomatik Tur Atlama Tetikleyicisi
-        socket?.emit('endTurn', { isTimeout: true }, (res) => {
-          setModal(null);
-          setSelectedCard(null);
-          setDiscardMode(false);
-          setDiscardSelected([]);
-
-          if (!res.ok && res.needsDiscard) {
-            // Otomatik Fazla Kartları Atma (Ceza)
-            const currentPlayer = gameState?.players?.find(p => p.id === playerId);
-            const over = (currentPlayer?.hand?.length || 0) - (gameState.handLimit || 7);
-            if (over > 0 && currentPlayer?.hand) {
-              const cardsToDiscard = currentPlayer.hand.slice(0, over).map(c => c.id);
-              socket.emit('discardCards', { cardIds: cardsToDiscard }, (discardRes) => {
-                if (discardRes.ok) socket.emit('endTurn', { isTimeout: true });
-              });
-            }
-          } else {
-            setError('');
-          }
-        });
+        // Clear local states
+        setModal(null);
+        setSelectedCard(null);
+        setDiscardMode(false);
+        setDiscardSelected([]);
+        setError('');
 
         prevTurnAlertRef.current = gameState.turnStartTime;
       }
@@ -640,8 +1258,7 @@ export default function App() {
       prevTurnAlertRef.current = null;
       setIsTimeRunningOut(false);
     }
-  }, [now, gameState?.currentPlayerId, playerId, isMyTurn, isBlocked, gameState?.turnTimer, gameState?.turnStartTime, gameState?.pendingChallenges, gameState?.pendingPayments, gameState?.players, gameState?.handLimit, socket, playTurkishVoice, showToast]);
-
+  }, [now, gameState?.currentPlayerId, playerId, isMyTurn, isBlocked, gameState?.turnTimer, gameState?.turnStartTime, gameState?.serverTime, playTurkishVoice, showToast]);
   // ---- CONSOLE KANCA (INTERCEPTOR) ----
   useEffect(() => {
     const origLog = console.log;
@@ -676,14 +1293,26 @@ export default function App() {
     s.on('connect', () => {
       setStatus('Bağlandı');
       setIsConnected(true);
+
+      // Sunucudan en güncel istatistikleri çekip eşitle
+      const savedUser = JSON.parse(localStorage.getItem('md_db_user') || 'null');
+      if (savedUser && savedUser.username) {
+        s.emit('getUserInfo', { username: savedUser.username }, (res) => {
+          if (res && res.ok && res.user) {
+            setDbUser(res.user);
+            localStorage.setItem('md_db_user', JSON.stringify(res.user));
+          }
+        });
+      }
+
       // Sayfa yenilendiyse veya bağlantı koptuysa otomatik odaya geri gir
       const savedRoom = localStorage.getItem('md_room');
       const savedName = localStorage.getItem('md_name');
       const savedPid = localStorage.getItem('md_pid');
 
       if (savedRoom && savedName && savedPid) {
-        const savedUser = JSON.parse(localStorage.getItem('md_db_user') || 'null');
-        const dbUsername = savedUser ? savedUser.username : null;
+        const savedUserForJoin = JSON.parse(localStorage.getItem('md_db_user') || 'null');
+        const dbUsername = savedUserForJoin ? savedUserForJoin.username : null;
         s.emit('joinRoom', { roomCode: savedRoom, name: savedName, reconnectPlayerId: savedPid, avatar: myAvatarStyle, dbUsername }, (res) => {
           if (res.ok) {
             setPlayerId(savedPid);
@@ -709,18 +1338,63 @@ export default function App() {
       setStatus('Sunucuya bağlanılamıyor! Yeniden deneniyor...');
     });
     s.on('publicRooms', (rooms) => setPublicRooms(rooms));
-    s.on('roomClosed', () => { setStatus('Oda host tarafından kapatıldı.'); handleExit(); });
-    s.on('returnedToLobby', () => { setStatus('Oyun bitirildi, lobiye dönüldü.'); setScreen('lobby'); });
+    s.on('roomClosed', () => {
+      setStatus('Oda host tarafından kapatıldı.');
+      stopAllSFX();
+      setBgmTension(false);
+      handleExit();
+    });
+    s.on('returnedToLobby', () => {
+      setStatus('Oyun bitirildi, lobiye dönüldü.');
+      stopAllSFX();
+      setBgmTension(false);
+      setScreen('lobby');
+
+      // Lobide güncel istatistikleri göster
+      const savedUser = JSON.parse(localStorage.getItem('md_db_user') || 'null');
+      if (savedUser && savedUser.username) {
+        s.emit('getUserInfo', { username: savedUser.username }, (res) => {
+          if (res && res.ok && res.user) {
+            setDbUser(res.user);
+            localStorage.setItem('md_db_user', JSON.stringify(res.user));
+          }
+        });
+      }
+    });
 
     s.on('gameState', (state) => {
       setGameState(prev => {
         if (state.winner && (!prev || !prev.winner)) {
+          stopAllSFX();
+          setBgmTension(false);
           sfxWin();
+        }
+
+        // Detect action plays & responses from log
+        if (prev && state && state.log && prev.log) {
+          const lastLog = state.log[state.log.length - 1];
+          const prevLog = prev.log[prev.log.length - 1];
+          if (lastLog && lastLog !== prevLog) {
+            const logText = lastLog.text || '';
+            if (logText.includes('Reddet!') || logText.includes('Just Say No')) {
+              setShowShield(true);
+              setTimeout(() => setShowShield(false), 900);
+            }
+            if (logText.includes('Anlaşma Bozan') || logText.includes('Deal Breaker')) {
+              setShowSparks(true);
+              setTimeout(() => setShowSparks(false), 1500);
+            }
+            if (logText.includes('Hırsız Sincap') || logText.includes('Thief Squirrel')) {
+              setShowScratch(true);
+              setTimeout(() => setShowScratch(false), 800);
+            }
+          }
         }
         return state;
       });
       if (state.phase === 'playing') setScreen('game');
-      else if (state.phase === 'lobby') setScreen('lobby'); // OYUN BİTTİĞİNDE HERKESİ LOBİYE ÇEK!
+      else if (state.phase === 'lobby') setScreen('lobby');
+      stateReceivedTimeRef.current = Date.now();
     });
 
     s.on('gameStarted', () => {
@@ -737,6 +1411,13 @@ export default function App() {
       if (msg.senderId !== playerId) {
         sfxChatSent();
       }
+      // 🔊 Sesli Reaksiyonlar (Audio Emote Spams)
+      if (msg.text.includes('💸')) sfxChaChing();
+      else if (msg.text.includes('🛡️') || msg.text.includes('Yemezler')) sfxActionJustSayNo();
+      else if (msg.text.includes('🎲')) sfxDiceRoll();
+      else if (msg.text.includes('💣') || msg.text.includes('Anlaşma')) sfxGlassBreak();
+      else if (msg.text.includes('🤝')) sfxTradeAccepted();
+
       if (!isChatOpen) {
         showToast(`💬 ${msg.senderName}: ${msg.text}`, 'info', 3000);
       }
@@ -1282,6 +1963,20 @@ export default function App() {
       } else if (targetType === 'properties') {
         handleCardAction(card);
       }
+    } else if (draggedRef.current) {
+      // 🚀 Swipe Gestures (Yukarı/Aşağı Hızlı Sürükleme)
+      if (info.offset.y < -120) {
+        handleCardAction(card);
+        if (navigator.vibrate) navigator.vibrate(60);
+      } else if (info.offset.y > 100) {
+        if (card.type === 'property') {
+          setError('Tapu Senedi kartları bankaya konamaz!');
+          sfxError();
+        } else {
+          handlePlayCard(card, { asBankMoney: true });
+          if (navigator.vibrate) navigator.vibrate(60);
+        }
+      }
     }
   };
 
@@ -1293,23 +1988,25 @@ export default function App() {
     const curr = gameState.currentPlayerId;
     if (prev !== null && prev !== curr) {
       if (prev === playerId) {
-        showToast('✅ Tur Bitti', 'success', 1800);
-        setActionOverlay({ text: 'TUR BİTTİ!', icon: '⏳' });
+        showToast(lang === 'en' ? '✅ Turn Ended' : '✅ Tur Bitti', 'success', 1800);
+        setActionOverlay({ text: lang === 'en' ? 'TURN ENDED!' : 'TUR BİTTİ!', icon: '⏳' });
         setTimeout(() => setActionOverlay(null), 2500);
         sfxTurnEnded();
       }
       if (curr === playerId) {
-        showToast('🎲 SIRA SENDE!', 'turn', 2800);
-        setActionOverlay({ text: 'SIRA SENDE!', icon: '🎲' });
+        showToast(lang === 'en' ? '🎲 YOUR TURN!' : '🎲 SIRA SENDE!', 'turn', 2800);
+        setActionOverlay({ text: lang === 'en' ? 'YOUR TURN!' : 'SIRA SENDE!', icon: '🎲' });
         setTimeout(() => setActionOverlay(null), 2500);
         sfxYourTurn();
+        setShowTurnFlash(true);
+        setTimeout(() => setShowTurnFlash(false), 1200);
         // Titreşim (Destekleyen cihazlar için)
         if (navigator.vibrate) navigator.vibrate([200, 100, 200]);
       } else {
         const p = gameState.players.find(pl => pl.id === curr);
         if (p) {
-          showToast(`🎲 ${p.name}'in sırası`, 'info', 1800);
-          setActionOverlay({ text: `${p.name.toUpperCase()}'İN SIRASI!`, icon: '🎲' });
+          showToast(lang === 'en' ? `🎲 ${p.name}'s turn` : `🎲 ${p.name}'in sırası`, 'info', 1800);
+          setActionOverlay({ text: lang === 'en' ? `${p.name.toUpperCase()}'S TURN!` : `${p.name.toUpperCase()}'İN SIRASI!`, icon: '🎲' });
           setTimeout(() => setActionOverlay(null), 2500);
         }
       }
@@ -1334,6 +2031,32 @@ export default function App() {
       } else {
         sfxPaymentDue();
       }
+
+      // Auto-select payment selection based on rules: Cash first, then property.
+      let remaining = pay.amount;
+      const bankCards = me?.bank || [];
+      const propertyCards = Object.values(me?.properties || {}).flat();
+      const sortedBank = [...bankCards].sort((a, b) => a.value - b.value);
+      const sortedProps = [...propertyCards].sort((a, b) => a.value - b.value);
+      const bankIds = [];
+      const propIds = [];
+
+      for (const c of sortedBank) {
+        if (remaining <= 0) break;
+        bankIds.push(c.id);
+        remaining -= c.value;
+      }
+      if (remaining > 0) {
+        for (const c of sortedProps) {
+          if (remaining <= 0) break;
+          propIds.push(c.id);
+          remaining -= c.value;
+        }
+      }
+      setPaymentSelection({
+        bankCardIds: bankIds,
+        propertyCardIds: propIds
+      });
     }
     prevPaymentIdRef.current = pay?.id || null;
   }, [gameState?.myPendingChallenge, gameState?.myPendingPayment]);
@@ -1342,6 +2065,8 @@ export default function App() {
   const renderLogMsg = useCallback((entry) => {
     const { msg, type } = (typeof entry === 'string' ? { msg: entry, type: 'info' } : entry);
     if (!gameState?.players) return msg;
+
+    const translatedMsg = translateLog(msg, lang);
 
     // Olay türüne göre ikon belirle
     let icon = 'ℹ️ ';
@@ -1353,10 +2078,10 @@ export default function App() {
       case 'system': icon = '⚙️ '; break;
       case 'action': icon = '⚡ '; break;
     }
-    if (msg.includes('kazandi')) icon = '🏆 ';
-    if (msg.includes('reddet')) icon = '🛡️ ';
+    if (translatedMsg.toLowerCase().includes('won') || translatedMsg.includes('kazandı')) icon = '🏆 ';
+    if (translatedMsg.toLowerCase().includes('no') || translatedMsg.includes('reddet')) icon = '🛡️ ';
 
-    let parts = [{ text: msg, type: 'text' }];
+    let parts = [{ text: translatedMsg, type: 'text' }];
 
     gameState.players.forEach((p, pIdx) => {
       const color = PLAYER_COLORS[pIdx % PLAYER_COLORS.length];
@@ -1376,7 +2101,9 @@ export default function App() {
     });
 
     // Hamle bilgilerini (X hamle kaldı / Hamle bitti) vurgula
-    const moveRegex = /\((?:\d+ hamle kaldı|Hamle bitti)\)/g;
+    const moveRegex = lang === 'en'
+      ? /\((?:\d+ moves? left|turn ended)\)/gi
+      : /\((?:\d+ hamle kaldı|Hamle bitti)\)/g;
     let finalParts = [];
     parts.forEach(part => {
       if (part.type !== 'text') {
@@ -1472,6 +2199,8 @@ export default function App() {
   };
 
   const handleReturnToLobby = () => {
+    stopAllSFX();
+    setBgmTension(false);
     setScreen('lobby');
   };
 
@@ -1482,6 +2211,8 @@ export default function App() {
   };
 
   const handleExit = () => {
+    stopAllSFX();
+    setBgmTension(false);
     localStorage.removeItem('md_room');
     localStorage.removeItem('md_pid');
     setRoomCode('');
@@ -1489,6 +2220,17 @@ export default function App() {
     setGameState(null);
     setScreen('lobby');
     setError('');
+
+    // Çıkış yaparken güncel verileri eşitle
+    const savedUser = JSON.parse(localStorage.getItem('md_db_user') || 'null');
+    if (savedUser && savedUser.username && socket) {
+      socket.emit('getUserInfo', { username: savedUser.username }, (res) => {
+        if (res && res.ok && res.user) {
+          setDbUser(res.user);
+          localStorage.setItem('md_db_user', JSON.stringify(res.user));
+        }
+      });
+    }
   };
 
   // ---- MASA DEVİRME (RAGE QUIT) ----
@@ -1568,6 +2310,90 @@ export default function App() {
     setPaymentSelection({ bankCardIds, propertyCardIds });
   };
 
+  const selectOptimalSubset = (cards, target) => {
+    let bestSubset = null;
+    let bestSum = Infinity;
+
+    const backtrack = (index, currentSubset, currentSum) => {
+      if (currentSum >= target) {
+        if (currentSum < bestSum) {
+          bestSum = currentSum;
+          bestSubset = [...currentSubset];
+        } else if (currentSum === bestSum) {
+          if (currentSubset.length < bestSubset.length) {
+            bestSubset = [...currentSubset];
+          }
+        }
+        return;
+      }
+      if (index >= cards.length) return;
+
+      currentSubset.push(cards[index]);
+      backtrack(index + 1, currentSubset, currentSum + cards[index].value);
+      currentSubset.pop();
+
+      backtrack(index + 1, currentSubset, currentSum);
+    };
+
+    const sortedCards = [...cards].sort((a, b) => a.value - b.value);
+    backtrack(0, [], 0);
+
+    if (!bestSubset) {
+      return sortedCards;
+    }
+    return bestSubset;
+  };
+
+  const handleAutoSelectPayment = () => {
+    const pay = gameState?.myPendingPayment;
+    if (!pay) return;
+    const targetAmount = pay.amount;
+    const bankCards = me?.bank || [];
+    const propertyCards = Object.values(me?.properties || {}).flat();
+
+    const totalBankValue = bankCards.reduce((sum, c) => sum + c.value, 0);
+
+    if (totalBankValue >= targetAmount) {
+      const optimalBank = selectOptimalSubset(bankCards, targetAmount);
+      setPaymentSelection({
+        bankCardIds: optimalBank.map(c => c.id),
+        propertyCardIds: []
+      });
+    } else {
+      const remaining = targetAmount - totalBankValue;
+      const optimalProps = selectOptimalSubset(propertyCards, remaining);
+      setPaymentSelection({
+        bankCardIds: bankCards.map(c => c.id),
+        propertyCardIds: optimalProps.map(c => c.id)
+      });
+    }
+  };
+
+  const handleClearPaymentSelection = () => {
+    setPaymentSelection({ bankCardIds: [], propertyCardIds: [] });
+  };
+
+  const handleTouchStart = (e) => {
+    const touch = e.touches ? e.touches[0] : null;
+    if (touch) {
+      e.currentTarget.setAttribute('data-start-x', touch.clientX);
+      e.currentTarget.setAttribute('data-start-y', touch.clientY);
+    }
+  };
+
+  const isClickTouchScroll = (e) => {
+    const startX = e.currentTarget.getAttribute('data-start-x');
+    const startY = e.currentTarget.getAttribute('data-start-y');
+    if (startX && startY) {
+      const diffX = Math.abs(e.clientX - parseFloat(startX));
+      const diffY = Math.abs(e.clientY - parseFloat(startY));
+      if (diffX > 10 || diffY > 10) {
+        return true;
+      }
+    }
+    return false;
+  };
+
   const handleSubmitPayment = () => {
     const allSelected = [
       ...(me.bank || []).filter(c => paymentSelection.bankCardIds.includes(c.id)),
@@ -1640,7 +2466,7 @@ export default function App() {
     sfxCoin();
     socket.emit('buyScavengeCard', { cardId }, (res) => {
       if (!res.ok) { showToast(res.error, 'error'); sfxError(); }
-      else { showToast('Kart satın alındı!', 'success'); setShowScavengeModal(false); }
+      else { showToast(lang === 'en' ? 'Card purchased successfully!' : 'Kart satın alındı!', 'success'); setShowScavengeModal(false); }
     });
   };
 
@@ -1648,7 +2474,7 @@ export default function App() {
   const renderDiscardModal = () => {
     if (!showDiscardModal) return null;
     return (
-      <Modal title="🗑️ Iskarta Yığını (Son 5 Kart)" onClose={() => setShowDiscardModal(false)}>
+      <Modal title={lang === 'en' ? '🗑️ Discard Pile (Last 5 Cards)' : '🗑️ Iskarta Yığını (Son 5 Kart)'} onClose={() => setShowDiscardModal(false)}>
         <div style={{
           background: 'rgba(255, 255, 255, 0.02)',
           border: '1px solid rgba(255, 255, 255, 0.05)',
@@ -1673,18 +2499,18 @@ export default function App() {
                 onMouseOver={e => e.currentTarget.style.transform = 'scale(1.05) translateY(-4px)'}
                 onMouseOut={e => e.currentTarget.style.transform = 'scale(1)'}
               >
-                <CardVisual card={card} small onHover={handleCardHover} onClick={() => { setPreviewCard(card); setPreviewLocked(true); }} />
+                <CardVisual card={card} small onHover={handleCardHover} onClick={() => { setPreviewCard(card); setPreviewLocked(true); }} lang={lang} />
               </div>
             ))
           ) : (
             <div style={{ textAlign: 'center', color: 'rgba(255, 255, 255, 0.35)', fontSize: 13 }}>
               <span style={{ fontSize: 32, display: 'block', marginBottom: 8 }}>🗑️</span>
-              Iskarta yığını henüz boş.
+              {lang === 'en' ? 'Discard pile is empty.' : 'Iskarta yığını henüz boş.'}
             </div>
           )}
         </div>
         <p style={{ color: '#8892b0', fontSize: 11, textAlign: 'center', marginTop: 12, marginBottom: 0 }}>
-          Kart detaylarını incelemek için kartların üzerine tıklayabilirsiniz.
+          {lang === 'en' ? 'You can click on cards to inspect their details.' : 'Kart detaylarını incelemek için kartların üzerine tıklayabilirsiniz.'}
         </p>
       </Modal>
     );
@@ -1694,7 +2520,7 @@ export default function App() {
   const renderScavengeModal = () => {
     if (!showScavengeModal) return null;
     return (
-      <Modal title="🕵️ Karaborsa (Çöpteki Kartlar)" onClose={() => setShowScavengeModal(false)}>
+      <Modal title={lang === 'en' ? '🕵️ Black Market (Discard Market)' : '🕵️ Karaborsa (Çöpteki Kartlar)'} onClose={() => setShowScavengeModal(false)}>
         <div style={{
           background: 'linear-gradient(135deg, rgba(231, 76, 60, 0.08), rgba(142, 68, 173, 0.08))',
           border: '1px solid rgba(231, 76, 60, 0.2)',
@@ -1704,9 +2530,9 @@ export default function App() {
           boxShadow: '0 4px 15px rgba(231, 76, 60, 0.05)'
         }}>
           <p style={{ color: '#E2E8F0', fontSize: 12, margin: 0, lineHeight: 1.5 }}>
-            Atılan kartları <strong style={{ color: '#FFD700' }}>2M Nakit</strong> karşılığında geri satın alabilirsiniz.
+            {lang === 'en' ? 'You can purchase discarded cards back for' : 'Atılan kartları'} <strong style={{ color: '#FFD700' }}>2M {lang === 'en' ? 'Cash' : 'Nakit'}</strong> {lang === 'en' ? '.' : 'karşılığında geri satın alabilirsiniz.'}
             <span style={{ display: 'block', fontSize: 10, color: '#a0aec0', marginTop: 4 }}>
-              * Arazi kartları geçerli değildir. Tam para üstü verilmez.
+              * {lang === 'en' ? 'Property cards are not eligible. Exact change only.' : 'Arazi kartları geçerli değildir. Tam para üstü verilmez.'}
             </span>
           </p>
         </div>
@@ -1740,7 +2566,7 @@ export default function App() {
                 }}
               >
                 <div style={{ cursor: 'pointer' }} onClick={() => { setPreviewCard(card); setPreviewLocked(true); }}>
-                  <CardVisual card={card} small onHover={handleCardHover} />
+                  <CardVisual card={card} small onHover={handleCardHover} lang={lang} />
                 </div>
                 <button
                   onClick={() => handleBuyScavenge(card.id)}
@@ -1753,14 +2579,14 @@ export default function App() {
                     boxShadow: '0 2px 8px rgba(46,204,113,0.3)'
                   }}
                 >
-                  💵 2M ile Al
+                  {lang === 'en' ? '💵 Buy for 2M' : '💵 2M ile Al'}
                 </button>
               </div>
             ))
           ) : (
             <div style={{ textAlign: 'center', color: 'rgba(255, 255, 255, 0.35)', fontSize: 13, padding: '20px 0' }}>
               <span style={{ fontSize: 32, display: 'block', marginBottom: 8 }}>🕵️</span>
-              Karaborsa şu an boş.
+              {lang === 'en' ? 'Black Market is currently empty.' : 'Karaborsa şu an boş.'}
             </div>
           )}
         </div>
@@ -2146,7 +2972,7 @@ export default function App() {
 
     const EMOTES = ['😂', '😡', '😭', '😱', '👏', '🔥', '💸', '🤝'];
     return (
-      <Modal title={`${p.name} - Tüm Varlıklar`} onClose={() => setViewingPlayerId(null)}>
+      <Modal title={lang === 'en' ? `${p.name} - All Assets` : `${p.name} - Tüm Varlıklar`} onClose={() => setViewingPlayerId(null)}>
         {/* EMOTE CONTAINER */}
         <div style={{
           marginBottom: 16,
@@ -2163,7 +2989,7 @@ export default function App() {
             letterSpacing: '0.5px',
             textAlign: 'center'
           }}>
-            İFADE GÖNDER
+            {lang === 'en' ? 'SEND EMOTE' : 'İFADE GÖNDER'}
           </div>
           <div style={{ display: 'flex', gap: 10, justifyContent: 'center', flexWrap: 'wrap' }}>
             {EMOTES.map(emoji => (
@@ -2220,7 +3046,7 @@ export default function App() {
               boxShadow: '0 4px 12px rgba(52,152,219,0.25)'
             }}
           >
-            🤝 Barışçıl Takas Teklif Et (Ticaret)
+            {lang === 'en' ? '🤝 Propose Peaceful Trade (Commerce)' : '🤝 Barışçıl Takas Teklif Et (Ticaret)'}
           </button>
         )}
 
@@ -2233,14 +3059,14 @@ export default function App() {
           borderRadius: 12
         }}>
           <div style={{ fontSize: 12, color: '#aaa', marginBottom: 12, fontWeight: '800', letterSpacing: '0.4px' }}>
-            🏦 BANKA ({p.bankTotal}M)
+            {lang === 'en' ? `🏦 BANK (${p.bankTotal}M)` : `🏦 BANKA (${p.bankTotal}M)`}
           </div>
           <div style={{
             display: 'flex',
             flexWrap: 'wrap',
             gap: 10,
             alignItems: 'center',
-            minHeight: 100,
+            minHeight: isMobile ? 'auto' : 100,
             padding: '4px 0'
           }}>
             {(p.bank || []).map((c) => (
@@ -2261,7 +3087,7 @@ export default function App() {
             ))}
             {(!p.bank || p.bank.length === 0) && (
               <span style={{ color: 'rgba(255,255,255,0.3)', fontSize: 12, fontStyle: 'italic' }}>
-                Bankada hiç nakit yok...
+                {lang === 'en' ? 'No cash in the bank...' : 'Bankada hiç nakit yok...'}
               </span>
             )}
           </div>
@@ -2275,10 +3101,10 @@ export default function App() {
           borderRadius: 12
         }}>
           <div style={{ fontSize: 12, color: '#aaa', marginBottom: 12, fontWeight: '800', letterSpacing: '0.4px' }}>
-            🏘️ ARSALAR VE MÜLKLER
+            {lang === 'en' ? '🏘️ PROPERTIES & SETS' : '🏘️ ARSALAR VE MÜLKLER'}
           </div>
           {Object.keys(p.properties || {}).length > 0 && Object.values(p.properties || {}).flat().length > 0 ? (
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
+            <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap: 10 }}>
               {Object.entries(p.properties || {}).map(([color, cards]) => (
                 cards.length > 0 && (
                   <FannedPropertySet
@@ -2295,7 +3121,7 @@ export default function App() {
             </div>
           ) : (
             <div style={{ color: 'rgba(255,255,255,0.3)', fontSize: 12, fontStyle: 'italic', textAlign: 'center', padding: '16px 0' }}>
-              Masada hiç arsası bulunmuyor.
+              {lang === 'en' ? 'No properties on the board.' : 'Masada hiç arsası bulunmuyor.'}
             </div>
           )}
         </div>
@@ -2419,13 +3245,17 @@ export default function App() {
 
     if (modal.type === 'chooseColor') {
       return (
-        <Modal title="Renk Seç" onClose={() => setModal(null)}>
+        <Modal title={lang === 'en' ? 'Select Color' : 'Renk Seç'} onClose={() => setModal(null)}>
           <div style={{ color: '#94a3b8', fontSize: 13, marginBottom: 20 }}>
-            Bu joker mülk kartını hangi renk grubu için kullanmak istersiniz?
+            {lang === 'en' ? 'Which color group would you like to use this wild property card for?' : 'Bu joker mülk kartını hangi renk grubu için kullanmak istersiniz?'}
           </div>
           <div className="premium-option-grid">
             {modal.colors.map(color => {
-              const info = COLOR_INFO[color] || { hex: '#475569', name: color, light: '#64748b' };
+              const infoRaw = COLOR_INFO[color] || { hex: '#475569', name: color, light: '#64748b' };
+              const info = {
+                ...infoRaw,
+                name: getColorName(color, lang)
+              };
               return (
                 <div
                   key={color}
@@ -2455,9 +3285,14 @@ export default function App() {
         ? others.filter(p => p.id === modal.targetId)
         : others;
       return (
-        <Modal title={`${ACTION_NAMES[modal.action] || 'Aksiyon'} - Hedef Seç`} onClose={() => setModal(null)}>
+        <Modal
+          title={lang === 'en'
+            ? `${{ slydeal: 'Sly Deal', forceddeal: 'Forced Deal', dealbreaker: 'Deal Breaker', debtcollector: 'Debt Collector', thief_squirrel: 'Thief Squirrel' }[modal.action] || 'Action'} - Select Target`
+            : `${ACTION_NAMES[modal.action] || 'Aksiyon'} - Hedef Seç`}
+          onClose={() => setModal(null)}
+        >
           <div style={{ color: '#94a3b8', fontSize: 13, marginBottom: 20 }}>
-            Bu kartı kime karşı kullanmak istiyorsunuz? Aşağıdan bir oyuncu ve hedef seçin.
+            {lang === 'en' ? 'Who do you want to play this card against? Select a player and target below.' : 'Bu kartı kime karşı kullanmak istiyorsunuz? Aşağıdan bir oyuncu ve hedef seçin.'}
           </div>
           {(modal.action === 'slydeal' || modal.action === 'forceddeal' || modal.action === 'dealbreaker') && (
             <div style={{
@@ -2469,11 +3304,15 @@ export default function App() {
               boxShadow: 'inset 0 1px 0 rgba(255, 255, 255, 0.05)'
             }}>
               <div style={{ fontSize: 11, fontWeight: 'bold', color: '#FFD700', marginBottom: 6, display: 'flex', alignItems: 'center', gap: 4 }}>
-                👤 Senin Mevcut Arazilerin:
+                {lang === 'en' ? '👤 Your Current Properties:' : '👤 Senin Mevcut Arazilerin:'}
               </div>
               <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
                 {Object.entries(me?.properties || {}).filter(([, cards]) => cards.length > 0).map(([color, cards]) => {
-                  const info = COLOR_INFO[color] || { hex: '#aaa' };
+                  const infoRaw = COLOR_INFO[color] || { hex: '#aaa' };
+                  const info = {
+                    ...infoRaw,
+                    name: getColorName(color, lang)
+                  };
                   const isComplete = isSetComplete(cards, color);
                   const setSize = SET_SIZES[color] || 2;
                   return (
@@ -2493,13 +3332,13 @@ export default function App() {
                       }}
                     >
                       <span style={{ width: 8, height: 8, borderRadius: '50%', background: info.hex }} />
-                      <span>{color} ({cards.length}/{setSize})</span>
+                      <span>{info.name} ({cards.length}/{setSize})</span>
                       {isComplete && <span style={{ fontSize: 8 }}>⭐</span>}
                     </div>
                   );
                 })}
                 {(!me?.properties || Object.values(me.properties).every(c => c.length === 0)) && (
-                  <div style={{ fontSize: 10, color: '#555', fontStyle: 'italic' }}>Masada hiç araziniz bulunmuyor.</div>
+                  <div style={{ fontSize: 10, color: '#555', fontStyle: 'italic' }}>{lang === 'en' ? 'You have no properties on the board.' : 'Masada hiç araziniz bulunmuyor.'}</div>
                 )}
               </div>
             </div>
@@ -2523,11 +3362,15 @@ export default function App() {
                         {propEntries.length > 0 && (
                           <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
                             {propEntries.map(([color, cards]) => {
-                              const info = COLOR_INFO[color] || { hex: '#aaa' };
+                              const infoRaw = COLOR_INFO[color] || { hex: '#aaa' };
+                              const info = {
+                                ...infoRaw,
+                                name: getColorName(color, lang)
+                              };
                               const complete = isSetComplete(cards, color);
                               const sz = SET_SIZES[color] || 2;
                               return (
-                                <div key={color} title={`${info.name || color}: ${cards.length}/${sz}${complete ? ' ✓ TAM SET' : ''}`}
+                                <div key={color} title={`${info.name}: ${cards.length}/${sz}${complete ? (lang === 'en' ? ' ✓ FULL SET' : ' ✓ TAM SET') : ''}`}
                                   style={{
                                     display: 'flex', alignItems: 'center', gap: 2,
                                     background: complete ? `${info.hex}30` : 'rgba(255,255,255,0.06)',
@@ -2547,13 +3390,13 @@ export default function App() {
                       </div>
                     </div>
                     <span style={{ fontSize: 11, color: '#94a3b8', background: 'rgba(255,255,255,0.05)', padding: '2px 8px', borderRadius: 12, alignSelf: 'flex-start' }}>
-                      Banka: {p.bankTotal}M
+                      {lang === 'en' ? 'Bank:' : 'Banka:'} {p.bankTotal}M
                     </span>
                   </div>
 
                   {modal.action === 'debtcollector' && (
                     <button onClick={() => handlePlayCard(card, { targetId: p.id })} style={{ ...btnStyle('#E74C3C'), width: '100%', padding: '12px 16px', borderRadius: 8, margin: 0 }}>
-                      💸 {p.name}'den 5M Tahsil Et
+                      {lang === 'en' ? `💸 Collect 5M from ${p.name}` : `💸 ${p.name}'den 5M Tahsil Et`}
                     </button>
                   )}
 
@@ -2571,20 +3414,24 @@ export default function App() {
                         opacity: p.handCount === 0 ? 0.5 : 1
                       }}
                     >
-                      🐿️ {p.name}'dan Kart Çal (Elde {p.handCount || 0} Kart var)
+                      {lang === 'en' ? `🐿️ Steal Card from ${p.name} (Has ${p.handCount || 0} Cards)` : `🐿️ ${p.name}'dan Kart Çal (Elde ${p.handCount || 0} Kart var)`}
                     </button>
                   )}
 
                   {modal.action === 'dealbreaker' && (
                     <div>
-                      <div style={{ color: '#a855f7', fontWeight: 'bold', fontSize: 12, marginBottom: 10 }}>Çalmak istediğiniz tamamlanmış seti seçin:</div>
+                      <div style={{ color: '#a855f7', fontWeight: 'bold', fontSize: 12, marginBottom: 10 }}>{lang === 'en' ? 'Select the completed set you want to steal:' : 'Çalmak istediğiniz tamamlanmış seti seçin:'}</div>
                       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12 }}>
                         {Object.entries(p.properties || {}).filter(([color, cards]) => isSetComplete(cards, color)).map(([color, cards]) => {
-                          const info = COLOR_INFO[color] || { hex: '#444', name: color, light: '#666' };
+                          const infoRaw = COLOR_INFO[color] || { hex: '#444', name: color, light: '#666' };
+                          const info = {
+                            ...infoRaw,
+                            name: getColorName(color, lang)
+                          };
                           const b = p.buildings?.[color];
                           return (
                             <div key={color} style={{ background: 'rgba(0,0,0,0.3)', padding: 12, borderRadius: 10, border: `1.5px solid ${info.hex}`, display: 'flex', flexDirection: 'column', alignItems: 'center', minWidth: 110 }}>
-                              <div style={{ color: info.light || '#fff', fontSize: 10, fontWeight: 900, marginBottom: 6, textTransform: 'uppercase', letterSpacing: 0.5 }}>{info.name} SETİ</div>
+                              <div style={{ color: info.light || '#fff', fontSize: 10, fontWeight: 900, marginBottom: 6, textTransform: 'uppercase', letterSpacing: 0.5 }}>{info.name.toUpperCase()} {lang === 'en' ? 'SET' : 'SETİ'}</div>
 
                               {/* Card Previews */}
                               <div style={{ display: 'flex', gap: 3, marginBottom: 8 }}>
@@ -2609,13 +3456,13 @@ export default function App() {
                               )}
 
                               <button onClick={() => handlePlayCard(card, { targetId: p.id, targetColor: color })} style={{ ...btnStyle('#a855f7'), padding: '6px 14px', fontSize: 11, width: '100%', margin: 0 }}>
-                                💣 ÇAL
+                                {lang === 'en' ? '💣 STEAL' : '💣 ÇAL'}
                               </button>
                             </div>
                           );
                         })}
                         {Object.entries(p.properties || {}).filter(([color, cards]) => isSetComplete(cards, color)).length === 0 && (
-                          <div style={{ color: '#64748b', fontSize: 12, fontStyle: 'italic', padding: '4px 0' }}>Tamamlanmış mülk seti bulunmuyor.</div>
+                          <div style={{ color: '#64748b', fontSize: 12, fontStyle: 'italic', padding: '4px 0' }}>{lang === 'en' ? 'No completed property sets found.' : 'Tamamlanmış mülk seti bulunmuyor.'}</div>
                         )}
                       </div>
                     </div>
@@ -2623,7 +3470,7 @@ export default function App() {
 
                   {modal.action === 'slydeal' && (
                     <div>
-                      <div style={{ color: '#3b82f6', fontWeight: 'bold', fontSize: 12, marginBottom: 10 }}>Çalmak istediğiniz bağımsız araziyi seçin (Setler Hariç):</div>
+                      <div style={{ color: '#3b82f6', fontWeight: 'bold', fontSize: 12, marginBottom: 10 }}>{lang === 'en' ? 'Select the single property card you want to steal (excluding completed sets):' : 'Çalmak istediğiniz bağımsız araziyi seçin (Setler Hariç):'}</div>
                       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
                         {Object.entries(p.properties || {}).flatMap(([color, cards]) =>
                           !isSetComplete(cards, color) ? cards.map(propCard => {
@@ -2659,7 +3506,7 @@ export default function App() {
                                   e.currentTarget.style.borderColor = 'transparent';
                                 }}
                               >
-                                <CardVisual card={propCard} small />
+                                <CardVisual card={propCard} small lang={lang} />
                               </div>
                             );
                           }) : []
@@ -2676,32 +3523,29 @@ export default function App() {
                       {/* Step 1 */}
                       <div className={`step-card ${modal.step !== 2 ? 'active' : 'inactive'}`}>
                         <div className="step-header" style={{ color: '#e11d48' }}>
-                          <span>①</span> {p.name}'den Alacağınız Kartı Seçin
+                          <span>①</span> {lang === 'en' ? `Select Card to Take from ${p.name}` : `${p.name}'den Alacağınız Kartı Seçin`}
                         </div>
                         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
                           {Object.entries(p.properties || {}).flatMap(([color, cards]) => {
                             const isSetDone = isSetComplete(cards, color);
                             return cards.map(propCard => {
                               const isSelected = modal.targetCardId === propCard.id;
-
-                              // Akıllı Uyarı Mantığı (Profitable Glow)
                               let isProfitable = false;
                               const me = gameState.players.find(pl => pl.id === playerId);
                               if (me && !isSetDone) {
-                                if (propCard.isWild) isProfitable = true;
-                                else {
-                                  const pColors = propCard.isDual ? propCard.colors : [propCard.color];
-                                  isProfitable = pColors.some(clr => me.properties?.[clr]?.length > 0);
-                                }
+                                  if (propCard.isWild) isProfitable = true;
+                                  else {
+                                    const pColors = propCard.isDual ? propCard.colors : [propCard.color];
+                                    isProfitable = pColors.some(clr => me.properties?.[clr]?.length > 0);
+                                  }
                               }
-
                               return (
                                 <div
                                   key={propCard.id}
                                   className={isSetDone ? '' : (isProfitable && !isSelected ? 'profitable-glow' : '')}
                                   onClick={() => {
                                     if (isSetDone) {
-                                      showToast("Tamamlanmış bir setten kart alamazsınız!", "warning");
+                                      showToast(lang === 'en' ? "You cannot take cards from a completed set!" : "Tamamlanmış bir setten kart alamazsınız!", "warning");
                                       return;
                                     }
                                     setModal({ ...modal, targetId: p.id, targetColor: color, targetCardId: propCard.id, step: 2 });
@@ -2719,7 +3563,7 @@ export default function App() {
                                     position: 'relative'
                                   }}
                                 >
-                                  <CardVisual card={propCard} small />
+                                  <CardVisual card={propCard} small lang={lang} />
                                   {isSetDone && (
                                     <div style={{
                                       position: 'absolute', inset: 0,
@@ -2737,7 +3581,7 @@ export default function App() {
                             });
                           })}
                           {Object.entries(p.properties || {}).every(([c, cards]) => cards.length === 0) && (
-                            <div style={{ color: '#64748b', fontSize: 11, fontStyle: 'italic' }}>Alınabilecek arsa bulunmuyor.</div>
+                            <div style={{ color: '#64748b', fontSize: 11, fontStyle: 'italic' }}>{lang === 'en' ? 'No property available to take.' : 'Alınabilecek arsa bulunmuyor.'}</div>
                           )}
                         </div>
                       </div>
@@ -2745,7 +3589,7 @@ export default function App() {
                       {/* Step 2 */}
                       <div className={`step-card ${modal.step === 2 ? 'active' : 'inactive'}`}>
                         <div className="step-header" style={{ color: '#10b981', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                          <span><span>②</span> Kendi Kartlarınızdan Vereceğinizi Seçin</span>
+                          <span><span>②</span> {lang === 'en' ? 'Select Card to Give from Yours' : 'Kendi Kartlarınızdan Vereceğinizi Seçin'}</span>
                           {modal.step === 2 && (
                             <button
                               onClick={(e) => {
@@ -2763,16 +3607,15 @@ export default function App() {
                                 margin: 0
                               }}
                             >
-                              ◀ Geri Dön
+                              {lang === 'en' ? '◀ Back' : '◀ Geri Dön'}
                             </button>
                           )}
                         </div>
-                        {modal.step === 2 ? (
+                        {modal.step === 2 && (
                           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, animation: 'toast-in 0.25s ease' }}>
                             {Object.entries(me?.properties || {}).flatMap(([color, cards]) => {
                               const isSetDone = isSetComplete(cards, color);
                               return cards.map(propCard => {
-                                // Akıllı Uyarı Mantığı (Danger Glow)
                                 let isDangerous = false;
                                 if (!isSetDone) {
                                   if (propCard.isWild) isDangerous = true;
@@ -2781,7 +3624,6 @@ export default function App() {
                                     isDangerous = cColors.some(clr => p.properties?.[clr]?.length > 0);
                                   }
                                 }
-
                                 return (
                                   <div
                                     key={propCard.id}
@@ -2822,7 +3664,7 @@ export default function App() {
                                       }
                                     }}
                                   >
-                                    <CardVisual card={propCard} small />
+                                    <CardVisual card={propCard} small lang={lang} />
                                     {isSetDone && (
                                       <div style={{
                                         position: 'absolute', inset: 0,
@@ -2840,11 +3682,14 @@ export default function App() {
                               });
                             })}
                             {Object.entries(me?.properties || {}).every(([c, cards]) => cards.length === 0) && (
-                              <div style={{ color: '#64748b', fontSize: 11, fontStyle: 'italic' }}>Verilebilecek arsanız bulunmuyor.</div>
+                              <div style={{ color: '#64748b', fontSize: 11, fontStyle: 'italic' }}>{lang === 'en' ? 'No property available to give.' : 'Verilebilecek arsanız bulunmuyor.'}</div>
                             )}
                           </div>
-                        ) : (
-                          <div style={{ color: '#64748b', fontSize: 12, fontStyle: 'italic' }}>Lütfen önce yukarıdan alacağınız kartı seçin.</div>
+                        )}
+                        {modal.step !== 2 && (
+                          <div style={{ color: '#64748b', fontSize: 12, fontStyle: 'italic' }}>
+                            {lang === 'en' ? 'Please select the card to take from above first.' : 'Lütfen önce yukarıdan alacağınız kartı seçin.'}
+                          </div>
                         )}
                       </div>
                     </div>
@@ -2860,17 +3705,17 @@ export default function App() {
     if (modal.type === 'viewBankCards') {
       const bankCards = me?.bank || [];
       return (
-        <Modal title={`💰 Banka Kasası (${me?.bankTotal || 0}M)`} onClose={() => setModal(null)}>
+        <Modal title={lang === 'en' ? `💰 Bank Vault (${me?.bankTotal || 0}M)` : `💰 Banka Kasası (${me?.bankTotal || 0}M)`} onClose={() => setModal(null)}>
           <div style={{ marginBottom: 12, fontSize: 12, color: '#94a3b8' }}>
-            Bankandaki tüm kartlar aşağıda listeleniyor. Para kartları ve bankaya yatırdığın aksiyon kartları burada görünür.
+            {lang === 'en' ? 'All cards in your bank are listed below. Money cards and action cards you deposited to the bank appear here.' : 'Bankandaki tüm kartlar aşağıda listeleniyor. Para kartları ve bankaya yatırdığın aksiyon kartları burada görünür.'}
           </div>
           {bankCards.length === 0 ? (
-            <div style={{ textAlign: 'center', color: '#555', padding: 24, fontStyle: 'italic', fontSize: 13 }}>Banka kasası boş.</div>
+            <div style={{ textAlign: 'center', color: '#555', padding: 24, fontStyle: 'italic', fontSize: 13 }}>{lang === 'en' ? 'Bank vault is empty.' : 'Banka kasası boş.'}</div>
           ) : (
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10, justifyContent: 'center', maxHeight: 360, overflowY: 'auto' }}>
               {bankCards.map(c => (
                 <div key={c.id} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4 }}>
-                  <CardVisual card={c} small={false} />
+                  <CardVisual card={c} small lang={lang} />
                   <div style={{ fontSize: 11, fontWeight: 900, color: '#2ECC71', background: 'rgba(46,204,113,0.12)', border: '1px solid rgba(46,204,113,0.3)', borderRadius: 6, padding: '2px 8px' }}>
                     {c.value}M
                   </div>
@@ -2879,7 +3724,7 @@ export default function App() {
             </div>
           )}
           <div style={{ marginTop: 16, padding: '10px 14px', background: 'rgba(255,215,0,0.05)', border: '1px solid rgba(255,215,0,0.2)', borderRadius: 10, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <span style={{ color: '#aaa', fontSize: 12 }}>Toplam Banka Değeri:</span>
+            <span style={{ color: '#aaa', fontSize: 12 }}>{lang === 'en' ? 'Total Bank Value:' : 'Toplam Banka Değeri:'}</span>
             <span style={{ color: '#FFD700', fontWeight: 900, fontSize: 16 }}>{me?.bankTotal || 0}M</span>
           </div>
         </Modal>
@@ -3088,7 +3933,7 @@ export default function App() {
       const card = modal.card;
       const allColors = card.colors || Object.keys(COLOR_INFO);
       return (
-        <Modal title="Mülk Rengini Değiştir" onClose={() => setModal(null)}>
+        <Modal title={lang === 'en' ? 'Flip Property Color' : 'Mülk Rengini Değiştir'} onClose={() => setModal(null)}>
           <div style={{ display: 'flex', flexDirection: isMobile ? 'column' : 'row', gap: 20, alignItems: 'center', justifyContent: 'center' }}>
             {/* Left Column: 3D Visual Preview */}
             <div style={{
@@ -3110,14 +3955,14 @@ export default function App() {
                 onMouseEnter={(e) => e.currentTarget.style.transform = 'rotateY(0deg) rotateX(0deg) scale(1.03)'}
                 onMouseLeave={(e) => e.currentTarget.style.transform = 'rotateY(-12deg) rotateX(8deg)'}
               >
-                <CardVisual card={card} small={false} />
+                <CardVisual card={card} small={false} lang={lang} />
               </div>
             </div>
 
             {/* Right Column: Color Options with Rents */}
             <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 12, width: '100%' }}>
               <p style={{ color: '#E0E0E0', fontSize: 13, margin: 0, opacity: 0.9, lineHeight: 1.4 }}>
-                Bu kart şu anda <span style={{ color: COLOR_INFO[card.activeColor]?.light || '#fff', fontWeight: 900, textDecoration: 'underline' }}>{COLOR_INFO[card.activeColor]?.name || card.activeColor}</span> grubunda. Çevirmek istediğiniz yeni rengi seçin:
+                {lang === 'en' ? 'This card is currently in the' : 'Bu kart şu anda'} <span style={{ color: COLOR_INFO[card.activeColor]?.light || '#fff', fontWeight: 900, textDecoration: 'underline' }}>{getColorName(card.activeColor, lang)}</span> {lang === 'en' ? 'group. Select the new color to flip to:' : 'grubunda. Çevirmek istediğiniz yeni rengi seçin:'}
               </p>
 
               <div style={{ display: 'flex', flexDirection: 'column', gap: 10, maxHeight: '280px', overflowY: 'auto', paddingRight: 4 }}>
@@ -3168,11 +4013,11 @@ export default function App() {
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                         <span style={{ fontWeight: 800, fontSize: 13, color: info.light || '#fff', display: 'flex', alignItems: 'center', gap: 6 }}>
                           <span style={{ display: 'inline-block', width: 10, height: 10, borderRadius: '50%', background: info.hex, border: '1px solid rgba(255,255,255,0.3)' }}></span>
-                          {info.name}
+                          {getColorName(color, lang)}
                         </span>
                         {isActive && (
                           <span style={{ background: '#FFD700', color: '#000', fontSize: 9, fontWeight: 900, padding: '1px 5px', borderRadius: '6px', letterSpacing: 0.5 }}>
-                            AKTİF GRUP
+                            {lang === 'en' ? 'ACTIVE GROUP' : 'AKTİF GRUP'}
                           </span>
                         )}
                       </div>
@@ -3181,7 +4026,7 @@ export default function App() {
                       <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', background: 'rgba(0,0,0,0.25)', borderRadius: '6px', padding: '4px 8px' }}>
                         {info.rents.map((rentVal, i) => (
                           <div key={i} style={{ fontSize: 10.5, color: '#ccc' }}>
-                            <span style={{ fontWeight: 'bold', color: '#fff' }}>{i + 1} Kart:</span> {rentVal}M
+                            <span style={{ fontWeight: 'bold', color: '#fff' }}>{i + 1} {lang === 'en' ? (i === 0 ? 'Card' : 'Cards') : 'Kart'}:</span> {rentVal}M
                           </div>
                         ))}
                       </div>
@@ -3218,10 +4063,10 @@ export default function App() {
       };
 
       const cardThemeColor = activeColor?.hex || baseColor?.hex || (isAction ? ACTION_COLORS[card.action] : '#95A5A6');
-      const displayName = manifest?.names?.[card.key] || card.name;
+      const displayName = translateCard(card, lang).name;
 
       return (
-        <Modal title="🔍 KART DETAYLARI" onClose={() => setModal(null)}>
+        <Modal title={lang === 'en' ? '🔍 CARD DETAILS' : '🔍 KART DETAYLARI'} onClose={() => setModal(null)}>
           <div style={{ display: 'flex', flexDirection: isMobile ? 'column' : 'row', gap: 20, alignItems: 'center', justifyContent: 'center' }}>
             {/* Left Column: Card Visual */}
             <div style={{
@@ -3237,7 +4082,7 @@ export default function App() {
                 borderRadius: '12px',
                 overflow: 'hidden'
               }}>
-                <CardVisual card={card} small={false} />
+                <CardVisual card={card} small={false} lang={lang} />
               </div>
             </div>
 
@@ -3248,15 +4093,15 @@ export default function App() {
               </h3>
 
               <div style={{ fontSize: 12, background: 'rgba(255,255,255,0.05)', padding: '6px 10px', borderRadius: 6, color: '#aaa', display: 'inline-flex', alignSelf: 'flex-start' }}>
-                Değer: <b style={{ color: '#FFD700', marginLeft: 4 }}>{card.value}M Nakit</b>
+                {lang === 'en' ? 'Value:' : 'Değer:'} <b style={{ color: '#FFD700', marginLeft: 4 }}>{card.value}M {lang === 'en' ? 'Cash' : 'Nakit'}</b>
               </div>
 
               {isProp && baseColor?.rents && (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 6, background: 'rgba(0,0,0,0.3)', borderRadius: 10, padding: 12, border: '1px solid rgba(255,255,255,0.08)' }}>
-                  <div style={{ fontWeight: 'black', color: '#FFD700', fontSize: 11, letterSpacing: 0.5, borderBottom: '1px solid rgba(255,255,255,0.15)', paddingBottom: 6, marginBottom: 4 }}>KİRA TABLOSU</div>
+                  <div style={{ fontWeight: 'black', color: '#FFD700', fontSize: 11, letterSpacing: 0.5, borderBottom: '1px solid rgba(255,255,255,0.15)', paddingBottom: 6, marginBottom: 4 }}>{lang === 'en' ? 'RENT TABLE' : 'KİRA TABLOSU'}</div>
                   {baseColor.rents.map((r, i) => (
                     <div key={i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 12.5, fontWeight: 'bold' }}>
-                      <span style={{ color: '#ccc' }}>{i + 1} Kart Sahipliği:</span>
+                      <span style={{ color: '#ccc' }}>{i + 1} {lang === 'en' ? 'Cards Owned:' : 'Kart Sahipliği:'}</span>
                       <span style={{ color: '#2ECC71' }}>{r}M</span>
                     </div>
                   ))}
@@ -3265,9 +4110,9 @@ export default function App() {
 
               {(isAction || card.description) && (
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 6, background: 'rgba(255,255,255,0.03)', borderRadius: 10, padding: 12, border: '1px solid rgba(255,255,255,0.05)' }}>
-                  <div style={{ fontWeight: 'bold', color: '#FFD700', fontSize: 11, borderBottom: '1px solid rgba(255,255,255,0.1)', paddingBottom: 6, marginBottom: 4 }}>KART AÇIKLAMASI</div>
+                  <div style={{ fontWeight: 'bold', color: '#FFD700', fontSize: 11, borderBottom: '1px solid rgba(255,255,255,0.1)', paddingBottom: 6, marginBottom: 4 }}>{lang === 'en' ? 'CARD DESCRIPTION' : 'KART AÇIKLAMASI'}</div>
                   <p style={{ lineHeight: 1.5, margin: 0, fontSize: 12, color: '#eee' }}>
-                    {getDetailedCardTip(card)}
+                    {getDetailedCardTip(card, lang)}
                   </p>
                 </div>
               )}
@@ -3385,122 +4230,147 @@ export default function App() {
 
   // ---- LOBİ AYARLARI PANELİ OLUŞTURUCU ----
   const renderRoomSettings = (disabled = false) => {
-    const selStyle = { background: 'rgba(0,0,0,0.5)', color: '#fff', border: '1px solid rgba(255,255,255,0.2)', borderRadius: 8, padding: '6px 12px', outline: 'none', cursor: 'pointer' };
+    const selStyle = { background: 'rgba(0,0,0,0.6)', color: '#fff', border: '1px solid rgba(255,255,255,0.15)', borderRadius: 8, padding: '8px 12px', outline: 'none', cursor: 'pointer', fontSize: 13, width: '100%', boxSizing: 'border-box' };
     return (
-      <details className="settings-details" style={{ pointerEvents: disabled ? 'none' : 'auto', opacity: disabled ? 0.7 : 1, marginTop: 12, width: '100%' }}>
-        <summary>⚙️ GELİŞMİŞ OYUN AYARLARI</summary>
-        <div className="settings-content">
-
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '6px 6px', borderBottom: '1px solid rgba(255,255,255,0.1)', marginBottom: '10px' }}>
-            <span style={{ fontSize: 13, color: '#FFD700', fontWeight: 'bold' }}>🎮 Hazır Şablonlar:</span>
-            <select onChange={e => e.target.value && applyPreset(e.target.value)} style={{ ...selStyle, border: '1px solid #FFD700', fontSize: 11 }}>
-              <option value="">Şablon Seç...</option>
-              <option value="classic">🎲 Klasik Mod</option>
-              <option value="speed">⚡ Hızlı Başlangıç</option>
-              <option value="chaos">🔥 Kaos Modu</option>
+      <details className="settings-details" style={{ pointerEvents: disabled ? 'none' : 'auto', opacity: disabled ? 0.8 : 1, marginTop: 12, width: '100%' }}>
+        <summary style={{ fontWeight: 800, color: '#FFD700', letterSpacing: 0.5, cursor: 'pointer', padding: '8px 4px', borderBottom: '1px solid rgba(255,255,255,0.08)' }}>{lang === 'en' ? '⚙️ ADVANCED ROOM SETTINGS' : '⚙️ GELİŞMİŞ OYUN AYARLARI'}</summary>
+        <div className="settings-content" style={{ display: 'flex', flexDirection: 'column', gap: 16, marginTop: 12 }}>
+          
+          {/* Hazır Şablonlar */}
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 12px', background: 'rgba(255,215,0,0.05)', borderRadius: 10, border: '1px solid rgba(255,215,0,0.15)' }}>
+            <span style={{ fontSize: 12, color: '#FFD700', fontWeight: 'bold' }}>{lang === 'en' ? '🎮 Presets:' : '🎮 Hazır Şablonlar:'}</span>
+            <select onChange={e => e.target.value && applyPreset(e.target.value)} style={{ background: 'rgba(0,0,0,0.5)', color: '#fff', border: '1px solid #FFD700', borderRadius: 8, padding: '6px 12px', outline: 'none', cursor: 'pointer', fontSize: 11 }}>
+              <option value="">{lang === 'en' ? 'Select Preset...' : 'Şablon Seç...'}</option>
+              <option value="classic">{lang === 'en' ? '🎲 Classic Mode' : '🎲 Klasik Mod'}</option>
+              <option value="speed">{lang === 'en' ? '⚡ Speed Mode' : '⚡ Hızlı Başlangıç'}</option>
+              <option value="chaos">{lang === 'en' ? '🔥 Chaos Mode' : '🔥 Kaos Modu'}</option>
             </select>
           </div>
 
-          <label className="switch-container">
-            <span className="switch-label">⏱️ Eli Otomatik Bitir (3 Hamle)</span>
-            <input type="checkbox" className="switch-checkbox" checked={roomSettings.autoEndTurn} onChange={e => setRoomSettings(prev => ({ ...prev, autoEndTurn: e.target.checked }))} />
-            <div className="switch-toggle" />
-          </label>
-
-          <label className="switch-container">
-            <span className="switch-label">🛡️ Çifte Reddet (Savunmaya İtiraz)</span>
-            <input type="checkbox" className="switch-checkbox" checked={roomSettings.allowCounterJustSayNo} onChange={e => setRoomSettings(prev => ({ ...prev, allowCounterJustSayNo: e.target.checked }))} />
-            <div className="switch-toggle" />
-          </label>
-
-          <label className="switch-container">
-            <span className="switch-label">👁️‍🗨️ Açık El Modu (Antrenman)</span>
-            <input type="checkbox" className="switch-checkbox" checked={roomSettings.openHands} onChange={e => setRoomSettings(prev => ({ ...prev, openHands: e.target.checked }))} />
-            <div className="switch-toggle" />
-          </label>
-
-          <label className="switch-container">
-            <span className="switch-label">🔒 Joker Kilidi (Renk Sabitlenir)</span>
-            <input type="checkbox" className="switch-checkbox" checked={roomSettings.lockWildcards} onChange={e => setRoomSettings(prev => ({ ...prev, lockWildcards: e.target.checked }))} />
-            <div className="switch-toggle" />
-          </label>
-
-          <label className="switch-container">
-            <span className="switch-label">⚡ Hızlı Reddet (15 Saniye limit)</span>
-            <input type="checkbox" className="switch-checkbox" checked={roomSettings.fastChallenge} onChange={e => setRoomSettings(prev => ({ ...prev, fastChallenge: e.target.checked }))} />
-            <div className="switch-toggle" />
-          </label>
-
-          <label className="switch-container">
-            <span className="switch-label">🔁 Barışçıl Takas İzni</span>
-            <input type="checkbox" className="switch-checkbox" checked={roomSettings.allowTrades} onChange={e => setRoomSettings(prev => ({ ...prev, allowTrades: e.target.checked }))} />
-            <div className="switch-toggle" />
-          </label>
-
-          <label className="switch-container">
-            <span className="switch-label">🕵️ Sokak Haydutları (Karaborsa)</span>
-            <input type="checkbox" className="switch-checkbox" checked={roomSettings.streetThugs} onChange={e => setRoomSettings(prev => ({ ...prev, streetThugs: e.target.checked }))} />
-            <div className="switch-toggle" />
-          </label>
-
-          <label className="switch-container">
-            <span className="switch-label">🎲 Kumarbazın Zarı (Ekstra Şans)</span>
-            <input type="checkbox" className="switch-checkbox" checked={roomSettings.gambleZari} onChange={e => setRoomSettings(prev => ({ ...prev, gambleZari: e.target.checked }))} />
-            <div className="switch-toggle" />
-          </label>
-
-          <label className="switch-container">
-            <span className="switch-label">🐿️ Hırsız Sincap Kartları</span>
-            <input type="checkbox" className="switch-checkbox" checked={roomSettings.thiefSquirrelEnabled} onChange={e => setRoomSettings(prev => ({ ...prev, thiefSquirrelEnabled: e.target.checked }))} />
-            <div className="switch-toggle" />
-          </label>
-
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '4px 6px' }}>
-            <span style={{ fontSize: 13, color: '#aaa' }}>🕒 Hamle Süresi:</span>
-            <select value={roomSettings.turnTimer} onChange={e => setRoomSettings(prev => ({ ...prev, turnTimer: Number(e.target.value) }))} style={selStyle}>
-              <option value={0}>Sınırsız (Klasik)</option>
-              <option value={30}>30 Saniye</option>
-              <option value={60}>60 Saniye</option>
-              <option value={120}>2 Dakika</option>
-            </select>
+          {/* Bölüm 1: Genel Akış ve Hedefler */}
+          <div style={{ background: 'rgba(0,0,0,0.2)', padding: 12, borderRadius: 10, border: '1px solid rgba(255,255,255,0.04)' }}>
+            <h4 style={{ color: '#3498DB', fontSize: 11, fontWeight: 900, margin: '0 0 10px 0', letterSpacing: 1, textTransform: 'uppercase' }}>{lang === 'en' ? '⚡ GAME FLOW' : '⚡ OYUN AKIŞI'}</h4>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+                <div>
+                  <span style={{ fontSize: 11, color: '#a0aec0', display: 'block', marginBottom: 4 }}>{lang === 'en' ? 'Win Condition:' : 'Kazanma Hedefi:'}</span>
+                  <select value={roomSettings.winSets} onChange={e => setRoomSettings(prev => ({ ...prev, winSets: Number(e.target.value) }))} style={selStyle}>
+                    <option value={2}>{lang === 'en' ? '2 Sets (Fast)' : '2 Set (Hızlı)'}</option>
+                    <option value={3}>{lang === 'en' ? '3 Sets (Classic)' : '3 Set (Klasik)'}</option>
+                    <option value={4}>{lang === 'en' ? '4 Sets (Long)' : '4 Set (Uzun)'}</option>
+                    <option value={5}>{lang === 'en' ? '5 Sets (Epic)' : '5 Set (Destansı)'}</option>
+                  </select>
+                </div>
+                <div>
+                  <span style={{ fontSize: 11, color: '#a0aec0', display: 'block', marginBottom: 4 }}>{lang === 'en' ? 'Starting Hand:' : 'Başlangıç El Kartı:'}</span>
+                  <select value={roomSettings.startCards} onChange={e => setRoomSettings(prev => ({ ...prev, startCards: Number(e.target.value) }))} style={selStyle}>
+                    <option value={5}>{lang === 'en' ? '5 Cards (Standard)' : '5 Kart (Standart)'}</option>
+                    <option value={7}>{lang === 'en' ? '7 Cards (Fast)' : '7 Kart (Hızlı)'}</option>
+                    <option value={10}>{lang === 'en' ? '10 Cards (Chaos)' : '10 Kart (Kaos)'}</option>
+                  </select>
+                </div>
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginTop: 4 }}>
+                <div>
+                  <span style={{ fontSize: 11, color: '#a0aec0', display: 'block', marginBottom: 4 }}>{lang === 'en' ? 'Turn Time:' : 'Hamle Süresi:'}</span>
+                  <select value={roomSettings.turnTimer} onChange={e => setRoomSettings(prev => ({ ...prev, turnTimer: Number(e.target.value) }))} style={selStyle}>
+                    <option value={0}>{lang === 'en' ? 'Unlimited' : 'Sınırsız (Klasik)'}</option>
+                    <option value={30}>{lang === 'en' ? '30 Seconds' : '30 Saniye'}</option>
+                    <option value={60}>{lang === 'en' ? '60 Seconds' : '60 Saniye'}</option>
+                    <option value={120}>{lang === 'en' ? '2 Minutes' : '2 Dakika'}</option>
+                  </select>
+                </div>
+                <div>
+                  <span style={{ fontSize: 11, color: '#a0aec0', display: 'block', marginBottom: 4 }}>{lang === 'en' ? 'Bot Difficulty:' : 'Bot Zorluğu:'}</span>
+                  <select value={roomSettings.botDifficulty || 'medium'} onChange={e => setRoomSettings(prev => ({ ...prev, botDifficulty: e.target.value }))} style={selStyle}>
+                    <option value="easy">{lang === 'en' ? 'Easy' : 'Kolay'}</option>
+                    <option value="medium">{lang === 'en' ? 'Medium' : 'Orta'}</option>
+                    <option value="hard">{lang === 'en' ? 'Hard (Aggressive)' : 'Zor (Agresif)'}</option>
+                  </select>
+                </div>
+              </div>
+            </div>
           </div>
 
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '4px 6px' }}>
-            <span style={{ fontSize: 13, color: '#aaa' }}>🏆 Kazanma Hedefi:</span>
-            <select value={roomSettings.winSets} onChange={e => setRoomSettings(prev => ({ ...prev, winSets: Number(e.target.value) }))} style={selStyle}>
-              <option value={2}>2 Tam Set (Hızlı)</option>
-              <option value={3}>3 Tam Set (Klasik)</option>
-              <option value={4}>4 Tam Set (Uzun)</option>
-              <option value={5}>5 Tam Set (Destansı)</option>
-            </select>
+          {/* Bölüm 2: Özel Kurallar */}
+          <div style={{ background: 'rgba(0,0,0,0.2)', padding: 12, borderRadius: 10, border: '1px solid rgba(255,255,255,0.04)' }}>
+            <h4 style={{ color: '#E67E22', fontSize: 11, fontWeight: 900, margin: '0 0 10px 0', letterSpacing: 1, textTransform: 'uppercase' }}>{lang === 'en' ? '🛡️ SPECIAL RULES' : '🛡️ ÖZEL KURALLAR'}</h4>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              
+              <label className="switch-container">
+                <span className="switch-label">{lang === 'en' ? '⏱️ Auto End Turn (after 3 moves)' : '⏱️ Eli Otomatik Bitir (3 Hamle)'}</span>
+                <input type="checkbox" className="switch-checkbox" checked={roomSettings.autoEndTurn} onChange={e => setRoomSettings(prev => ({ ...prev, autoEndTurn: e.target.checked }))} />
+                <div className="switch-toggle" />
+              </label>
+
+              <label className="switch-container">
+                <span className="switch-label">{lang === 'en' ? '🛡️ Allow Counter Just Say No' : '🛡️ Çifte Reddet (Savunmaya İtiraz)'}</span>
+                <input type="checkbox" className="switch-checkbox" checked={roomSettings.allowCounterJustSayNo} onChange={e => setRoomSettings(prev => ({ ...prev, allowCounterJustSayNo: e.target.checked }))} />
+                <div className="switch-toggle" />
+              </label>
+
+              <label className="switch-container">
+                <span className="switch-label">{lang === 'en' ? '🔒 Lock Wildcards after placing' : '🔒 Joker Kilidi (Renk Sabitlenir)'}</span>
+                <input type="checkbox" className="switch-checkbox" checked={roomSettings.lockWildcards} onChange={e => setRoomSettings(prev => ({ ...prev, lockWildcards: e.target.checked }))} />
+                <div className="switch-toggle" />
+              </label>
+
+              <label className="switch-container">
+                <span className="switch-label">{lang === 'en' ? '🔁 Allow Property Trades' : '🔁 Barışçıl Takas İzni'}</span>
+                <input type="checkbox" className="switch-checkbox" checked={roomSettings.allowTrades} onChange={e => setRoomSettings(prev => ({ ...prev, allowTrades: e.target.checked }))} />
+                <div className="switch-toggle" />
+              </label>
+
+              <div style={{ marginTop: 4 }}>
+                <span style={{ fontSize: 11, color: '#a0aec0', display: 'block', marginBottom: 4 }}>{lang === 'en' ? 'Extra Deal Breakers:' : 'İlave Deal Breaker (Set Çalma):'}</span>
+                <select value={roomSettings.extraDealBreakers} onChange={e => setRoomSettings(prev => ({ ...prev, extraDealBreakers: Number(e.target.value) }))} style={selStyle}>
+                  <option value={0}>{lang === 'en' ? 'None (Original 2 Cards)' : 'Yok (Orijinal 2 Kart)'}</option>
+                  <option value={1}>{lang === 'en' ? '+1 Card (Total 3)' : '+1 Kart (Toplam 3)'}</option>
+                  <option value={3}>{lang === 'en' ? '+3 Cards (Chaos!)' : '+3 Kart (Kaos!)'}</option>
+                </select>
+              </div>
+
+            </div>
           </div>
 
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '4px 6px' }}>
-            <span style={{ fontSize: 13, color: '#aaa' }}>🃏 Başlangıç Kart Sayısı:</span>
-            <select value={roomSettings.startCards} onChange={e => setRoomSettings(prev => ({ ...prev, startCards: Number(e.target.value) }))} style={selStyle}>
-              <option value={5}>5 Kart (Standart)</option>
-              <option value={7}>7 Kart (Hızlı)</option>
-              <option value={10}>10 Kart (Kaos)</option>
-            </select>
+          {/* Bölüm 3: Modlar ve Eğlence */}
+          <div style={{ background: 'rgba(0,0,0,0.2)', padding: 12, borderRadius: 10, border: '1px solid rgba(255,255,255,0.04)' }}>
+            <h4 style={{ color: '#2ECC71', fontSize: 11, fontWeight: 900, margin: '0 0 10px 0', letterSpacing: 1, textTransform: 'uppercase' }}>{lang === 'en' ? '🔥 FUN MODES' : '🔥 EĞLENCE MODLARI'}</h4>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              
+              <label className="switch-container">
+                <span className="switch-label">{lang === 'en' ? '👁️‍🗨️ Open Hands (Training)' : '👁️‍🗨️ Açık El Modu (Antrenman)'}</span>
+                <input type="checkbox" className="switch-checkbox" checked={roomSettings.openHands} onChange={e => setRoomSettings(prev => ({ ...prev, openHands: e.target.checked }))} />
+                <div className="switch-toggle" />
+              </label>
+
+              <label className="switch-container">
+                <span className="switch-label">{lang === 'en' ? '⚡ Fast Challenge (15s JSN limit)' : '⚡ Hızlı Reddet (15sn Savunma limit)'}</span>
+                <input type="checkbox" className="switch-checkbox" checked={roomSettings.fastChallenge} onChange={e => setRoomSettings(prev => ({ ...prev, fastChallenge: e.target.checked }))} />
+                <div className="switch-toggle" />
+              </label>
+
+              <label className="switch-container">
+                <span className="switch-label">{lang === 'en' ? '🕵️ Street Thugs (Black Market)' : '🕵️ Sokak Haydutları (Karaborsa)'}</span>
+                <input type="checkbox" className="switch-checkbox" checked={roomSettings.streetThugs} onChange={e => setRoomSettings(prev => ({ ...prev, streetThugs: e.target.checked }))} />
+                <div className="switch-toggle" />
+              </label>
+
+              <label className="switch-container">
+                <span className="switch-label">{lang === 'en' ? '🎲 Gambler\'s Die (Gamble roll)' : '🎲 Kumarbazın Zarı (Şans zarı)'}</span>
+                <input type="checkbox" className="switch-checkbox" checked={roomSettings.gambleZari} onChange={e => setRoomSettings(prev => ({ ...prev, gambleZari: e.target.checked }))} />
+                <div className="switch-toggle" />
+              </label>
+
+              <label className="switch-container">
+                <span className="switch-label">{lang === 'en' ? '🐿️ Thief Squirrel Cards' : '🐿️ Hırsız Sincap Kartları'}</span>
+                <input type="checkbox" className="switch-checkbox" checked={roomSettings.thiefSquirrelEnabled} onChange={e => setRoomSettings(prev => ({ ...prev, thiefSquirrelEnabled: e.target.checked }))} />
+                <div className="switch-toggle" />
+              </label>
+
+            </div>
           </div>
 
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '4px 6px' }}>
-            <span style={{ fontSize: 13, color: '#aaa' }}>💣 Deste Hilesi (Deal Breaker):</span>
-            <select value={roomSettings.extraDealBreakers} onChange={e => setRoomSettings(prev => ({ ...prev, extraDealBreakers: Number(e.target.value) }))} style={selStyle}>
-              <option value={0}>Yok (Orijinal 2)</option>
-              <option value={1}>+1 Ekle (Toplam 3)</option>
-              <option value={3}>+3 Ekle (Kaos!)</option>
-            </select>
-          </div>
-
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '4px 6px' }}>
-            <span style={{ fontSize: 13, color: '#aaa' }}>🤖 Bot Zorluk Derecesi:</span>
-            <select value={roomSettings.botDifficulty || 'medium'} onChange={e => setRoomSettings(prev => ({ ...prev, botDifficulty: e.target.value }))} style={selStyle}>
-              <option value="easy">Kolay (Hatalar Yapar)</option>
-              <option value="medium">Orta (Standart)</option>
-              <option value="hard">Zor (Agresif & Taktiksel)</option>
-            </select>
-          </div>
         </div>
       </details>
     );
@@ -3703,28 +4573,28 @@ export default function App() {
     }
 
     if (isCounter) {
-      alertTitle = 'KARŞI REDDET!';
+      alertTitle = lang === 'en' ? 'COUNTER JUST SAY NO!' : 'KARŞI REDDET!';
       alertColor = '#eab308';
       alertIcon = '🛡️';
     }
 
     let opponentCard = null;
     if (isCounter) {
-      opponentCard = { type: 'action', action: 'justsayno', name: 'Reddet!', value: 4, key: 'action_justsayno' };
+      opponentCard = { type: 'action', action: 'justsayno', name: lang === 'en' ? 'Just Say No!' : 'Reddet!', value: 4, key: 'action_justsayno' };
     } else {
       switch (ch.action) {
-        case 'rent': opponentCard = { type: 'action', action: 'rent', name: 'Kira Kartı', value: 1, key: 'rent_all' }; break;
-        case 'birthday': opponentCard = { type: 'action', action: 'birthday', name: 'Doğum Günü', value: 2, key: 'action_birthday' }; break;
-        case 'debtcollector': opponentCard = { type: 'action', action: 'debtcollector', name: 'Borç Tahsildarı', value: 3, key: 'action_debtcollector' }; break;
-        case 'slydeal': opponentCard = { type: 'action', action: 'slydeal', name: 'Sinsi Anlaşma', value: 3, key: 'action_slydeal' }; break;
-        case 'forceddeal': opponentCard = { type: 'action', action: 'forceddeal', name: 'Zorunlu Anlaşma', value: 3, key: 'action_forceddeal' }; break;
-        case 'dealbreaker': opponentCard = { type: 'action', action: 'dealbreaker', name: 'Anlaşma Bozucu', value: 5, key: 'action_dealbreaker' }; break;
-        default: opponentCard = { type: 'action', action: 'passgo', name: 'Pas Geç', value: 1, key: 'action_passgo' };
+        case 'rent': opponentCard = { type: 'action', action: 'rent', name: lang === 'en' ? 'Rent Card' : 'Kira Kartı', value: 1, key: 'rent_all' }; break;
+        case 'birthday': opponentCard = { type: 'action', action: 'birthday', name: lang === 'en' ? 'Its My Birthday' : 'Doğum Günü', value: 2, key: 'action_birthday' }; break;
+        case 'debtcollector': opponentCard = { type: 'action', action: 'debtcollector', name: lang === 'en' ? 'Debt Collector' : 'Borç Tahsildarı', value: 3, key: 'action_debtcollector' }; break;
+        case 'slydeal': opponentCard = { type: 'action', action: 'slydeal', name: lang === 'en' ? 'Sly Deal' : 'Sinsi Anlaşma', value: 3, key: 'action_slydeal' }; break;
+        case 'forceddeal': opponentCard = { type: 'action', action: 'forceddeal', name: lang === 'en' ? 'Forced Deal' : 'Zorunlu Anlaşma', value: 3, key: 'action_forceddeal' }; break;
+        case 'dealbreaker': opponentCard = { type: 'action', action: 'dealbreaker', name: lang === 'en' ? 'Deal Breaker' : 'Anlaşma Bozucu', value: 5, key: 'action_dealbreaker' }; break;
+        default: opponentCard = { type: 'action', action: 'passgo', name: lang === 'en' ? 'Pass Go' : 'Pas Geç', value: 1, key: 'action_passgo' };
       }
     }
 
     return (
-      <Modal title={isCounter ? '🛡️ Karşı Reddet! Şansın!' : `⚠️ ${alertTitle}`} onClose={() => { }}>
+      <Modal title={isCounter ? (lang === 'en' ? '🛡️ Counter with Just Say No!' : '🛡️ Karşı Reddet! Şansın!') : `⚠️ ${alertTitle}`} onClose={() => { }}>
         <div className="modal-split-layout">
           {/* Left Column: 3D Card Preview */}
           <div style={{
@@ -3746,7 +4616,7 @@ export default function App() {
               onMouseEnter={(e) => e.currentTarget.style.transform = 'rotateY(0deg) rotateX(0deg) scale(1.03)'}
               onMouseLeave={(e) => e.currentTarget.style.transform = 'rotateY(-12deg) rotateX(8deg)'}
             >
-              <CardVisual card={opponentCard} small={false} />
+              <CardVisual card={opponentCard} small={false} lang={lang} />
             </div>
           </div>
 
@@ -3802,7 +4672,7 @@ export default function App() {
                   boxShadow: '0 4px 15px rgba(255,215,0,0.02)'
                 }}>
                   <div style={{ fontSize: 10, color: '#FFD700', fontWeight: 800, textAlign: 'center', marginBottom: 10, letterSpacing: 0.5 }}>
-                    🛡️ ELİNİZDE SAVUNMA KARTI VAR! (Kullanmak için tıkla)
+                    {lang === 'en' ? '🛡️ YOU HAVE A DEFENSE CARD! (Click to use)' : '🛡️ ELİNİZDE SAVUNMA KARTI VAR! (Kullanmak için tıkla)'}
                   </div>
                   <div style={{ display: 'flex', gap: 8, justifyContext: 'center', justifyContent: 'center' }}>
                     {(me?.hand || []).filter(c => c.action === 'justsayno').map(c => (
@@ -3814,7 +4684,7 @@ export default function App() {
                         onMouseOver={(e) => e.currentTarget.style.transform = 'scale(1.08) translateY(-4px)'}
                         onMouseOut={(e) => e.currentTarget.style.transform = 'scale(1)'}
                       >
-                        <CardVisual card={c} small />
+                        <CardVisual card={c} small lang={lang} />
                       </div>
                     ))}
                   </div>
@@ -3851,7 +4721,6 @@ export default function App() {
   const renderPaymentModal = () => {
     if (!gameState?.myPendingPayment) return null;
     const payment = gameState.myPendingPayment;
-    // Eğer hiç varlığım yoksa server otomatik geçer, ama yine de göstermeyelim
     const hasBank = (me?.bank || []).length > 0;
     const hasProps = Object.values(me?.properties || {}).flat().length > 0;
     if (!hasBank && !hasProps) return null;
@@ -3878,147 +4747,196 @@ export default function App() {
 
     return (
       <Modal title="💸 Ödeme Yap" onClose={() => { }}>
-        <div className="modal-split-layout">
-          {/* Left Column: 3D Card Preview */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 14, width: '100%' }}>
+
+          {/* Üst Bilgi Kartı */}
           <div style={{
-            perspective: '1000px',
-            width: 132 * 1.22,
-            height: 192 * 1.15,
+            background: 'rgba(231, 76, 60, 0.08)',
+            border: '1px solid rgba(231, 76, 60, 0.2)',
+            borderRadius: 12,
+            padding: '12px 16px',
             display: 'flex',
             alignItems: 'center',
-            justifyContent: 'center',
-            marginBottom: isMobile ? 10 : 0
+            justifyContent: 'space-between',
+            gap: 12,
+            flexWrap: 'wrap'
           }}>
-            <div style={{
-              transform: 'rotateY(-12deg) rotateX(8deg)',
-              transformStyle: 'preserve-3d',
-              boxShadow: '0 15px 35px rgba(0,0,0,0.5), 0 0 15px rgba(255,215,0,0.2)',
-              borderRadius: '8px',
-              transition: 'transform 0.4s ease',
-            }}
-              onMouseEnter={(e) => e.currentTarget.style.transform = 'rotateY(0deg) rotateX(0deg) scale(1.03)'}
-              onMouseLeave={(e) => e.currentTarget.style.transform = 'rotateY(-12deg) rotateX(8deg)'}
+            <div style={{ flex: 1, minWidth: 200 }}>
+              <div style={{ color: '#E2E8F0', fontSize: 14, fontWeight: 600 }}>
+                <b style={{ color: '#FFD700' }}>{payment.collectorName}</b>'e toplam <b style={{ color: '#ef4444', fontSize: 16 }}>{payment.amount}M</b> ödemeniz gerekiyor.
+              </div>
+              <div style={{ color: '#94a3b8', fontSize: 11, marginTop: 4, fontStyle: 'italic' }}>Gerekçe: {payment.reason}</div>
+            </div>
+            {/* Küçük Görsel Önizleme */}
+            <div style={{ width: 44, height: 60, borderRadius: 4, overflow: 'hidden', boxShadow: '0 4px 10px rgba(0,0,0,0.3)', flexShrink: 0 }}>
+              <CardVisual card={paymentCard} small />
+            </div>
+          </div>
+
+          {/* Hızlı Seçim Yardımcı Araçları (Daha uzakta, güvenli butonlar) */}
+          <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-start', flexWrap: 'wrap' }}>
+            <button
+              onClick={() => { sfxClick(); handleAutoSelectPayment(); }}
+              style={{ ...btnStyle('rgba(46, 204, 113, 0.12)'), border: '1px solid rgba(46, 204, 113, 0.3)', color: '#2ECC71', padding: '6px 12px', fontSize: 11, minHeight: 'auto', borderRadius: 8, margin: 0 }}
             >
-              <CardVisual card={paymentCard} small={false} />
-            </div>
+              🤖 Otomatik Seç (Öncelikli Para)
+            </button>
+            <button
+              onClick={() => { sfxClick(); handleSelectAllPayment(); }}
+              style={{ ...btnStyle('rgba(255,255,255,0.05)'), border: '1px solid rgba(255,255,255,0.1)', color: '#aaa', padding: '6px 12px', fontSize: 11, minHeight: 'auto', borderRadius: 8, margin: 0 }}
+            >
+              Tümünü Seç
+            </button>
+            <button
+              onClick={() => { sfxClick(); handleClearPaymentSelection(); }}
+              style={{ ...btnStyle('rgba(231, 76, 60, 0.05)'), border: '1px solid rgba(231, 76, 60, 0.15)', color: '#e74c3c', padding: '6px 12px', fontSize: 11, minHeight: 'auto', borderRadius: 8, margin: 0 }}
+            >
+              Temizle
+            </button>
           </div>
 
-          {/* Right Column: Payment Cards Selection */}
-          <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 14, width: '100%' }}>
-            <div style={{ background: 'rgba(231, 76, 60, 0.08)', border: '1px solid rgba(231, 76, 60, 0.2)', borderRadius: 10, padding: 12 }}>
-              <div style={{ color: '#E2E8F0', fontSize: 13.5, margin: 0, fontWeight: 500, lineHeight: 1.4 }}>
-                <b style={{ color: '#FFD700' }}>{payment.collectorName}</b>'e toplam <b style={{ color: '#ef4444', fontSize: 15 }}>{payment.amount}M</b> ödemeniz gerekiyor.
-              </div>
-              <div style={{ color: '#94a3b8', fontSize: 11, marginTop: 6, fontStyle: 'italic' }}>Gerekçe: {payment.reason}</div>
-            </div>
+          {/* Kart Grupları (Yatay Kaydırılabilir Şeritler - Mobil Dostu) */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
 
-            <div style={{ maxHeight: '240px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 12, paddingRight: 4 }}>
-              {hasBank && (
-                <div style={{ background: 'rgba(255,255,255,0.01)', border: '1px solid rgba(255,255,255,0.04)', borderRadius: 12, padding: 12 }}>
-                  <div style={{ fontSize: 9.5, color: '#10b981', fontWeight: 900, marginBottom: 8, letterSpacing: 0.5, textTransform: 'uppercase' }}>BANKA KASANIZDAKİ PARALAR</div>
-                  <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-                    {(me?.bank || []).map(c => {
-                      const isSelected = paymentSelection.bankCardIds.includes(c.id);
-                      return (
-                        <div key={c.id}
-                          onClick={() => togglePaymentBankCard(c.id)}
-                          onMouseEnter={() => handleCardHover(c)}
-                          onMouseLeave={() => handleCardHover(null)}
-                          style={{
-                            cursor: 'pointer',
-                            transition: 'all 0.2s ease',
-                            transform: isSelected ? 'scale(1.05)' : 'none',
-                            outline: isSelected ? '2.5px solid #10b981' : 'none',
-                            borderRadius: 8,
-                            overflow: 'hidden',
-                            boxShadow: isSelected ? '0 0 10px rgba(16,185,129,0.4)' : 'none'
-                          }}
-                        >
-                          <CardVisual card={c} small />
-                        </div>
-                      );
-                    })}
-                  </div>
+            {hasBank && (
+              <div style={{ background: 'rgba(255,255,255,0.01)', border: '1px solid rgba(255,255,255,0.04)', borderRadius: 12, padding: 12 }}>
+                <div style={{ fontSize: 10, color: '#10b981', fontWeight: 900, marginBottom: 8, letterSpacing: 0.5, textTransform: 'uppercase' }}>💵 Banka Kasasındaki Paralar</div>
+                <div style={{ display: 'flex', gap: 10, overflowX: 'auto', paddingBottom: 6, WebkitOverflowScrolling: 'touch' }}>
+                  {(me?.bank || []).map(c => {
+                    const isSelected = paymentSelection.bankCardIds.includes(c.id);
+                    return (
+                      <div key={c.id}
+                        onTouchStart={handleTouchStart}
+                        onClick={(e) => {
+                          if (isClickTouchScroll(e)) return;
+                          togglePaymentBankCard(c.id);
+                        }}
+                        style={{
+                          cursor: 'pointer',
+                          transition: 'all 0.2s ease',
+                          transform: isSelected ? 'scale(1.04) translateY(-2px)' : 'none',
+                          border: isSelected ? '3px solid #10b981' : '1px solid rgba(255,255,255,0.1)',
+                          borderRadius: 10,
+                          position: 'relative',
+                          flexShrink: 0,
+                          boxShadow: isSelected ? '0 6px 15px rgba(16,185,129,0.3)' : 'none'
+                        }}
+                      >
+                        <CardVisual card={c} small />
+                        {isSelected && (
+                          <div style={{
+                            position: 'absolute', top: 4, right: 4,
+                            width: 18, height: 18, borderRadius: '50%',
+                            background: '#10b981', color: '#fff',
+                            display: 'flex', alignItems: 'center', justifyContent: 'center',
+                            fontSize: 10, fontWeight: 'bold', zIndex: 10
+                          }}>✓</div>
+                        )}
+                      </div>
+                    );
+                  })}
                 </div>
-              )}
+              </div>
+            )}
 
-              {hasProps && (
-                <div style={{ background: 'rgba(255,255,255,0.01)', border: '1px solid rgba(255,255,255,0.04)', borderRadius: 12, padding: 12 }}>
-                  <div style={{ fontSize: 9.5, color: '#f59e0b', fontWeight: 900, marginBottom: 8, letterSpacing: 0.5, textTransform: 'uppercase' }}>TAPU SENETLERİNİZ (Mülkleriniz)</div>
-                  <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-                    {Object.entries(me?.properties || {}).flatMap(([color, cards]) => cards.map(c => {
-                      const isSelected = paymentSelection.propertyCardIds.includes(c.id);
+            {hasProps && (
+              <div style={{ background: 'rgba(255,255,255,0.01)', border: '1px solid rgba(255,255,255,0.04)', borderRadius: 12, padding: 12 }}>
+                <div style={{ fontSize: 10, color: '#f59e0b', fontWeight: 900, marginBottom: 8, letterSpacing: 0.5, textTransform: 'uppercase' }}>🏠 Tapu Senetleriniz (Mülkleriniz)</div>
+                <div style={{ display: 'flex', gap: 10, overflowX: 'auto', paddingBottom: 6, WebkitOverflowScrolling: 'touch' }}>
+                  {Object.entries(me?.properties || {}).flatMap(([color, cards]) => cards.map(c => {
+                    const isSelected = paymentSelection.propertyCardIds.includes(c.id);
 
-                      // Akıllı Uyarı Mantığı (Danger Glow)
-                      const collector = gameState.players.find(p => p.id === payment.collectorId);
-                      let isDangerous = false;
-                      if (collector) {
-                        if (c.isWild) isDangerous = true;
-                        else {
-                          const cColors = c.isDual ? c.colors : [c.color];
-                          isDangerous = cColors.some(clr => collector.properties?.[clr]?.length > 0);
-                        }
+                    // Akıllı Uyarı Mantığı (Danger Glow)
+                    const collector = gameState.players.find(p => p.id === payment.collectorId);
+                    let isDangerous = false;
+                    if (collector) {
+                      if (c.isWild) isDangerous = true;
+                      else {
+                        const cColors = c.isDual ? c.colors : [c.color];
+                        isDangerous = cColors.some(clr => collector.properties?.[clr]?.length > 0);
                       }
+                    }
 
-                      return (
-                        <div key={c.id}
-                          className={isDangerous && !isSelected ? 'danger-glow' : ''}
-                          onClick={() => togglePaymentPropertyCard(c.id)}
-                          onMouseEnter={() => handleCardHover(c)}
-                          onMouseLeave={() => handleCardHover(null)}
-                          style={{
-                            cursor: 'pointer',
-                            transition: 'all 0.2s ease',
-                            transform: isSelected ? 'scale(1.05)' : 'none',
-                            outline: isSelected ? '2.5px solid #f59e0b' : 'none',
-                            borderRadius: 8,
-                            overflow: 'hidden',
-                            boxShadow: isSelected ? '0 0 10px rgba(245,158,11,0.4)' : 'none'
-                          }}
-                        >
-                          <CardVisual card={c} small />
-                        </div>
-                      );
-                    }))}
-                  </div>
+                    return (
+                      <div key={c.id}
+                        className={isDangerous && !isSelected ? 'danger-glow' : ''}
+                        onTouchStart={handleTouchStart}
+                        onClick={(e) => {
+                          if (isClickTouchScroll(e)) return;
+                          togglePaymentPropertyCard(c.id);
+                        }}
+                        style={{
+                          cursor: 'pointer',
+                          transition: 'all 0.2s ease',
+                          transform: isSelected ? 'scale(1.04) translateY(-2px)' : 'none',
+                          border: isSelected ? '3px solid #f59e0b' : (isDangerous ? '1px dashed #ef4444' : '1px solid rgba(255,255,255,0.1)'),
+                          borderRadius: 10,
+                          position: 'relative',
+                          flexShrink: 0,
+                          boxShadow: isSelected ? '0 6px 15px rgba(245,158,11,0.3)' : 'none'
+                        }}
+                      >
+                        <CardVisual card={c} small />
+                        {isSelected && (
+                          <div style={{
+                            position: 'absolute', top: 4, right: 4,
+                            width: 18, height: 18, borderRadius: '50%',
+                            background: '#f59e0b', color: '#fff',
+                            display: 'flex', alignItems: 'center', justifyContent: 'center',
+                            fontSize: 10, fontWeight: 'bold', zIndex: 10
+                          }}>✓</div>
+                        )}
+                        {isDangerous && !isSelected && (
+                          <div style={{
+                            position: 'absolute', bottom: 4, right: 4,
+                            background: '#ef4444', color: '#fff',
+                            padding: '1px 5px', borderRadius: 4,
+                            fontSize: 8, fontWeight: 'bold', zIndex: 10
+                          }}>🚨 TEHLİKE</div>
+                        )}
+                      </div>
+                    );
+                  }))}
                 </div>
-              )}
-            </div>
-
-            <div style={{ borderTop: '1px solid rgba(255,255,255,0.08)', paddingTop: 14 }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-                <div style={{ color: selectedTotal >= payment.amount ? '#10b981' : '#f59e0b', fontWeight: 900, fontSize: 13 }}>
-                  Seçilen Toplam: <span style={{ fontSize: 15 }}>{selectedTotal}M</span> / {payment.amount}M
-                  {selectedTotal < payment.amount && selectedTotal === totalAssets && totalAssets > 0 && (
-                    <span style={{ color: '#ef4444', display: 'block', fontSize: 11, fontWeight: 'normal', marginTop: 2 }}>⚠️ Tüm varlığınızla ödeme yapıyorsunuz</span>
-                  )}
-                </div>
-                <button onClick={handleSelectAllPayment} style={{ ...btnStyle('rgba(255,255,255,0.08)'), border: '1px solid rgba(255,255,255,0.1)', padding: '6px 12px', fontSize: 11, minHeight: 'auto', borderRadius: 6 }}>Tümünü Seç</button>
               </div>
+            )}
 
-              <button onClick={handleSubmitPayment} disabled={!canSubmit}
-                style={{
-                  ...btnStyle('#10b981'),
-                  width: '100%',
-                  padding: '12px',
-                  opacity: canSubmit ? 1 : 0.4,
-                  fontSize: 13,
-                  height: 44,
-                  borderRadius: 8,
-                  margin: 0,
-                  boxShadow: canSubmit ? '0 4px 15px rgba(16,185,129,0.3)' : 'none'
-                }}
-              >
-                Ödeme Yap ({selectedTotal}M)
-              </button>
-            </div>
           </div>
+
+          {/* Alt Ödeme Gönderme Bölümü */}
+          <div style={{ borderTop: '1px solid rgba(255,255,255,0.08)', paddingTop: 14 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+              <div style={{ color: selectedTotal >= payment.amount ? '#10b981' : '#f59e0b', fontWeight: 900, fontSize: 13.5 }}>
+                Seçilen Toplam: <span style={{ fontSize: 16, color: selectedTotal >= payment.amount ? '#10b981' : '#f59e0b' }}>{selectedTotal}M</span> / {payment.amount}M
+                {selectedTotal < payment.amount && selectedTotal === totalAssets && totalAssets > 0 && (
+                  <span style={{ color: '#ef4444', display: 'block', fontSize: 11, fontWeight: 'normal', marginTop: 2 }}>⚠️ Tüm varlığınızla ödeme yapıyorsunuz</span>
+                )}
+              </div>
+            </div>
+
+            <button onClick={handleSubmitPayment} disabled={!canSubmit}
+              style={{
+                ...btnStyle('#10b981'),
+                width: '100%',
+                padding: '12px',
+                opacity: canSubmit ? 1 : 0.4,
+                fontSize: 14,
+                fontWeight: 900,
+                height: 48,
+                borderRadius: 10,
+                margin: 0,
+                boxShadow: canSubmit ? '0 4px 15px rgba(16,185,129,0.3)' : 'none'
+              }}
+            >
+              Ödeme Gönder ({selectedTotal}M)
+            </button>
+          </div>
+
         </div>
       </Modal>
     );
   };
 
-  // ── TAKAS TEKLİF VE YANIT MODALLARI ──
   const renderTradeModal = () => {
     if (modal?.type === 'proposeTrade') {
       const target = gameState.players.find(p => p.id === modal.targetId);
@@ -4035,12 +4953,26 @@ export default function App() {
               <div style={{ color: '#f87171', fontWeight: 800, marginBottom: 12, fontSize: 13, letterSpacing: 0.5 }}>📤 NE VERECEKSİN? (SENİN)</div>
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, maxHeight: '200px', overflowY: 'auto' }}>
                 {(me?.bank || []).map(c => (
-                  <div key={c.id} onClick={() => toggle('offerBankIds', c.id)} style={{ cursor: 'pointer', transition: 'opacity 0.2s', opacity: tradeSelection.offerBankIds.includes(c.id) ? 1 : 0.35 }}>
+                  <div key={c.id}
+                    onTouchStart={handleTouchStart}
+                    onClick={(e) => {
+                      if (isClickTouchScroll(e)) return;
+                      toggle('offerBankIds', c.id);
+                    }}
+                    style={{ cursor: 'pointer', transition: 'opacity 0.2s', opacity: tradeSelection.offerBankIds.includes(c.id) ? 1 : 0.35 }}
+                  >
                     <CardVisual card={c} small />
                   </div>
                 ))}
                 {Object.values(me?.properties || {}).flat().map(c => (
-                  <div key={c.id} onClick={() => toggle('offerPropIds', c.id)} style={{ cursor: 'pointer', transition: 'opacity 0.2s', opacity: tradeSelection.offerPropIds.includes(c.id) ? 1 : 0.35 }}>
+                  <div key={c.id}
+                    onTouchStart={handleTouchStart}
+                    onClick={(e) => {
+                      if (isClickTouchScroll(e)) return;
+                      toggle('offerPropIds', c.id);
+                    }}
+                    style={{ cursor: 'pointer', transition: 'opacity 0.2s', opacity: tradeSelection.offerPropIds.includes(c.id) ? 1 : 0.35 }}
+                  >
                     <CardVisual card={c} small />
                   </div>
                 ))}
@@ -4055,12 +4987,26 @@ export default function App() {
               <div style={{ color: '#34d399', fontWeight: 800, marginBottom: 12, fontSize: 13, letterSpacing: 0.5 }}>📥 NE ALACAKSIN? ({target?.name.toUpperCase()})</div>
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, maxHeight: '200px', overflowY: 'auto' }}>
                 {target.bank.map(c => (
-                  <div key={c.id} onClick={() => toggle('requestBankIds', c.id)} style={{ cursor: 'pointer', transition: 'opacity 0.2s', opacity: tradeSelection.requestBankIds.includes(c.id) ? 1 : 0.35 }}>
+                  <div key={c.id}
+                    onTouchStart={handleTouchStart}
+                    onClick={(e) => {
+                      if (isClickTouchScroll(e)) return;
+                      toggle('requestBankIds', c.id);
+                    }}
+                    style={{ cursor: 'pointer', transition: 'opacity 0.2s', opacity: tradeSelection.requestBankIds.includes(c.id) ? 1 : 0.35 }}
+                  >
                     <CardVisual card={c} small />
                   </div>
                 ))}
                 {Object.values(target.properties).flat().map(c => (
-                  <div key={c.id} onClick={() => toggle('requestPropIds', c.id)} style={{ cursor: 'pointer', transition: 'opacity 0.2s', opacity: tradeSelection.requestPropIds.includes(c.id) ? 1 : 0.35 }}>
+                  <div key={c.id}
+                    onTouchStart={handleTouchStart}
+                    onClick={(e) => {
+                      if (isClickTouchScroll(e)) return;
+                      toggle('requestPropIds', c.id);
+                    }}
+                    style={{ cursor: 'pointer', transition: 'opacity 0.2s', opacity: tradeSelection.requestPropIds.includes(c.id) ? 1 : 0.35 }}
+                  >
                     <CardVisual card={c} small />
                   </div>
                 ))}
@@ -4096,58 +5042,96 @@ export default function App() {
   // ---- LOBBY ----
   if (screen === 'lobby') {
     return (
-      <div className="lobby-imperial-bg" style={{ minHeight: '100vh', color: '#fff', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: 20, position: 'relative', overflow: 'hidden' }}>
+      <div className="lobby-imperial-bg" style={{ minHeight: '100vh', color: '#fff', display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '16px', position: 'relative', overflowX: 'hidden' }}>
         {/* Floating Ambient Lights */}
         <div className="ambient-aura ambient-aura-1" />
         <div className="ambient-aura ambient-aura-2" />
 
-        <div style={{ display: 'flex', alignItems: 'center', gap: 16, marginBottom: 28, zIndex: 1 }}>
-          <div style={{ fontSize: 54, filter: 'drop-shadow(0 4px 12px rgba(255, 215, 0, 0.3))', transform: 'rotate(-5deg)' }}>🏰</div>
-          <div>
-            <h1 style={{
-              color: '#FFD700',
-              fontSize: 36,
-              margin: 0,
-              fontWeight: 900,
-              letterSpacing: '1px',
-              textShadow: '0 4px 20px rgba(255, 215, 0, 0.4), 0 0 40px rgba(255, 215, 0, 0.2)'
-            }}>
-              Monopoly Deal
-            </h1>
-            <p style={{ color: '#94a3b8', fontSize: 14, margin: 0, fontWeight: 600, letterSpacing: '2px', textTransform: 'uppercase' }}>Çevrimiçi Kart Oyunu</p>
+        {/* PREMIUM NAVIGATION / HEADER BAR */}
+        <header style={{
+          width: '100%',
+          maxWidth: 640,
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          gap: 12,
+          padding: '12px 16px',
+          background: 'rgba(22, 30, 49, 0.45)',
+          backdropFilter: 'blur(20px)',
+          border: '1px solid rgba(255,255,255,0.06)',
+          borderRadius: 16,
+          boxShadow: '0 8px 32px rgba(0,0,0,0.3)',
+          marginBottom: 20,
+          zIndex: 10,
+          boxSizing: 'border-box'
+        }}>
+          {/* Logo */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <span style={{ fontSize: 24, filter: 'drop-shadow(0 2px 6px rgba(255, 215, 0, 0.3))' }}>🏰</span>
+            <span style={{ color: '#FFD700', fontSize: 16, fontWeight: 950, letterSpacing: '0.5px' }}>Castle Deal</span>
           </div>
-        </div>
 
-        <div className="glass-card" style={{ width: '100%', maxWidth: 520, boxShadow: '0 25px 60px rgba(0, 0, 0, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.08)' }}>
-
-          {/* ÜYE GİRİŞİ VE LİDERLİK TABLOSU BUTONLARI */}
-          <div style={{ display: 'flex', gap: 10, justifyContent: 'center', marginBottom: 24, borderBottom: '1px solid rgba(255,255,255,0.06)', paddingBottom: 16 }}>
+          {/* User Profile Info or Auth Buttons */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <button
+              onClick={() => {
+                const nextLang = lang === 'tr' ? 'en' : 'tr';
+                setLang(nextLang);
+                localStorage.setItem('md_lang', nextLang);
+                sfxClick();
+              }}
+              style={{
+                background: 'rgba(255, 255, 255, 0.08)',
+                border: '1px solid rgba(255, 255, 255, 0.15)',
+                color: '#fff',
+                padding: '4px 8px',
+                borderRadius: 20,
+                fontSize: 10,
+                fontWeight: 'bold',
+                cursor: 'pointer',
+              }}
+            >
+              {lang === 'tr' ? '🇹🇷 TR' : '🇬🇧 EN'}
+            </button>
             {dbUser ? (
-              <div style={{ display: 'flex', alignItems: 'center', gap: 10, background: 'rgba(255,255,255,0.04)', border: '1px solid rgba(255,255,255,0.08)', padding: '6px 12px', borderRadius: 20 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)', padding: '4px 10px', borderRadius: 20 }}>
                 <img
                   src={`https://api.dicebear.com/7.x/${dbUser.avatar || 'avataaars'}/svg?seed=${dbUser.username}`}
                   alt="avatar"
-                  style={{ width: 22, height: 22, borderRadius: '50%', background: 'rgba(0,0,0,0.2)' }}
+                  style={{ width: 18, height: 18, borderRadius: '50%', background: 'rgba(0,0,0,0.2)' }}
                 />
-                <span style={{ fontSize: 11, fontWeight: 900, color: '#FFD700' }}>{dbUser.displayName || dbUser.username}</span>
-                <span style={{ fontSize: 10, color: '#a0aec0' }}>🏆 {dbUser.wins || 0} Zafer | 🪙 {dbUser.points || 100} Puan</span>
-                <button onClick={handleDbLogout} style={{ background: 'rgba(231, 76, 60, 0.15)', border: '1px solid rgba(231, 76, 60, 0.3)', color: '#E74C3C', padding: '2px 8px', borderRadius: 4, cursor: 'pointer', fontSize: 9, fontWeight: 'bold' }}>Çıkış</button>
+                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start' }}>
+                  <span style={{ fontSize: 10, fontWeight: 900, color: '#FFD700', lineHeight: 1.1 }}>{dbUser.displayName || dbUser.display_name || dbUser.username}</span>
+                  <span style={{ fontSize: 8, color: '#a0aec0', marginTop: 1 }}>🏆 {dbUser.wins || 0} Zafer | 🪙 {dbUser.points || 100} Puan</span>
+                </div>
+                <button onClick={handleDbLogout} style={{ background: 'rgba(231, 76, 60, 0.15)', border: '1px solid rgba(231, 76, 60, 0.3)', color: '#E74C3C', padding: '1px 6px', borderRadius: 4, cursor: 'pointer', fontSize: 8, fontWeight: 'bold', marginLeft: 4 }}>Çıkış</button>
               </div>
             ) : (
-              <button onClick={() => { setAuthMode('login'); setModal({ type: 'auth' }); sfxClick(); }} style={{ ...btnStyle('linear-gradient(135deg, #9b59b6, #8e44ad)'), margin: 0, padding: '8px 16px', borderRadius: 20, fontSize: 11, fontWeight: 900, boxShadow: '0 4px 10px rgba(155,89,182,0.2)' }}>
-                🔑 Giriş Yap / Kayıt Ol
+              <button onClick={() => { setAuthMode('login'); setModal({ type: 'auth' }); sfxClick(); }} style={{ ...btnStyle('linear-gradient(135deg, #9b59b6, #8e44ad)'), margin: 0, padding: '6px 12px', borderRadius: 20, fontSize: 10, fontWeight: 900, boxShadow: '0 4px 10px rgba(155,89,182,0.2)' }}>
+                🔑 Giriş
               </button>
             )}
 
-            <button onClick={() => { handleOpenLeaderboard(); sfxClick(); }} style={{ ...btnStyle('linear-gradient(135deg, #f1c40f, #f39c12)'), margin: 0, padding: '8px 16px', borderRadius: 20, fontSize: 11, fontWeight: 900, boxShadow: '0 4px 10px rgba(241,196,15,0.2)' }}>
-              🏆 Liderlik Tablosu
+            <button onClick={() => { handleOpenLeaderboard(); sfxClick(); }} style={{ ...btnStyle('linear-gradient(135deg, #f1c40f, #f39c12)'), margin: 0, padding: '6px 12px', borderRadius: 20, fontSize: 10, fontWeight: 900, boxShadow: '0 4px 10px rgba(241,196,15,0.2)' }}>
+              🏆 Sıralama
             </button>
           </div>
+        </header>
 
-          {/* Avatar ve İsim Seçimi */}
-          <div style={{ marginBottom: 28, textAlign: 'center' }}>
-            <div style={{ fontSize: 11, color: '#FFD700', fontWeight: 800, marginBottom: 16, letterSpacing: 1.5 }}>KİMLİĞİNİ OLUŞTUR</div>
-            <div style={{ display: 'flex', gap: 12, justifyContent: 'center', alignItems: 'center', minHeight: 60 }}>
+        {/* MAIN CONTAINER */}
+        <div className="glass-card" style={{ width: '100%', maxWidth: 640, boxShadow: '0 25px 60px rgba(0, 0, 0, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.08)', padding: 18, zIndex: 1, boxSizing: 'border-box' }}>
+          
+          {/* USER IDENTITY FORM */}
+          <div style={{
+            background: 'rgba(255, 255, 255, 0.02)',
+            border: '1px solid rgba(255, 255, 255, 0.05)',
+            borderRadius: 14,
+            padding: '14px 16px',
+            marginBottom: 20,
+            textAlign: 'center'
+          }}>
+            <div style={{ fontSize: 10, color: '#FFD700', fontWeight: 900, marginBottom: 12, letterSpacing: 1.5, textTransform: 'uppercase' }}>👤 KİMLİĞİNİ OLUŞTUR</div>
+            <div style={{ display: 'flex', gap: 10, justifyContent: 'center', alignItems: 'center', flexWrap: 'wrap', minHeight: 52 }}>
               {AVATAR_STYLES.map(style => (
                 <div key={style} className={myAvatarStyle === style ? 'avatar-halo-active' : ''}>
                   <img
@@ -4155,12 +5139,11 @@ export default function App() {
                     alt={style}
                     onClick={() => handleSelectAvatar(style)}
                     style={{
-                      width: 52, height: 52, borderRadius: '50%', cursor: 'pointer',
-                      border: myAvatarStyle === style ? '3px solid #FFD700' : '2px solid transparent',
+                      width: 44, height: 44, borderRadius: '50%', cursor: 'pointer',
+                      border: myAvatarStyle === style ? '2.5px solid #FFD700' : '2px solid transparent',
                       background: 'rgba(255,255,255,0.06)',
-                      transition: 'all 0.25s cubic-bezier(0.175, 0.885, 0.32, 1.275)',
-                      transform: myAvatarStyle === style ? 'scale(1.15) translateY(-2px)' : 'scale(1)',
-                      boxShadow: myAvatarStyle === style ? '0 8px 20px rgba(255,215,0,0.3)' : 'none'
+                      transition: 'all 0.2s ease',
+                      transform: myAvatarStyle === style ? 'scale(1.1) translateY(-1px)' : 'scale(1)'
                     }}
                   />
                 </div>
@@ -4171,82 +5154,151 @@ export default function App() {
               disabled={!!dbUser}
               onChange={e => setMyName(e.target.value)}
               placeholder="Oyuncu Adınızı Yazın..."
-              style={{ ...inputStyle, textAlign: 'center', fontSize: 15, fontWeight: 'bold', padding: '12px', background: !!dbUser ? 'rgba(255,255,255,0.02)' : 'rgba(0,0,0,0.3)', border: '1px solid rgba(255,215,0,0.25)', marginTop: 20, borderRadius: 8, cursor: !!dbUser ? 'not-allowed' : 'text', opacity: !!dbUser ? 0.75 : 1 }}
+              style={{ ...inputStyle, textAlign: 'center', fontSize: 14, fontWeight: 'bold', padding: '10px 14px', background: !!dbUser ? 'rgba(255,255,255,0.02)' : 'rgba(0,0,0,0.3)', border: '1px solid rgba(255,215,0,0.25)', marginTop: 14, marginBottom: 0, borderRadius: 8, cursor: !!dbUser ? 'not-allowed' : 'text', opacity: !!dbUser ? 0.8 : 1 }}
             />
           </div>
 
+          {/* HOME PANEL VS WAITING ROOM */}
           {!roomCode ? (
             <>
-              <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap: 16 }}>
-                {/* ODA KUR */}
-                <div style={{ background: 'rgba(230, 126, 34, 0.03)', border: '1px solid rgba(230, 126, 34, 0.15)', borderRadius: 12, padding: 18, display: 'flex', flexDirection: 'column' }}>
-                  <h3 style={{ color: '#E67E22', fontSize: 13, fontWeight: 900, marginBottom: 14, textAlign: 'center', letterSpacing: 0.5 }}>✨ YENİ OYUN KUR</h3>
+              {/* TABS HEADER FOR MOBILE RESPONSIVENESS */}
+              <div className="lobby-tabs" style={{ display: 'flex', background: 'rgba(0, 0, 0, 0.2)', borderRadius: 12, padding: 4, marginBottom: 16 }}>
+                <button
+                  onClick={() => { setLobbyTab('create'); sfxClick(); }}
+                  className={`lobby-tab-btn ${lobbyTab === 'create' ? 'active' : ''}`}
+                  style={{
+                    flex: 1,
+                    padding: '8px 4px',
+                    background: lobbyTab === 'create' ? 'linear-gradient(135deg, #E67E22, #D35400)' : 'transparent',
+                    border: 'none',
+                    color: '#fff',
+                    borderRadius: 8,
+                    fontSize: 12,
+                    fontWeight: 900,
+                    cursor: 'pointer',
+                    transition: 'all 0.2s',
+                    boxShadow: lobbyTab === 'create' ? '0 4px 12px rgba(230, 126, 34, 0.3)' : 'none'
+                  }}
+                >
+                  {lang === 'en' ? '🎮 Create Room' : '🎮 Oda Kur'}
+                </button>
+                <button
+                  onClick={() => { setLobbyTab('join'); sfxClick(); }}
+                  className={`lobby-tab-btn ${lobbyTab === 'join' ? 'active' : ''}`}
+                  style={{
+                    flex: 1,
+                    padding: '8px 4px',
+                    background: lobbyTab === 'join' ? 'linear-gradient(135deg, #2ECC71, #27AE60)' : 'transparent',
+                    border: 'none',
+                    color: '#fff',
+                    borderRadius: 8,
+                    fontSize: 12,
+                    fontWeight: 900,
+                    cursor: 'pointer',
+                    transition: 'all 0.2s',
+                    boxShadow: lobbyTab === 'join' ? '0 4px 12px rgba(46, 204, 113, 0.3)' : 'none'
+                  }}
+                >
+                  {lang === 'en' ? '🔑 Join Room' : '🔑 Odaya Katıl'}
+                </button>
+                <button
+                  onClick={() => { setLobbyTab('public'); sfxClick(); }}
+                  className={`lobby-tab-btn ${lobbyTab === 'public' ? 'active' : ''}`}
+                  style={{
+                    flex: 1,
+                    padding: '8px 4px',
+                    background: lobbyTab === 'public' ? 'linear-gradient(135deg, #3498DB, #2980B9)' : 'transparent',
+                    border: 'none',
+                    color: '#fff',
+                    borderRadius: 8,
+                    fontSize: 12,
+                    fontWeight: 900,
+                    cursor: 'pointer',
+                    transition: 'all 0.2s',
+                    boxShadow: lobbyTab === 'public' ? '0 4px 12px rgba(52, 152, 219, 0.3)' : 'none'
+                  }}
+                >
+                  {lang === 'en' ? '🌍 Public Rooms' : '🌍 Açık Odalar'} {publicRooms.length > 0 && <span style={{ background: '#E74C3C', color: '#fff', fontSize: 9, padding: '1px 5px', borderRadius: 10, marginLeft: 4 }}>{publicRooms.length}</span>}
+                </button>
+              </div>
 
+              {/* TAB CONTENT */}
+              {lobbyTab === 'create' && (
+                <div className="lobby-card-orange" style={{ animation: 'fade-in-slide 0.25s ease-out' }}>
+                  <h3 style={{ color: '#E67E22', fontSize: 13, fontWeight: 900, marginBottom: 12, textAlign: 'center', letterSpacing: 0.5 }}>{lang === 'en' ? '✨ CREATE NEW ROOM' : '✨ YENİ OYUN KUR'}</h3>
+                  
                   <label className="switch-container" style={{ marginBottom: 12, padding: '8px 12px' }}>
-                    <span className="switch-label" style={{ fontSize: 12 }}>🌍 Herkese Açık</span>
+                    <span className="switch-label" style={{ fontSize: 12 }}>{lang === 'en' ? '🌍 Public Room' : '🌍 Herkese Açık'}</span>
                     <input type="checkbox" className="switch-checkbox" checked={roomSettings.isPublic} onChange={e => setRoomSettings(prev => ({ ...prev, isPublic: e.target.checked }))} />
                     <div className="switch-toggle" />
                   </label>
 
                   {renderRoomSettings()}
-                  <div style={{ flex: 1, minHeight: 12 }}></div>
+                  <div style={{ minHeight: 12 }}></div>
                   <button onClick={handleCreate} className="lobby-action-btn" style={{ ...btnStyle('linear-gradient(135deg, #E67E22, #D35400)'), width: '100%', padding: '12px', fontSize: 13, borderRadius: 8, margin: 0 }}>
-                    🚀 Oda Oluştur
+                    {lang === 'en' ? '🚀 Create Room' : '🚀 Oda Oluştur'}
                   </button>
                 </div>
+              )}
 
-                {/* ODAYA KATIL */}
-                <div style={{ background: 'rgba(46, 204, 113, 0.03)', border: '1px solid rgba(46, 204, 113, 0.15)', borderRadius: 12, padding: 18, display: 'flex', flexDirection: 'column' }}>
-                  <h3 style={{ color: '#2ECC71', fontSize: 13, fontWeight: 900, marginBottom: 14, textAlign: 'center', letterSpacing: 0.5 }}>🔑 ÖZEL ODAYA KATIL</h3>
-                  <input value={joinCode} onChange={e => setJoinCode(e.target.value.toUpperCase())} placeholder="Oda Kodu" style={{ ...inputStyle, letterSpacing: 3, textAlign: 'center', fontWeight: 'bold', background: 'rgba(0,0,0,0.3)', border: '1px solid rgba(46,204,113,0.25)', marginBottom: 12, borderRadius: 8 }} />
-                  <div style={{ flex: 1, minHeight: 12 }}></div>
+              {lobbyTab === 'join' && (
+                <div className="lobby-card-green" style={{ animation: 'fade-in-slide 0.25s ease-out' }}>
+                  <h3 style={{ color: '#2ECC71', fontSize: 13, fontWeight: 900, marginBottom: 12, textAlign: 'center', letterSpacing: 0.5 }}>{lang === 'en' ? '🔑 JOIN PRIVATE ROOM' : '🔑 ÖZEL ODAYA KATIL'}</h3>
+                  <input value={joinCode} onChange={e => setJoinCode(e.target.value.toUpperCase())} placeholder={lang === 'en' ? 'Room Code' : 'Oda Kodu'} style={{ ...inputStyle, letterSpacing: 3, textAlign: 'center', fontWeight: 'bold', background: 'rgba(0,0,0,0.3)', border: '1px solid rgba(46,204,113,0.25)', marginBottom: 12, borderRadius: 8 }} />
+                  <div style={{ minHeight: 12 }}></div>
                   <button onClick={handleJoin} className="lobby-action-btn" style={{ ...btnStyle('linear-gradient(135deg, #2ECC71, #27AE60)'), width: '100%', padding: '12px', fontSize: 13, borderRadius: 8, margin: 0 }}>
-                    🚪 Odaya Giriş Yap
+                    {lang === 'en' ? '🚪 Enter Room' : '🚪 Odaya Giriş Yap'}
                   </button>
                 </div>
-              </div>
+              )}
 
-              {/* AÇIK ODALAR LİSTESİ */}
-              <div style={{ background: 'rgba(52, 152, 219, 0.03)', border: '1px solid rgba(52, 152, 219, 0.15)', padding: 16, borderRadius: 12, marginTop: 16 }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-                  <div style={{ fontSize: 11, color: '#94a3b8', fontWeight: 800, letterSpacing: 1 }}>🌍 HAREKETLİ AÇIK ODALAR</div>
-                  <button onClick={() => socket?.emit('requestPublicRooms')} style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)', color: '#fff', padding: '4px 10px', borderRadius: 6, cursor: 'pointer', fontSize: 10, fontWeight: 800 }}>
-                    🔄 Yenile
-                  </button>
-                </div>
-                {publicRooms.length === 0 ? (
-                  <div style={{ fontSize: 12, color: '#64748b', textAlign: 'center', padding: '10px 0', fontStyle: 'italic' }}>Şu an katılabileceğiniz açık oda bulunmuyor.</div>
-                ) : (
-                  <div style={{ maxHeight: 150, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 8 }}>
-                    {publicRooms.map(r => (
-                      <div key={r.code} className="public-room-item" style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.05)', borderRadius: 8, padding: '8px 12px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                        <div>
-                          <div style={{ color: '#fff', fontSize: 13, fontWeight: 'bold' }}>{r.hostName}'in Odası</div>
-                          <div style={{ color: '#94a3b8', fontSize: 11, marginTop: 2 }}>Hedef: {r.winSets} Set | Oyuncu: {r.playerCount}/5</div>
-                        </div>
-                        <button onClick={() => { setJoinCode(r.code); handleJoin(); }} style={{ ...btnStyle('#3498DB'), padding: '6px 14px', fontSize: 11, margin: 0 }}>GİRİŞ</button>
-                      </div>
-                    ))}
+              {lobbyTab === 'public' && (
+                <div className="lobby-card-blue" style={{ animation: 'fade-in-slide 0.25s ease-out' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+                    <div style={{ fontSize: 11, color: '#94a3b8', fontWeight: 800, letterSpacing: 1 }}>{lang === 'en' ? '🌍 ACTIVE PUBLIC ROOMS' : '🌍 HAREKETLİ AÇIK ODALAR'}</div>
+                    <button onClick={() => socket?.emit('requestPublicRooms')} style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)', color: '#fff', padding: '4px 10px', borderRadius: 6, cursor: 'pointer', fontSize: 10, fontWeight: 800 }}>
+                      {lang === 'en' ? '🔄 Refresh' : '🔄 Yenile'}
+                    </button>
                   </div>
-                )}
-              </div>
+                  {publicRooms.length === 0 ? (
+                    <div style={{ fontSize: 12, color: '#64748b', textAlign: 'center', padding: '20px 0', fontStyle: 'italic' }}>{lang === 'en' ? 'No active public rooms currently available.' : 'Şu an katılabileceğiniz açık oda bulunmuyor.'}</div>
+                  ) : (
+                    <div style={{ maxHeight: 220, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 8, paddingRight: 4 }}>
+                      {publicRooms.map(r => (
+                        <div key={r.code} className="public-room-item" style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.05)', borderRadius: 8, padding: '8px 12px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                          <div>
+                            <div style={{ color: '#fff', fontSize: 13, fontWeight: 'bold' }}>{r.hostName}'in Odası</div>
+                            <div style={{ color: '#94a3b8', fontSize: 11, marginTop: 2 }}>Hedef: {r.winSets} Set | Oyuncu: {r.playerCount}/5</div>
+                          </div>
+                          <button onClick={() => { setJoinCode(r.code); handleJoin(); }} style={{ ...btnStyle('#3498DB'), padding: '6px 14px', fontSize: 11, margin: 0 }}>GİRİŞ</button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
             </>
           ) : (
             <div style={{ textAlign: 'center' }}>
-              <div style={{ fontSize: 11, color: '#94a3b8', marginBottom: 12, textTransform: 'uppercase', letterSpacing: 1 }}>ODA GİRİŞ BİLETİ (Paylaşmak İçin Tıkla)</div>
+              {/* WAITING ROOM / ACTIVE LOBBY */}
+              <div style={{ fontSize: 11, color: '#94a3b8', marginBottom: 12, textTransform: 'uppercase', letterSpacing: 1 }}>ODA GİRİŞ BİLETİ (Kopyalamak İçin Tıkla)</div>
+              
               <div className="glass-card" style={{
                 background: 'linear-gradient(135deg, rgba(255, 215, 0, 0.05), rgba(0,0,0,0.5))',
                 border: '1.5px solid rgba(255, 215, 0, 0.3)',
                 boxShadow: '0 8px 32px rgba(255, 215, 0, 0.08), inset 0 1px 0 rgba(255,255,255,0.05)',
-                padding: '16px 28px',
+                padding: '14px 24px',
                 borderRadius: '12px',
                 display: 'inline-block',
-                marginBottom: 24,
+                marginBottom: 20,
                 cursor: 'pointer',
-                transition: 'all 0.25s cubic-bezier(0.175, 0.885, 0.32, 1.275)'
+                transition: 'all 0.2s ease',
+                width: '100%',
+                maxWidth: 320,
+                boxSizing: 'border-box'
               }}
                 onMouseEnter={e => {
-                  e.currentTarget.style.transform = 'scale(1.03) translateY(-2px)';
+                  e.currentTarget.style.transform = 'scale(1.02) translateY(-1px)';
                   e.currentTarget.style.borderColor = '#FFD700';
                   e.currentTarget.style.boxShadow = '0 12px 40px rgba(255, 215, 0, 0.2)';
                 }}
@@ -4256,96 +5308,153 @@ export default function App() {
                   e.currentTarget.style.boxShadow = '0 8px 32px rgba(255, 215, 0, 0.08)';
                 }}
                 onClick={() => { navigator.clipboard.writeText(roomCode); showToast('Oda kodu kopyalandı!', 'success'); sfxClick(); }}>
-                <div style={{ fontSize: 10, color: '#FFD700', fontWeight: 800, letterSpacing: 1.5, textTransform: 'uppercase', marginBottom: 6 }}>KOPYALA</div>
-                <div style={{ fontSize: 32, fontWeight: 900, color: '#FFD700', letterSpacing: 5, textShadow: '0 0 12px rgba(255,215,0,0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10 }}>
+                <div style={{ fontSize: 9, color: '#FFD700', fontWeight: 900, letterSpacing: 1.5, textTransform: 'uppercase', marginBottom: 4 }}>KOPYALA</div>
+                <div style={{ fontSize: 28, fontWeight: 900, color: '#FFD700', letterSpacing: 4, textShadow: '0 0 12px rgba(255,215,0,0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10 }}>
                   {roomCode}
-                  <span style={{ fontSize: 18, opacity: 0.8 }}>📋</span>
+                  <span style={{ fontSize: 16, opacity: 0.8 }}>📋</span>
                 </div>
               </div>
 
-              <div style={{ color: '#94a3b8', fontSize: 13, marginBottom: 16, fontWeight: 600 }}>
-                👥 Bağlı Oyuncular: {gameState?.players?.length || 1} / 5
+              <div style={{ color: '#fff', fontSize: 14, marginBottom: 16, fontWeight: 800, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
+                <span>👥 Oyuncular</span>
+                <span style={{ background: 'rgba(255,255,255,0.1)', padding: '2px 8px', borderRadius: 12, fontSize: 11 }}>{gameState?.players?.length || 1} / 5</span>
               </div>
 
-              <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap: 12, marginBottom: 24, textAlign: 'left' }}>
-                {gameState?.players?.map((p, idx) => {
-                  const playerColor = PLAYER_COLORS[idx % PLAYER_COLORS.length];
-                  const isSelf = p.id === playerId;
-                  return (
-                    <div
-                      key={p.id}
-                      style={{
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: 12,
-                        background: 'rgba(255,255,255,0.02)',
-                        padding: '10px 14px',
-                        borderRadius: 12,
-                        border: `1px solid ${playerColor}30`,
-                        boxShadow: `0 4px 15px rgba(0,0,0,0.3)`,
-                        transition: 'all 0.2s ease',
-                      }}
-                      onMouseEnter={e => {
-                        e.currentTarget.style.transform = 'translateY(-2px)';
-                        e.currentTarget.style.border = `1px solid ${playerColor}`;
-                        e.currentTarget.style.boxShadow = `0 6px 20px ${playerColor}25`;
-                      }}
-                      onMouseLeave={e => {
-                        e.currentTarget.style.transform = 'none';
-                        e.currentTarget.style.border = `1px solid ${playerColor}30`;
-                        e.currentTarget.style.boxShadow = `0 4px 15px rgba(0,0,0,0.3)`;
-                      }}
-                    >
-                      <div className={isSelf ? 'avatar-halo-active' : ''}>
-                        <img
-                          src={`https://api.dicebear.com/7.x/${p.avatar || 'avataaars'}/svg?seed=${p.name}`}
-                          alt="avatar"
-                          title={isSelf ? "İsmini değiştirmek için tıkla" : ""}
-                          onClick={() => {
-                            if (isSelf) {
-                              const newName = prompt("Yeni isminizi girin:", p.name);
-                              if (newName && newName.trim()) {
-                                setMyName(newName.trim());
-                                localStorage.setItem('md_name', newName.trim());
-                                socket?.emit('updatePlayerName', { roomCode, newName: newName.trim() });
+              {/* LOBBY PLAYER SLOTS (GRID SYSTEM FOR MOBILE RESPONSIVENESS) */}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 20 }}>
+                {Array.from({ length: 5 }).map((_, idx) => {
+                  const p = gameState?.players?.[idx];
+                  
+                  if (p) {
+                    const isSelf = p.id === playerId;
+                    const isReady = p.isReady || idx === 0; // Host is always ready
+                    
+                    return (
+                      <div
+                        key={p.id}
+                        className={`waiting-player-card ${isReady ? 'ready-halo-active' : ''}`}
+                        style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: 12,
+                          background: 'rgba(22, 30, 49, 0.4)',
+                          border: `1.5px solid ${isReady ? '#2ecc71' : 'rgba(255,255,255,0.08)'}`,
+                          borderRadius: 16,
+                          padding: '10px 14px',
+                          boxShadow: isReady ? '0 8px 24px rgba(46,204,113,0.15)' : '0 8px 24px rgba(0,0,0,0.3)',
+                          transition: 'all 0.25s ease',
+                          position: 'relative'
+                        }}
+                      >
+                        <div style={{ position: 'relative' }}>
+                          {((isSelf ? (dbUser?.wins || 0) : (p.isBot ? 2 : 0)) > 0) && (
+                            <span className="avatar-gear-crown" style={{ position: 'absolute', top: -10, left: '50%', transform: 'translateX(-50%)', fontSize: 14, filter: 'drop-shadow(0 2px 4px rgba(255,215,0,0.5))', zIndex: 2 }}>👑</span>
+                          )}
+                          <img
+                            src={`https://api.dicebear.com/7.x/${p.avatar || 'avataaars'}/svg?seed=${p.name}`}
+                            alt="avatar"
+                            title={isSelf ? "İsmini değiştirmek için tıkla" : "Profili gör"}
+                            onClick={() => {
+                              if (isSelf) {
+                                const newName = prompt("Yeni isminizi girin:", p.name);
+                                if (newName && newName.trim()) {
+                                  setMyName(newName.trim());
+                                  localStorage.setItem('md_name', newName.trim());
+                                  socket?.emit('updatePlayerName', { roomCode, newName: newName.trim() });
+                                }
+                              } else {
+                                setProfilePlayer(p);
+                                socket?.emit('sendEmote', { targetId: p.id, emoji: '👋' });
                               }
-                            }
-                          }}
-                          style={{
-                            width: 44,
-                            height: 44,
-                            borderRadius: '50%',
-                            background: 'rgba(0,0,0,0.2)',
-                            cursor: isSelf ? 'pointer' : 'default',
-                            border: `2px solid ${isSelf ? '#FFD700' : 'rgba(255,255,255,0.2)'}`,
-                            boxShadow: isSelf ? '0 0 10px rgba(255,215,0,0.3)' : 'none'
-                          }}
-                        />
-                      </div>
-                      <div style={{ display: 'flex', flexDirection: 'column', flex: 1 }}>
-                        <span style={{ color: '#fff', fontSize: 14, fontWeight: 'bold' }}>{p.name}</span>
-                        <div style={{ display: 'flex', gap: 6, marginTop: 4 }}>
-                          {isSelf && <span style={{ fontSize: 9, background: '#FFD700', color: '#000', padding: '2px 6px', borderRadius: 10, fontWeight: 'bold', letterSpacing: 0.5 }}>SEN</span>}
-                          {idx === 0 && <span style={{ fontSize: 9, background: '#8E44AD', color: '#fff', padding: '2px 6px', borderRadius: 10, fontWeight: 'bold', letterSpacing: 0.5 }}>HOST</span>}
+                            }}
+                            style={{
+                              width: 44,
+                              height: 44,
+                              borderRadius: '50%',
+                              background: 'rgba(0,0,0,0.2)',
+                              cursor: 'pointer',
+                              border: `2px solid ${isSelf ? '#FFD700' : 'rgba(255,255,255,0.15)'}`,
+                              boxShadow: isSelf ? '0 0 10px rgba(255,215,0,0.3)' : 'none',
+                              transition: 'transform 0.2s'
+                            }}
+                          />
+                        </div>
+                        
+                        <div style={{ display: 'flex', flexDirection: 'column', flex: 1, textAlign: 'left' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                            <span style={{ color: '#fff', fontSize: 13, fontWeight: 'bold' }}>{p.name}</span>
+                            {isSelf && <span style={{ fontSize: 8, background: '#FFD700', color: '#000', padding: '1px 5px', borderRadius: 8, fontWeight: 900 }}>SEN</span>}
+                            {idx === 0 && <span style={{ fontSize: 8, background: '#8E44AD', color: '#fff', padding: '1px 5px', borderRadius: 8, fontWeight: 900 }}>HOST</span>}
+                          </div>
+                          <span style={{ fontSize: 9, color: '#a0aec0', marginTop: 1 }}>
+                            {p.isBot ? '🤖 Yapay Zeka Oyuncu' : '👤 Çevrimiçi Oyuncu'}
+                          </span>
+                        </div>
+                        
+                        {/* Status badge */}
+                        <div style={{
+                          padding: '4px 10px',
+                          borderRadius: 20,
+                          fontSize: 9,
+                          fontWeight: 900,
+                          background: isReady ? 'rgba(46, 204, 113, 0.12)' : 'rgba(230, 126, 34, 0.12)',
+                          color: isReady ? '#2ECC71' : '#E67E22',
+                          border: `1px solid ${isReady ? 'rgba(46, 204, 113, 0.25)' : 'rgba(230, 126, 34, 0.25)'}`
+                        }}>
+                          {isReady ? '✓ HAZIR' : '⏳ BEKLİYOR'}
                         </div>
                       </div>
-                    </div>
-                  );
+                    );
+                  } else {
+                    return (
+                      <div
+                        key={`empty-${idx}`}
+                        style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: 12,
+                          background: 'rgba(255,255,255,0.01)',
+                          border: '1.5px dashed rgba(255,255,255,0.08)',
+                          borderRadius: 16,
+                          padding: '12px 14px',
+                          color: '#64748b'
+                        }}
+                      >
+                        <div style={{ width: 38, height: 38, borderRadius: '50%', border: '1.5px dashed rgba(255,255,255,0.08)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 16, color: 'rgba(255,255,255,0.1)' }}>
+                          ?
+                        </div>
+                        <div style={{ flex: 1, textAlign: 'left', display: 'flex', flexDirection: 'column' }}>
+                          <span style={{ fontSize: 12, fontWeight: 700, color: 'rgba(255,255,255,0.15)' }}>Boş Yuva</span>
+                          <span style={{ fontSize: 9, color: 'rgba(255,255,255,0.08)', marginTop: 1 }}>Oyuncu bekleniyor...</span>
+                        </div>
+                        <div className="lobby-pulse-dot" style={{ width: 6, height: 6, borderRadius: '50%', background: 'rgba(255,255,255,0.08)' }} />
+                      </div>
+                    );
+                  }
                 })}
               </div>
 
-              {gameState?.players?.[0]?.id === playerId && (
+              {/* ACTION PANEL (DEPENDING ON HOST OR GUEST ROLE) */}
+              {gameState?.players?.[0]?.id === playerId ? (
                 <>
-                  <div style={{ marginTop: 24, marginBottom: 16 }}>
-                    <div style={{ color: '#94a3b8', fontSize: 12, marginBottom: 8, fontWeight: 700, letterSpacing: 0.5 }}>KART TEMA AYARI:</div>
+                  {/* Host Panel */}
+                  <div style={{
+                    background: 'rgba(255,255,255,0.02)',
+                    border: '1px solid rgba(255,255,255,0.05)',
+                    padding: 14,
+                    borderRadius: 14,
+                    marginBottom: 16
+                  }}>
+                    <div style={{ color: '#94a3b8', fontSize: 11, marginBottom: 8, fontWeight: 900, letterSpacing: 0.5, textTransform: 'uppercase' }}>🎨 KART TEMA AYARI</div>
                     <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', justifyContent: 'center' }}>
                       {THEMES.map(t => (
-                        <button key={t.id} onClick={() => setSelectedTheme(t.id)} style={{
-                          padding: '8px 14px', borderRadius: 8, cursor: 'pointer', fontSize: 12, fontWeight: 800,
-                          border: selectedTheme === t.id ? '2px solid #FFD700' : '1px solid rgba(255,255,255,0.15)',
-                          background: selectedTheme === t.id ? 'rgba(255,215,0,0.12)' : 'rgba(255,255,255,0.04)',
+                        <button key={t.id} onClick={() => { setSelectedTheme(t.id); sfxClick(); }} style={{
+                          padding: '6px 12px', borderRadius: 8, cursor: 'pointer', fontSize: 11, fontWeight: 800,
+                          border: selectedTheme === t.id ? '1.5px solid #FFD700' : '1px solid rgba(255,255,255,0.12)',
+                          background: selectedTheme === t.id ? 'rgba(255,215,0,0.1)' : 'rgba(255,255,255,0.04)',
                           color: '#fff',
-                          margin: 0
+                          margin: 0,
+                          transition: 'all 0.15s ease'
                         }}>
                           {t.name}
                         </button>
@@ -4353,53 +5462,74 @@ export default function App() {
                     </div>
                   </div>
 
-                  {/* ODA AYARLARI PANELİ (Host İçin) */}
+                  {/* Advanced Settings */}
                   {renderRoomSettings()}
                   <div style={{ height: 16 }} />
 
-                  {gameState?.players?.length < 5 && (
-                    <button onClick={() => {
-                      socket?.emit('addBot', { roomCode }, res => {
-                        if (res?.ok) showToast('Bot odaya eklendi', 'success');
-                        else if (res?.error) showToast(res.error, 'error');
-                      });
-                    }} style={{ ...btnStyle('linear-gradient(135deg, #8E44AD, #9B59B6)'), width: '100%', padding: '12px', fontSize: 14, borderRadius: 8, margin: '0 0 8px 0' }}>
-                      🤖 Bot Ekle
-                    </button>
-                  )}
+                  {/* Action Buttons */}
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                    {gameState?.players?.length < 5 && (
+                      <button onClick={() => {
+                        socket?.emit('addBot', { roomCode }, res => {
+                          if (res?.ok) showToast('Bot odaya eklendi', 'success');
+                          else if (res?.error) showToast(res.error, 'error');
+                        });
+                      }} style={{ ...btnStyle('linear-gradient(135deg, #8E44AD, #9B59B6)'), width: '100%', padding: '12px', fontSize: 13, borderRadius: 8, margin: 0 }}>
+                        🤖 Bot Ekle (Yapay Zeka)
+                      </button>
+                    )}
 
-                  <button onClick={handleStart} style={{ ...btnStyle('linear-gradient(135deg, #10b981, #059669)'), width: '100%', padding: '12px', fontSize: 14, borderRadius: 8, margin: 0 }}>
-                    🏁 Oyunu Başlat ({gameState?.players?.length || 1} oyuncu)
-                  </button>
-                  <button onClick={handleCloseRoom} style={{
-                    ...btnStyle('rgba(255,255,255,0.08)'),
-                    width: '100%', padding: '12px', fontSize: 13, marginTop: 8, borderRadius: 8, border: '1px solid rgba(255,255,255,0.1)', margin: '8px 0 0 0'
-                  }}>
-                    ❌ Odayı Kapat
-                  </button>
-                </>
-              )}
-              {gameState?.players?.find(p => p.id === playerId)?.id !== gameState?.players?.[0]?.id && (
-                <>
-                  <p style={{ color: '#94a3b8', fontSize: 13, marginTop: 12, fontStyle: 'italic' }}>Host oyunu başlatacak, bekleyin...</p>
-                  {/* Konuk oyuncular ayarları sadece "Okunur/Devre Dışı" görebilir */}
-                  {renderRoomSettings(true)}
-                  <button
-                    onClick={() => {
-                      if (!window.confirm('Odadan ayrılmak istediğinden emin misin?')) return;
-                      socket?.emit('leaveRoom', { roomCode }, () => { });
-                      handleExit();
-                    }}
-                    style={{
+                    <button onClick={handleStart} style={{ ...btnStyle('linear-gradient(135deg, #10b981, #059669)'), width: '100%', padding: '12px', fontSize: 13, borderRadius: 8, margin: 0 }}>
+                      🏁 Oyunu Başlat ({gameState?.players?.length || 1} Oyuncu)
+                    </button>
+                    
+                    <button onClick={handleCloseRoom} style={{
                       ...btnStyle('rgba(231,76,60,0.15)'),
-                      width: '100%', padding: '12px', fontSize: 13,
-                      marginTop: 12, borderRadius: 8,
-                      border: '1px solid rgba(231,76,60,0.35)',
-                      color: '#E74C3C', margin: '12px 0 0 0'
-                    }}
-                  >
-                    🚪 Odadan Çık
-                  </button>
+                      width: '100%', padding: '10px', fontSize: 12, borderRadius: 8, border: '1px solid rgba(231,76,60,0.3)', color: '#E74C3C', margin: 0
+                    }}>
+                      ❌ Odayı Kapat
+                    </button>
+                  </div>
+                </>
+              ) : (
+                <>
+                  {/* Guest Panel */}
+                  <p style={{ color: '#94a3b8', fontSize: 12, marginTop: 8, marginBottom: 12, fontStyle: 'italic' }}>Host oyunu başlatacak, lütfen bekleyin...</p>
+                  
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                    {/* Ready Toggle */}
+                    <button
+                      onClick={() => {
+                        socket?.emit('toggleReady', { roomCode });
+                        sfxClick();
+                      }}
+                      style={{
+                        ...btnStyle(gameState?.players?.find(p => p.id === playerId)?.isReady ? 'linear-gradient(135deg, #e74c3c, #c0392b)' : 'linear-gradient(135deg, #2ecc71, #27ae60)'),
+                        width: '100%', padding: '12px', fontSize: 13, borderRadius: 8, fontWeight: 900, margin: 0
+                      }}
+                    >
+                      {gameState?.players?.find(p => p.id === playerId)?.isReady ? '❌ HAZIR DEĞİLİM' : '✅ HAZIR OL!'}
+                    </button>
+
+                    {/* View Only Settings */}
+                    {renderRoomSettings(true)}
+                    
+                    <button
+                      onClick={() => {
+                        if (!window.confirm('Odadan ayrılmak istediğinden emin misin?')) return;
+                        socket?.emit('leaveRoom', { roomCode }, () => { });
+                        handleExit();
+                      }}
+                      style={{
+                        ...btnStyle('rgba(255,255,255,0.06)'),
+                        width: '100%', padding: '10px', fontSize: 12,
+                        borderRadius: 8, border: '1px solid rgba(255,255,255,0.15)',
+                        color: '#eee', margin: 0
+                      }}
+                    >
+                      🚪 Odadan Ayrıl
+                    </button>
+                  </div>
                 </>
               )}
             </div>
@@ -4412,7 +5542,6 @@ export default function App() {
       </div>
     );
   }
-
   // ---- GAME ----
   if (!gameState || !me) return (
     <div style={{ minHeight: '100vh', background: '#0f0f23', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '24px', fontWeight: 'bold' }}>
@@ -4425,7 +5554,9 @@ export default function App() {
 
   const remainingTime = gameState?.turnPausedRemaining != null
     ? Math.floor(gameState.turnPausedRemaining)
-    : (gameState?.turnTimer > 0 && gameState?.turnStartTime ? Math.max(0, gameState.turnTimer - Math.floor((now - gameState.turnStartTime) / 1000)) : null);
+    : (gameState?.turnTimer > 0 && gameState?.turnStartTime && gameState?.serverTime
+       ? Math.max(0, gameState.turnTimer - Math.floor(((gameState.serverTime + (Date.now() - stateReceivedTimeRef.current)) - gameState.turnStartTime) / 1000))
+       : null);
   const showDanger = isMyTurn && !isBlocked && remainingTime !== null && remainingTime <= 10 && remainingTime > 0;
 
   // Kazananın Rengi
@@ -4440,22 +5571,21 @@ export default function App() {
       return 'radial-gradient(circle at center, #781c1c 0%, #0c081e 80%)';
     }
     if (isBlocked) {
-      // Ödeme/itiraz beklenirken gergin mor
-      return 'radial-gradient(circle at center, #5b1a78 0%, #0c081e 80%)';
+      // Ödeme/itiraz beklenirken yumuşak kömür/slate geçişi
+      return 'radial-gradient(circle at center, #1e1520 0%, #08070d 80%)';
     }
     if (isMyTurn) {
-      // Sıra bendeyken odaklanma mavisi (temaya göre)
-      if (activeTheme === 'cyberpunk') return 'radial-gradient(circle at center, #3d0066 0%, #050010 80%)';
-      if (activeTheme === 'retro') return 'radial-gradient(circle at center, #003300 0%, #000000 80%)';
-      if (activeTheme === 'wood') return 'radial-gradient(circle at center, #8a4f2a 0%, #2e1c0d 80%)';
-      return 'radial-gradient(circle at center, #1a4da3 0%, #060e22 80%)';
+      // Sıra bendeyken şık çelik mavisi odak geçişi
+      if (activeTheme === 'cyberpunk') return 'radial-gradient(circle at center, #1a162b 0%, #06050b 80%)';
+      if (activeTheme === 'retro') return 'radial-gradient(circle at center, #0f1813 0%, #050806 80%)';
+      if (activeTheme === 'wood') return 'radial-gradient(circle at center, #241a15 0%, #0d0907 80%)';
+      return 'radial-gradient(circle at center, #162238 0%, #070a12 80%)';
     }
-    // Temaya göre varsayılan arka planlar
-    if (activeTheme === 'cyberpunk') return 'radial-gradient(circle at center, #1b002c 0%, #050010 80%)';
-    if (activeTheme === 'retro') return 'radial-gradient(circle at center, #001f00 0%, #000000 80%)';
-    if (activeTheme === 'wood') return 'radial-gradient(circle at center, #5c3b1e 0%, #2e1c0d 80%)';
-    // Varsayılan arka plan
-    return 'radial-gradient(circle at center, #1c2b5e 0%, #080d21 80%)';
+    // Varsayılan premium kömür grisi arka planlar
+    if (activeTheme === 'cyberpunk') return 'radial-gradient(circle at center, #13121a 0%, #06050b 80%)';
+    if (activeTheme === 'retro') return 'radial-gradient(circle at center, #0a0d0a 0%, #050806 80%)';
+    if (activeTheme === 'wood') return 'radial-gradient(circle at center, #1c1511 0%, #0d0907 80%)';
+    return 'radial-gradient(circle at center, #121829 0%, #06080e 80%)';
   };
 
   return (
@@ -4471,6 +5601,79 @@ export default function App() {
       `}
       </style>
       <div className={`game-layout game-board-container theme-${activeTheme} ${is3DTable ? 'table-3d' : ''} ${boardShake === 'heavy' ? "board-shake-heavy" : boardShake ? "board-shake-active" : ""}`} style={{ background: getDynamicBackground(), color: '#fff', fontSize: 13, transition: 'background 0.8s ease-in-out' }}>
+        
+        {/* Holographic Grid Overlay */}
+        <div className="holographic-mesh-grid" />
+        <div className="ambient-nebula-left" />
+        <div className="ambient-nebula-right" />
+
+        {/* Sıra Geçiş Ekran Parlaması */}
+        {showTurnFlash && <div className="turn-flash-overlay" />}
+        {showTurnFlash && (
+          <div style={{
+            position: 'fixed',
+            top: '50%',
+            left: '50%',
+            transform: 'translate(-50%, -50%)',
+            zIndex: 99999,
+            pointerEvents: 'none',
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            justifyContent: 'center',
+          }}>
+            <motion.div
+              initial={{ scale: 0.3, opacity: 0 }}
+              animate={{ scale: 1.1, opacity: 1 }}
+              exit={{ scale: 0.5, opacity: 0 }}
+              transition={{ type: 'spring', stiffness: 260, damping: 20 }}
+              style={{
+                background: 'linear-gradient(135deg, rgba(251, 191, 36, 0.95), rgba(217, 119, 6, 0.95))',
+                padding: '16px 40px',
+                borderRadius: 20,
+                boxShadow: '0 15px 45px rgba(251, 191, 36, 0.45), 0 0 25px rgba(251, 191, 36, 0.2)',
+                border: '2px solid #FFF',
+                display: 'flex',
+                alignItems: 'center',
+                gap: 12,
+              }}
+            >
+              <span style={{ fontSize: 28 }}>🎲</span>
+              <span style={{
+                color: '#FFF',
+                fontSize: 22,
+                fontWeight: 900,
+                letterSpacing: 2,
+                textShadow: '0 2px 4px rgba(0,0,0,0.3)',
+                textTransform: 'uppercase'
+              }}>{lang === 'en' ? 'YOUR TURN!' : 'Sıra Sende!'}</span>
+            </motion.div>
+          </div>
+        )}
+
+        {/* Fullscreen Kalkan Efekti */}
+        {showShield && <div className="jsn-shield-overlay" />}
+
+        {/* Fullscreen Hırsız Sincap Pençe Efekti */}
+        {showScratch && (
+          <div className="claw-scratch-container">
+            <div className="claw-scratch-mark" />
+            <div className="claw-scratch-mark claw-scratch-mark-2" />
+          </div>
+        )}
+
+        {/* Fullscreen Yıldırım Şimşek Efekti */}
+        {showSparks && (
+          <div style={{
+            position: 'fixed',
+            inset: 0,
+            pointerEvents: 'none',
+            zIndex: 99999,
+            border: '8px solid #818cf8',
+            boxShadow: 'inset 0 0 80px rgba(129, 138, 248, 0.65)',
+            animation: 'sparks-pulse-anim 0.4s infinite alternate ease-in-out'
+          }} />
+        )}
 
         {/* Üst bar */}
         {!isHeaderOpen ? (
@@ -4503,11 +5706,36 @@ export default function App() {
               <div style={{ display: 'flex', width: '100%', justifyContent: 'space-between', alignItems: 'center' }}>
                 <div style={{ color: '#FFD700', fontWeight: 900, fontSize: 15 }}>🏠 Monopoly Deal</div>
                 <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-                  {isMyTurn && (
-                    <span style={{ background: '#FFD700', color: '#000', fontWeight: 700, padding: '2px 6px', borderRadius: 4, fontSize: 10 }}>
-                      SIRA SENDE
-                    </span>
-                  )}
+                  <span style={{
+                    background: isMyTurn ? '#FFD700' : 'rgba(255,255,255,0.05)',
+                    color: isMyTurn ? '#000' : '#aaa',
+                    fontWeight: 700,
+                    padding: '2px 6px',
+                    borderRadius: 4,
+                    fontSize: 10,
+                    border: isMyTurn ? 'none' : '1px solid rgba(255,255,255,0.1)',
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: 4
+                  }}>
+                    {isMyTurn ? 'SIRA SENDE' : `${gameState.players.find(p => p.id === gameState.currentPlayerId)?.name || 'Rakip'}'de`}
+                    {renderActionPoints(gameState.actionsLeft)}
+                  </span>
+                  <button
+                    onClick={() => {
+                      const nextLang = lang === 'tr' ? 'en' : 'tr';
+                      setLang(nextLang);
+                      localStorage.setItem('md_lang', nextLang);
+                      sfxClick();
+                    }}
+                    style={{
+                      background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.2)',
+                      color: '#fff', borderRadius: 4, cursor: 'pointer', fontSize: 9, padding: '4px 6px',
+                      fontWeight: 'bold'
+                    }}
+                  >
+                    {lang === 'tr' ? '🇹🇷' : '🇬🇧'}
+                  </button>
                   <button onClick={() => { setIsMenuOpen(true); sfxClick(); }} style={{ ...btnStyle('rgba(255,255,255,0.1)'), padding: '4px 10px', fontSize: 11, border: '1px solid rgba(255,255,255,0.2)' }}>
                     ⚙️ MENÜ
                   </button>
@@ -4537,11 +5765,21 @@ export default function App() {
                   <button onClick={() => { const next = !is3DTable; setIs3DTable(next); localStorage.setItem('md_3d', next ? 'on' : 'off'); sfxClick(); }} style={{ ...btnStyle(is3DTable ? 'rgba(46,204,113,0.15)' : 'rgba(255,255,255,0.1)'), padding: '4px 8px', fontSize: 11, border: is3DTable ? '1px solid rgba(46,204,113,0.4)' : 'none' }}>
                     {is3DTable ? '👓 3D Masa: Açık' : '👓 3D Masa: Kapalı'}
                   </button>
-                  {isMyTurn && (
-                    <span style={{ background: '#FFD700', color: '#000', fontWeight: 700, padding: '4px 8px', borderRadius: 6, fontSize: 11 }}>
-                      SIRA SENİN ({gameState.actionsLeft} aksiyon)
-                    </span>
-                  )}
+                  <span style={{
+                    background: isMyTurn ? '#FFD700' : 'rgba(255,255,255,0.05)',
+                    color: isMyTurn ? '#000' : '#aaa',
+                    fontWeight: 700,
+                    padding: '4px 8px',
+                    borderRadius: 6,
+                    fontSize: 11,
+                    border: isMyTurn ? 'none' : '1px solid rgba(255,255,255,0.1)',
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: 6
+                  }}>
+                    {isMyTurn ? 'SIRA SENDE' : `SIRA: ${gameState.players.find(p => p.id === gameState.currentPlayerId)?.name || 'Rakip'}`}
+                    {renderActionPoints(gameState.actionsLeft)}
+                  </span>
                   <button onClick={() => setShowHistoryModal(true)} style={{ ...btnStyle('rgba(52, 152, 219, 0.2)'), padding: '4px 8px', fontSize: 11, border: '1px solid rgba(52, 152, 219, 0.5)' }}>
                     📜 Geçmiş
                   </button>
@@ -4550,6 +5788,21 @@ export default function App() {
                       🕵️ Karaborsa ({gameState.scavengeMarket.length})
                     </button>
                   )}
+                  <button
+                    onClick={() => {
+                      const nextLang = lang === 'tr' ? 'en' : 'tr';
+                      setLang(nextLang);
+                      localStorage.setItem('md_lang', nextLang);
+                      sfxClick();
+                    }}
+                    style={{
+                      background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.2)',
+                      color: '#fff', borderRadius: 6, cursor: 'pointer', fontSize: 11, padding: '4px 8px',
+                      fontWeight: 'bold'
+                    }}
+                  >
+                    {lang === 'tr' ? '🇹🇷 TR' : '🇬🇧 EN'}
+                  </button>
                   <button onClick={toggleSound} title={soundOn ? 'Sesi Kapat' : 'Sesi Aç'} style={{
                     background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.2)',
                     color: '#fff', borderRadius: 6, cursor: 'pointer', fontSize: 13, padding: '3px 8px',
@@ -4600,12 +5853,19 @@ export default function App() {
 
 
         {/* Zaman Sınırı Fitil Sayacı (Burning Fuse) */}
-        {gameState.turnTimer > 0 && gameState.turnStartTime && !isBlocked && (
-          <div className="fuse-bar-container" title={`Kalan Tur Süresi: ${remainingTime} saniye`}>
-            <div className="fuse-bar" style={{ width: `${Math.max(0, Math.min(100, (remainingTime / gameState.turnTimer) * 100))}%` }} />
-            <div className="fuse-spark" style={{ left: `calc(${Math.max(0, Math.min(100, (remainingTime / gameState.turnTimer) * 100))}% - 5px)` }} />
-          </div>
-        )}
+        {gameState.turnTimer > 0 && gameState.turnStartTime && !isBlocked && (() => {
+          const pct = Math.max(0, Math.min(100, (remainingTime / gameState.turnTimer) * 100));
+          let timerClass = 'safe';
+          if (pct <= 20) timerClass = 'danger';
+          else if (pct <= 55) timerClass = 'warning';
+
+          return (
+            <div className="fuse-bar-container" title={`Kalan Tur Süresi: ${remainingTime} saniye`}>
+              <div className={`fuse-bar ${timerClass}`} style={{ width: `${pct}%` }} />
+              <div className={`fuse-spark ${timerClass}`} style={{ left: `calc(${pct}% - 7px)` }} />
+            </div>
+          );
+        })()}
 
         {renderModal()}
         {renderChallengeModal()}
@@ -4781,6 +6041,7 @@ export default function App() {
         {gameState.winner && (
           <VictoryOverlay
             winnerName={gameState.winner.name}
+            myPlayerId={playerId}
             players={gameState.players}
             isHost={gameState.players?.[0]?.id === playerId}
             onReturnToLobby={handleReturnToLobby}
@@ -4827,7 +6088,7 @@ export default function App() {
                   key={player.id}
                   ref={el => (playerPanelRefs.current[player.id] = el)}
                   onClick={() => setViewingPlayerId(player.id)}
-                  className={isCurrent ? 'player-strip-card ref-style spotlight-glow' : 'player-strip-card ref-style'}
+                  className={isCurrent ? 'player-strip-card ref-style spotlight-glow turn-pulsate' : 'player-strip-card ref-style'}
                   style={{
                     flexShrink: 0,
                     width: isMobile ? 120 : '100%',
@@ -4864,13 +6125,21 @@ export default function App() {
                   {/* ── ÜSTE: Avatar yuvarlak + İsim + Para ── */}
                   <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
                     {/* Avatar */}
-                    <div style={{
-                      width: 34, height: 34, borderRadius: '50%', flexShrink: 0,
-                      border: `2.5px solid ${playerColor}`,
-                      background: `${playerColor}25`,
-                      overflow: 'hidden',
-                      boxShadow: isCurrent ? `0 0 10px ${playerColor}99` : `0 0 4px ${playerColor}44`,
-                    }}>
+                    <div
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setProfilePlayer(player);
+                        socket?.emit('sendEmote', { targetId: player.id, emoji: '👋' });
+                      }}
+                      style={{
+                        width: 34, height: 34, borderRadius: '50%', flexShrink: 0,
+                        border: `2.5px solid ${playerColor}`,
+                        background: `${playerColor}25`,
+                        overflow: 'hidden',
+                        cursor: 'pointer',
+                        boxShadow: isCurrent ? `0 0 10px ${playerColor}99` : `0 0 4px ${playerColor}44`,
+                      }}
+                    >
                       <img
                         src={`https://api.dicebear.com/7.x/${player.avatarStyle || 'bottts'}/svg?seed=${player.name}`}
                         alt={player.name}
@@ -4901,12 +6170,15 @@ export default function App() {
                           {player.bankTotal}M
                         </span>
                         {isCurrent && (
-                          <span style={{
-                            fontSize: 7, color: '#FFD700', fontWeight: 900, letterSpacing: 0.5,
-                            background: 'rgba(255,215,0,0.15)', padding: '1px 4px', borderRadius: 4,
-                            border: '1px solid rgba(255,215,0,0.35)',
-                            animation: 'active-player-pulse 1s ease-in-out infinite',
-                          }}>▶ SIRADA</span>
+                          <div style={{ display: 'inline-flex', alignItems: 'center', gap: 2 }}>
+                            <span style={{
+                              fontSize: 7, color: '#FFD700', fontWeight: 900, letterSpacing: 0.5,
+                              background: 'rgba(255,215,0,0.15)', padding: '1px 4px', borderRadius: 4,
+                              border: '1px solid rgba(255,215,0,0.35)',
+                              animation: 'active-player-pulse 1s ease-in-out infinite',
+                            }}>▶ SIRADA</span>
+                            {renderActionPoints(gameState.actionsLeft)}
+                          </div>
                         )}
                       </div>
                     </div>
@@ -5038,421 +6310,281 @@ export default function App() {
             {/* Orta Panel (Responsive Masa / Log Görünümü) */}
             {isMobile ? (
               <div className="center-panel" style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'visible' }}>
-                {/* Tab Selector (Mobil için) */}
-                {/* === YENİ 3 SEKMELİ NAVİGASYON === */}
-                <div style={{
-                  display: 'flex',
-                  background: 'rgba(0,0,0,0.4)',
-                  borderRadius: 10,
-                  margin: '8px 10px 4px',
-                  padding: 3,
-                  flexShrink: 0,
-                  gap: 2,
-                  border: '1px solid rgba(255,255,255,0.06)',
-                }}>
-                  {[
-                    { id: 'board', icon: '🎮', label: 'MASA' },
-                    { id: 'players', icon: '👥', label: 'OYUNCULAR' },
-                    { id: 'log', icon: '📜', label: 'LOG' },
-                  ].map(tab => (
-                    <button
-                      key={tab.id}
-                      onClick={() => setActiveTab(tab.id)}
-                      style={{
-                        flex: 1,
-                        padding: '7px 4px',
-                        background: activeTab === tab.id
-                          ? 'linear-gradient(135deg, rgba(255,215,0,0.18), rgba(255,215,0,0.08))'
-                          : 'transparent',
-                        border: activeTab === tab.id
-                          ? '1px solid rgba(255,215,0,0.35)'
-                          : '1px solid transparent',
-                        color: activeTab === tab.id ? '#FFD700' : '#666',
-                        fontWeight: 800,
-                        fontSize: 9,
-                        borderRadius: 7,
-                        cursor: 'pointer',
-                        transition: 'all 0.2s',
-                        letterSpacing: 0.4,
-                      }}
-                    >
-                      <div style={{ fontSize: 14, marginBottom: 1 }}>{tab.icon}</div>
-                      {tab.label}
-                    </button>
-                  ))}
-                </div>
-
-                {/* === LOG SEKMESİ === */}
-                {activeTab === 'log' && (
-                  <div ref={logRef} className="game-log" style={{
-                    flex: 1, overflowY: 'auto', padding: '10px', display: 'flex', flexDirection: 'column', gap: 6,
-                    margin: '4px 10px 10px', background: 'rgba(0,0,0,0.3)', borderRadius: 12, border: '1px solid rgba(255,255,255,0.05)',
-                    boxShadow: 'inset 0 0 20px rgba(0,0,0,0.5)'
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 8, padding: 8, flex: 1, overflow: 'hidden' }}>
+                  {/* Yeni Yatay Deste ve Son Oynanan (Mobil - Hologram Temalı) */}
+                  <div style={{
+                    position: 'relative',
+                    height: '100px',
+                    background: 'rgba(17, 12, 38, 0.45)',
+                    border: '1px solid rgba(255, 255, 255, 0.08)',
+                    borderRadius: 14,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-around',
+                    padding: '8px 16px',
+                    boxShadow: '0 8px 32px 0 rgba(0,0,0,0.3)',
+                    overflow: 'hidden',
+                    flexShrink: 0
                   }}>
-                    {[...(gameState.log || [])].slice(-20).reverse().map((entry, i) => {
-                      const isSystem = entry.type === 'system';
-                      const isImportant = entry.type === 'payment' || entry.type === 'property' || entry.type === 'action';
-                      return (
-                        <div key={i} style={{
-                          fontSize: 11, color: isSystem ? '#FFD700' : '#ddd', padding: '8px 12px',
-                          background: isSystem ? 'linear-gradient(90deg, rgba(255, 215, 0, 0.15), transparent)' : isImportant ? 'linear-gradient(90deg, rgba(255, 255, 255, 0.05), transparent)' : 'transparent',
-                          borderRadius: 8, borderLeft: isSystem ? '3px solid #FFD700' : isImportant ? '2px solid rgba(255,255,255,0.3)' : '2px solid transparent',
-                          animation: 'fw-fade-in 0.3s ease-out'
-                        }}>
-                          <div className={isSystem ? 'system-log-blink' : ''} style={{ lineHeight: 1.4 }}>{renderLogMsg(entry)}</div>
-                          <div style={{ fontSize: 8, color: '#666', marginTop: 6, textAlign: 'right' }}>
-                            {new Date(entry.time).toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' })}
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                )}
+                    {/* Glowing holo ring in background */}
+                    <div className="holo-board-ring" style={{ width: 84, height: 84 }} />
+                    
+                    {/* Deste */}
+                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4, zIndex: 1 }}>
+                      <div style={{
+                        width: 44,
+                        height: 60,
+                        borderRadius: 8,
+                        background: 'linear-gradient(135deg, #3d1b7a, #160f38)',
+                        border: '2px solid #FFD700',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        boxShadow: '0 4px 15px rgba(255,215,0,0.25)',
+                        cursor: 'default',
+                        position: 'relative'
+                      }}>
+                        <span style={{ fontSize: 18 }}>🎴</span>
+                        <div style={{
+                          position: 'absolute', bottom: -4, right: -4,
+                          background: '#FFD700', color: '#000',
+                          fontSize: 9, fontWeight: 900, borderRadius: '50%',
+                          width: 18, height: 18, display: 'flex', alignItems: 'center', justifyContent: 'center',
+                          boxShadow: '0 2px 5px rgba(0,0,0,0.3)'
+                        }}>{gameState.deckCount}</div>
+                      </div>
+                      <span style={{ fontSize: 9, color: '#aaa', fontWeight: 'bold', letterSpacing: 0.5 }}>DESTE</span>
+                    </div>
 
-                {/* === OYUNCULAR SEKMESİ === */}
-                {activeTab === 'players' && (
-                  <div style={{ flex: 1, overflowY: 'auto', padding: '6px 10px 10px', display: 'flex', flexDirection: 'column', gap: 8 }}>
-                    {gameState.players.filter(p => p.id !== playerId).map(player => {
-                      const pIdx = gameState.players.findIndex(x => x.id === player.id);
-                      const playerColor = PLAYER_COLORS[pIdx % PLAYER_COLORS.length];
-                      const isCurrent = player.id === gameState.currentPlayerId;
-                      return (
-                        <div
-                          key={player.id}
-                          style={{
-                            borderRadius: 12,
-                            padding: '10px 12px',
-                            background: `linear-gradient(135deg, ${playerColor}18 0%, rgba(15,12,28,0.85) 100%)`,
-                            border: isCurrent ? `2px solid ${playerColor}` : `1px solid ${playerColor}40`,
-                            boxShadow: isCurrent ? `0 0 12px ${playerColor}44` : 'none',
-                          }}
-                        >
-                          {/* Başlık */}
-                          <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8 }}>
-                            <div style={{ width: 32, height: 32, borderRadius: '50%', border: `2px solid ${playerColor}`, overflow: 'hidden', flexShrink: 0 }}>
-                              <img src={`https://api.dicebear.com/7.x/${player.avatarStyle || 'bottts'}/svg?seed=${player.name}`} alt="" style={{ width: '100%', height: '100%' }} />
-                            </div>
-                            <div style={{ flex: 1 }}>
-                              <div style={{ color: playerColor, fontWeight: 800, fontSize: 13 }}>{player.name} {isCurrent && '▶'}</div>
-                              <div style={{ display: 'flex', gap: 6, marginTop: 2 }}>
-                                <span style={{ fontSize: 10, color: '#2ECC71', fontWeight: 700 }}>💰 {player.bankTotal}M</span>
-                                <span style={{ fontSize: 10, color: '#aaa', fontWeight: 700 }}>🃏 {player.handCount} kart</span>
+                    {/* Son Oynanan / Discard */}
+                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4, zIndex: 1 }}>
+                      <div style={{
+                        width: 44,
+                        height: 60,
+                        borderRadius: 8,
+                        background: 'rgba(0,0,0,0.4)',
+                        border: '1px dashed rgba(255,255,255,0.2)',
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        position: 'relative',
+                        boxShadow: '0 4px 10px rgba(0,0,0,0.3)',
+                      }}>
+                        {gameState.discard?.length > 0 ? (
+                          <div style={{ transform: 'scale(0.5)', cursor: 'pointer', position: 'absolute' }}
+                            onClick={() => { setPreviewCard(gameState.discard[gameState.discard.length - 1]); setPreviewLocked(true); }}>
+                            <CardVisual card={gameState.discard[gameState.discard.length - 1]} small />
+                          </div>
+                        ) : (
+                          <span style={{ fontSize: 8, color: '#666' }}>BOŞ</span>
+                        )}
+                      </div>
+                      <span style={{ fontSize: 9, color: '#aaa', fontWeight: 'bold', letterSpacing: 0.5 }}>SON HAMLE</span>
+                    </div>
+                  </div>
+
+                  {/* Benim Bankam ve Arazilerim (Mobil) */}
+                  <div data-drop-target="properties" style={{
+                    flex: 1, padding: 8, background: dragOverTarget === 'properties' ? 'rgba(255,215,0,0.08)' : 'rgba(255,255,255,0.02)',
+                    borderRadius: 8, display: 'flex', flexDirection: 'column', overflowY: 'auto'
+                  }}>
+                    <div style={{ fontSize: 9, color: '#aaa', fontWeight: 'bold', marginBottom: 4 }}>BENİM ARAZİLERİM ({myCompleteSets}/{gameState?.winSets || 3} set)</div>
+                    <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+
+                      {/* Banka Kasa Column */}
+                      <div
+                        ref={myBankRef}
+                        data-drop-target="bank"
+                        onClick={() => { setModal({ type: 'viewBankCards' }); sfxClick(); }}
+                        style={{
+                          display: 'flex',
+                          flexDirection: 'column',
+                          alignItems: 'center',
+                          gap: 4,
+                          flexShrink: 0,
+                          width: 44,
+                          minHeight: 64,
+                          background: dragOverTarget === 'bank' ? 'rgba(46,204,113,0.15)' : 'rgba(255,255,255,0.03)',
+                          border: dragOverTarget === 'bank' ? '2.5px dashed #2ECC71' : '1px solid rgba(255,255,255,0.08)',
+                          borderRadius: 6,
+                          padding: 2,
+                          boxSizing: 'border-box',
+                          transition: 'all 0.2s ease',
+                          cursor: 'pointer'
+                        }}
+                      >
+                        <span style={{ fontSize: 8, color: '#2ECC71', fontWeight: 'bold' }}>🏦 <BankTicker value={me.bankTotal} /></span>
+                        <div style={{ position: 'relative', width: 38, height: 52 }}>
+                          {me.bank?.slice(0, 5).map((c, i) => (
+                            <div
+                              key={c.id}
+                              className="mini-card-wrapper"
+                              style={{
+                                position: 'absolute',
+                                top: i * 4,
+                                left: i * 2,
+                                width: 32,
+                                height: 48,
+                                zIndex: i
+                              }}
+                            >
+                              <div style={{
+                                width: 32,
+                                height: 48,
+                                borderRadius: 4,
+                                background: 'linear-gradient(135deg, #2ECC71, #196F3D)',
+                                border: '1px solid rgba(255,255,255,0.2)',
+                                boxShadow: '0 2px 5px rgba(0,0,0,0.3)',
+                                display: 'flex',
+                                alignItems: 'center',
+                                justifyContent: 'center',
+                                fontWeight: 900,
+                                fontSize: 9,
+                                color: '#fff',
+                              }} className="mini-card-face">
+                                {c.value}M
+                              </div>
+                              <div className="mini-card-hover-view">
+                                <CardVisual card={c} small />
                               </div>
                             </div>
-                          </div>
-                          {/* Mülkler */}
-                          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-                            {Object.entries(player.properties || {}).filter(([, c]) => c.length > 0).map(([color, cards]) => {
-                              const info = COLOR_INFO[color] || { hex: '#aaa' };
-                              const isComplete = isSetComplete(cards, color);
-                              const setSize = SET_SIZES[color] || 2;
-                              return (
-                                <div key={color} style={{
-                                  display: 'flex', flexDirection: 'column', alignItems: 'center', width: 44, position: 'relative',
-                                  background: isComplete ? `${info.hex}15` : 'transparent',
-                                  borderRadius: 4, padding: 2,
-                                  border: isComplete ? `1px solid ${info.hex}` : 'none',
-                                  boxSizing: 'border-box'
-                                }}>
-                                  {cards.map((c, i) => (
-                                    <div key={c.id} onClick={() => setModal({ type: 'viewCardDetails', card: c })}
-                                      style={{ marginTop: i > 0 ? -42 : 0, zIndex: i, position: 'relative', cursor: 'pointer', width: 38, height: 52 }}
-                                    >
-                                      <div style={{
-                                        width: 38, height: 52, backgroundColor: '#fff',
-                                        border: isComplete ? `1.5px solid ${info.hex}` : '1px solid rgba(0,0,0,0.15)',
-                                        borderRadius: 4, display: 'flex', flexDirection: 'column', alignItems: 'center', overflow: 'hidden',
-                                        boxSizing: 'border-box'
-                                      }} className={`mini-card-face ${isComplete ? 'complete-set-glow' : ''}`}>
-                                        <div style={{ width: '100%', height: 8, background: c.isWild ? 'linear-gradient(90deg, #E74C3C, #F39C12, #2ECC71, #3498DB)' : (c.isDual && c.colors ? `linear-gradient(90deg, ${COLOR_INFO[c.colors[0]]?.hex} 0%, ${COLOR_INFO[c.colors[0]]?.hex} 50%, ${COLOR_INFO[c.colors[1]]?.hex} 50%, ${COLOR_INFO[c.colors[1]]?.hex} 100%)` : info.hex) }} />
-                                        <div style={{ fontSize: 8, fontWeight: 900, color: '#333', marginTop: 4, transform: 'scale(0.85)' }}>{c.isWild ? '★' : (c.value || '')}</div>
-                                      </div>
-                                    </div>
-                                  ))}
-                                  {/* Set ilerleme etiketi */}
-                                  <div style={{
-                                    fontSize: 8, fontWeight: 900,
-                                    color: isComplete ? '#FFD700' : info.hex,
-                                    background: isComplete ? 'rgba(255,215,0,0.15)' : 'rgba(0,0,0,0.45)',
-                                    border: isComplete ? '1px solid rgba(255,215,0,0.4)' : `1px solid ${info.hex}55`,
-                                    borderRadius: 3,
-                                    padding: '1px 4px',
-                                    marginTop: 3,
-                                    letterSpacing: 0.3,
-                                    textShadow: 'none',
-                                    lineHeight: 1.4,
-                                    zIndex: 20,
-                                    position: 'relative'
-                                  }}>
-                                    {isComplete ? `✓ ${cards.length}/${setSize}` : `${cards.length}/${setSize}`}
-                                  </div>
-                                  {/* Rent/Building Status Badge */}
-                                  <div style={{
-                                    fontSize: 7.5, fontWeight: 900,
-                                    color: '#2ECC71',
-                                    background: 'rgba(0,0,0,0.6)',
-                                    border: '1px solid rgba(46,204,113,0.3)',
-                                    borderRadius: 3,
-                                    padding: '1px 3px',
-                                    marginTop: 2,
-                                    display: 'flex',
-                                    alignItems: 'center',
-                                    gap: 1.5,
-                                    zIndex: 20,
-                                    position: 'relative',
-                                    justifyContent: 'center',
-                                    width: '100%',
-                                    boxSizing: 'border-box'
-                                  }} title="Güncel Kira Getirisi ve Binalar">
-                                    <span>💵{calculateRentClient(player, color)}M</span>
-                                    {isComplete && player.buildings?.[color] && (
-                                      <>
-                                        {player.buildings[color].houses > 0 && <span>🏠</span>}
-                                        {player.buildings[color].hotel && <span>🏨</span>}
-                                      </>
-                                    )}
-                                  </div>
-                                </div>
-                              );
-                            })}
-                            {Object.values(player.properties || {}).every(c => c.length === 0) && (
-                              <span style={{ color: '#444', fontSize: 11, fontStyle: 'italic' }}>Henüz arazi yok</span>
-                            )}
-                          </div>
-                        </div>
-                      );
-                    })}
-                  </div>
-                )}
-
-                {/* === MASA SEKMESİ === */}
-                {activeTab === 'board' && (
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 8, padding: 8, flex: 1, overflow: 'hidden' }}>
-                    {/* Yeni Yatay Deste ve Son Oynanan (Mobil) */}
-                    <div style={{ display: 'flex', gap: 12, background: 'rgba(0,0,0,0.15)', padding: '6px 12px', borderRadius: 8, alignItems: 'center', flexShrink: 0 }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 8, flex: 1 }}>
-                        <div style={{ width: 28, height: 38, borderRadius: 4, background: 'linear-gradient(135deg, #1f4068, #162447)', border: '1px solid #FFD700', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 2px 4px rgba(0,0,0,0.5)' }}>
-                          <span style={{ fontSize: 12 }}>🏠</span>
-                        </div>
-                        <span style={{ fontSize: 10, color: '#aaa', fontWeight: 'bold' }}>DESTE ({gameState.deckCount})</span>
-                      </div>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 8, flex: 1, justifyContent: 'flex-end' }}>
-                        <span style={{ fontSize: 10, color: '#aaa', fontWeight: 'bold' }}>SON OYNANAN</span>
-                        <div style={{ width: 28, height: 38, borderRadius: 4, background: 'rgba(255,255,255,0.05)', border: '1px dashed rgba(255,255,255,0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center', position: 'relative' }}>
-                          {gameState.discard?.length > 0 ? (
-                            <div style={{ transform: 'scale(0.35)', cursor: 'pointer', position: 'absolute' }}
-                              onClick={() => { setPreviewCard(gameState.discard[gameState.discard.length - 1]); setPreviewLocked(true); }}>
-                              <CardVisual card={gameState.discard[gameState.discard.length - 1]} small />
-                            </div>
-                          ) : (
-                            <span style={{ fontSize: 7, color: '#444' }}>YOK</span>
+                          ))}
+                          {(!me.bank || me.bank.length === 0) && (
+                            <div style={{ width: 32, height: 48, borderRadius: 4, border: '1.2px dashed rgba(255,255,255,0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 8, color: '#444' }}>BOŞ</div>
                           )}
                         </div>
                       </div>
-                    </div>
 
-                    {/* Benim Bankam ve Arazilerim (Mobil) */}
-                    <div data-drop-target="properties" style={{
-                      flex: 1, padding: 8, background: dragOverTarget === 'properties' ? 'rgba(255,215,0,0.08)' : 'rgba(255,255,255,0.02)',
-                      borderRadius: 8, display: 'flex', flexDirection: 'column', overflowY: 'auto'
-                    }}>
-                      <div style={{ fontSize: 9, color: '#aaa', fontWeight: 'bold', marginBottom: 4 }}>BENİM ARAZİLERİM ({myCompleteSets}/{gameState?.winSets || 3} set)</div>
-                      <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-
-                        {/* Banka Kasa Column */}
-                        <div
-                          ref={myBankRef}
-                          data-drop-target="bank"
-                          style={{
-                            display: 'flex',
-                            flexDirection: 'column',
-                            alignItems: 'center',
-                            gap: 4,
-                            flexShrink: 0,
-                            width: 44,
-                            minHeight: 64,
-                            background: dragOverTarget === 'bank' ? 'rgba(46,204,113,0.15)' : 'rgba(255,255,255,0.03)',
-                            border: dragOverTarget === 'bank' ? '2.5px dashed #2ECC71' : '1px solid rgba(255,255,255,0.08)',
-                            borderRadius: 6,
-                            padding: 2,
-                            boxSizing: 'border-box',
-                            transition: 'all 0.2s ease'
-                          }}
-                        >
-                          <span style={{ fontSize: 8, color: '#2ECC71', fontWeight: 'bold' }}>🏦 {me.bankTotal}M</span>
-                          <div style={{ position: 'relative', width: 38, height: 52 }}>
-                            {me.bank?.slice(0, 5).map((c, i) => (
+                      {/* Araziler (Mobil) */}
+                      {Object.entries(me.properties || {}).map(([color, cards]) => {
+                        if (cards.length === 0) return null;
+                        const info = COLOR_INFO[color] || { hex: '#aaa' };
+                        const isComplete = isSetComplete(cards, color);
+                        const setSize = SET_SIZES[color] || 2;
+                        return (
+                          <div
+                            key={color}
+                            style={{
+                              display: 'flex',
+                              flexDirection: 'column',
+                              alignItems: 'center',
+                              position: 'relative',
+                              width: 44,
+                              minHeight: 64,
+                              background: isComplete ? `${info.hex}15` : 'transparent',
+                              borderRadius: 4,
+                              padding: 2,
+                              border: isComplete ? `1px solid ${info.hex}` : 'none',
+                              boxSizing: 'border-box'
+                            }}
+                          >
+                            {cards.map((c, i) => (
                               <div
                                 key={c.id}
                                 className="mini-card-wrapper"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  if (isMyTurn && (c.isWild || c.isDual)) {
+                                    handleFlip(c);
+                                  } else {
+                                    setModal({ type: 'viewCardDetails', card: c });
+                                  }
+                                }}
                                 style={{
-                                  position: 'absolute',
-                                  top: i * 4,
-                                  left: i * 2,
-                                  width: 32,
-                                  height: 48,
-                                  zIndex: i
+                                  marginTop: i > 0 ? -42 : 0,
+                                  zIndex: i,
+                                  position: 'relative',
+                                  width: 38,
+                                  height: 52
                                 }}
                               >
                                 <div style={{
-                                  width: 32,
-                                  height: 48,
+                                  width: 38,
+                                  height: 52,
+                                  backgroundColor: '#FFFFFF',
+                                  border: isComplete ? `1.5px solid ${info.hex}` : '1px solid rgba(0,0,0,0.15)',
                                   borderRadius: 4,
-                                  background: 'linear-gradient(135deg, #2ECC71, #196F3D)',
-                                  border: '1px solid rgba(255,255,255,0.2)',
-                                  boxShadow: '0 2px 5px rgba(0,0,0,0.3)',
                                   display: 'flex',
+                                  flexDirection: 'column',
                                   alignItems: 'center',
-                                  justifyContent: 'center',
-                                  fontWeight: 900,
-                                  fontSize: 9,
-                                  color: '#fff',
-                                }} className="mini-card-face">
-                                  {c.value}M
+                                  overflow: 'hidden',
+                                  boxShadow: '0 2px 4px rgba(0,0,0,0.2)',
+                                  boxSizing: 'border-box',
+                                  transition: 'opacity 0.1s',
+                                  '--glow-color': info.hex
+                                }} className={`mini-card-face ${isComplete ? 'complete-set-glow' : ''}`}>
+                                  <div style={{ width: '100%', height: 8, background: c.isWild ? 'linear-gradient(90deg, #E74C3C, #F39C12, #2ECC71, #3498DB)' : (c.isDual && c.colors ? `linear-gradient(90deg, ${COLOR_INFO[c.colors[0]]?.hex} 0%, ${COLOR_INFO[c.colors[0]]?.hex} 50%, ${COLOR_INFO[c.colors[1]]?.hex} 50%, ${COLOR_INFO[c.colors[1]]?.hex} 100%)` : info.hex) }} />
+                                  <div style={{ fontSize: 8, fontWeight: 900, color: '#333', marginTop: 4, transform: 'scale(0.85)' }}>
+                                    {c.isWild ? '★' : (c.value || '')}
+                                  </div>
                                 </div>
                                 <div className="mini-card-hover-view">
                                   <CardVisual card={c} small />
                                 </div>
                               </div>
                             ))}
-                            {(!me.bank || me.bank.length === 0) && (
-                              <div style={{ width: 32, height: 48, borderRadius: 4, border: '1.2px dashed rgba(255,255,255,0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 8, color: '#444' }}>BOŞ</div>
-                            )}
-                          </div>
-                        </div>
-
-                        {/* Araziler (Mobil) */}
-                        {Object.entries(me.properties || {}).map(([color, cards]) => {
-                          if (cards.length === 0) return null;
-                          const info = COLOR_INFO[color] || { hex: '#aaa' };
-                          const isComplete = isSetComplete(cards, color);
-                          const setSize = SET_SIZES[color] || 2;
-                          return (
-                            <div
-                              key={color}
-                              style={{
-                                display: 'flex',
-                                flexDirection: 'column',
-                                alignItems: 'center',
-                                position: 'relative',
-                                width: 44,
-                                minHeight: 64,
-                                background: isComplete ? `${info.hex}15` : 'transparent',
-                                borderRadius: 4,
-                                padding: 2,
-                                border: isComplete ? `1px solid ${info.hex}` : 'none',
-                                boxSizing: 'border-box'
-                              }}
-                            >
-                              {cards.map((c, i) => (
-                                <div
-                                  key={c.id}
-                                  className="mini-card-wrapper"
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    if (isMyTurn && (c.isWild || c.isDual)) {
-                                      handleFlip(c);
-                                    } else {
-                                      setModal({ type: 'viewCardDetails', card: c });
-                                    }
-                                  }}
-                                  style={{
-                                    marginTop: i > 0 ? -42 : 0,
-                                    zIndex: i,
-                                    position: 'relative',
-                                    width: 38,
-                                    height: 52
-                                  }}
-                                >
-                                  <div style={{
-                                    width: 38,
-                                    height: 52,
-                                    backgroundColor: '#FFFFFF',
-                                    border: isComplete ? `1.5px solid ${info.hex}` : '1px solid rgba(0,0,0,0.15)',
-                                    borderRadius: 4,
-                                    display: 'flex',
-                                    flexDirection: 'column',
-                                    alignItems: 'center',
-                                    overflow: 'hidden',
-                                    boxShadow: '0 2px 4px rgba(0,0,0,0.2)',
-                                    boxSizing: 'border-box',
-                                    transition: 'opacity 0.1s',
-                                    '--glow-color': info.hex
-                                  }} className={`mini-card-face ${isComplete ? 'complete-set-glow' : ''}`}>
-                                    <div style={{ width: '100%', height: 8, background: c.isWild ? 'linear-gradient(90deg, #E74C3C, #F39C12, #2ECC71, #3498DB)' : (c.isDual && c.colors ? `linear-gradient(90deg, ${COLOR_INFO[c.colors[0]]?.hex} 0%, ${COLOR_INFO[c.colors[0]]?.hex} 50%, ${COLOR_INFO[c.colors[1]]?.hex} 50%, ${COLOR_INFO[c.colors[1]]?.hex} 100%)` : info.hex) }} />
-                                    <div style={{ fontSize: 8, fontWeight: 900, color: '#333', marginTop: 4, transform: 'scale(0.85)' }}>
-                                      {c.isWild ? '★' : (c.value || '')}
-                                    </div>
-                                  </div>
-                                  <div className="mini-card-hover-view">
-                                    <CardVisual card={c} small />
-                                  </div>
-                                </div>
-                              ))}
-                              {/* Set ilerleme etiketi (Mobil) */}
-                              <div style={{
-                                fontSize: 8, fontWeight: 900,
-                                color: isComplete ? '#FFD700' : info.hex,
-                                background: isComplete ? 'rgba(255,215,0,0.15)' : 'rgba(0,0,0,0.45)',
-                                border: isComplete ? '1px solid rgba(255,215,0,0.4)' : `1px solid ${info.hex}55`,
-                                borderRadius: 3,
-                                padding: '1px 4px',
-                                marginTop: 3,
-                                lineHeight: 1.4,
-                                zIndex: 20,
-                                position: 'relative'
-                              }}>
-                                {isComplete ? `✓ ${cards.length}/${setSize}` : `${cards.length}/${setSize}`}
-                              </div>
-                              {/* Rent/Building Status Badge (Mobil) */}
-                              <div style={{
-                                fontSize: 7.5, fontWeight: 900,
-                                color: '#2ECC71',
-                                background: 'rgba(0,0,0,0.6)',
-                                border: '1px solid rgba(46,204,113,0.3)',
-                                borderRadius: 3,
-                                padding: '1px 3px',
-                                marginTop: 2,
-                                display: 'flex',
-                                alignItems: 'center',
-                                gap: 1.5,
-                                zIndex: 20,
-                                position: 'relative',
-                                justifyContent: 'center',
-                                width: '100%',
-                                boxSizing: 'border-box'
-                              }} title="Güncel Kira Getirisi ve Binalar">
-                                <span>💵{calculateRentClient(me, color)}M</span>
-                                {isComplete && me.buildings?.[color] && (
-                                  <>
-                                    {me.buildings[color].houses > 0 && <span>🏠</span>}
-                                    {me.buildings[color].hotel && <span>🏨</span>}
-                                  </>
-                                )}
-                              </div>
+                            {/* Set ilerleme etiketi (Mobil) */}
+                            <div style={{
+                              fontSize: 8, fontWeight: 900,
+                              color: isComplete ? '#FFD700' : info.hex,
+                              background: isComplete ? 'rgba(255,215,0,0.15)' : 'rgba(0,0,0,0.45)',
+                              border: isComplete ? '1px solid rgba(255,215,0,0.4)' : `1px solid ${info.hex}55`,
+                              borderRadius: 3,
+                              padding: '1px 4px',
+                              marginTop: 3,
+                              lineHeight: 1.4,
+                              zIndex: 20,
+                              position: 'relative'
+                            }}>
+                              {isComplete ? `✓ ${cards.length}/${setSize}` : `${cards.length}/${setSize}`}
                             </div>
-                          );
-                        })}
-                        {Object.entries(me.properties || {}).every(([_, cards]) => cards.length === 0) && (
-                          <span style={{ color: '#555', fontSize: 10 }}>Henüz arazi yok</span>
-                        )}
-                      </div>
+                            {/* Rent/Building Status Badge (Mobil) */}
+                            <div style={{
+                              fontSize: 7.5, fontWeight: 900,
+                              color: '#2ECC71',
+                              background: 'rgba(0,0,0,0.6)',
+                              border: '1px solid rgba(46,204,113,0.3)',
+                              borderRadius: 3,
+                              padding: '1px 3px',
+                              marginTop: 2,
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: 1.5,
+                              zIndex: 20,
+                              position: 'relative',
+                              justifyContent: 'center',
+                              width: '100%',
+                              boxSizing: 'border-box'
+                            }} title="Güncel Kira Getirisi ve Binalar">
+                              <span>💵{calculateRentClient(me, color)}M</span>
+                              {isComplete && me.buildings?.[color] && (
+                                <>
+                                  {me.buildings[color].houses > 0 && <span>🏠</span>}
+                                  {me.buildings[color].hotel && <span>🏨</span>}
+                                </>
+                              )}
+                            </div>
+                          </div>
+                        );
+                      })}
+                      {Object.entries(me.properties || {}).every(([_, cards]) => cards.length === 0) && (
+                        <span style={{ color: '#555', fontSize: 10 }}>Henüz arazi yok</span>
+                      )}
                     </div>
                   </div>
-                )}
+                </div>
               </div>
-
             ) : (
               /* Masaüstü (Regular) Görünüm — Log artık log-col'da */
               <div className="center-panel" style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'visible' }}>
 
                 {/* Ortak Masa Ortası Alanı (Central Play Area - Desktop) */}
-                <div style={{ display: 'flex', gap: 24, padding: '12px 16px', background: 'rgba(0,0,0,0.18)', borderTop: '1px solid rgba(255,255,255,0.06)', borderBottom: '1px solid rgba(255,255,255,0.06)', alignItems: 'center', justifyContent: 'center', transition: 'background 0.3s' }}>
-                  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4 }}>
+                <div className="central-play-arena">
+                  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6 }}>
                     <span style={{ fontSize: 9, color: '#aaa', fontWeight: 'bold', letterSpacing: 0.5 }}>🎴 DESTE ({gameState.deckCount})</span>
-                    <div style={{ width: 68, height: 96, borderRadius: 6, border: '2px dashed rgba(255,255,255,0.2)', background: 'rgba(255,255,255,0.02)', display: 'flex', alignItems: 'center', justifyContent: 'center', position: 'relative', boxShadow: '0 4px 10px rgba(0,0,0,0.5)' }}>
+                    <div className="play-arena-slot">
                       {gameState.deckCount > 0 ? (
-                        <div style={{ width: 60, height: 88, borderRadius: 5, background: 'linear-gradient(135deg, #1f4068, #162447)', border: '2px solid #FFD700', boxShadow: '0 2px 5px rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'help' }} title="Destedeki Kalan Kart Sayısı">
+                        <div className="premium-deck-card" title="Destedeki Kalan Kart Sayısı">
                           <span style={{ fontSize: 20 }}>🏠</span>
                         </div>
                       ) : (
@@ -5461,9 +6593,9 @@ export default function App() {
                     </div>
                   </div>
 
-                  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4 }}>
+                  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6 }}>
                     <span style={{ fontSize: 9, color: '#aaa', fontWeight: 'bold', letterSpacing: 0.5 }}>📤 SON OYNANAN</span>
-                    <div style={{ width: 68, height: 96, borderRadius: 6, border: '2px dashed rgba(255,255,255,0.2)', background: 'rgba(255,255,255,0.02)', display: 'flex', alignItems: 'center', justifyContent: 'center', position: 'relative', boxShadow: '0 4px 10px rgba(0,0,0,0.5)' }}>
+                    <div className="play-arena-slot">
                       {gameState.discard?.length > 0 ? (
                         <div style={{ transform: 'scale(0.85)', cursor: 'pointer' }}
                           onClick={() => { setPreviewCard(gameState.discard[gameState.discard.length - 1]); setPreviewLocked(true); }}>
@@ -5489,6 +6621,7 @@ export default function App() {
                     <div
                       ref={myBankRef}
                       data-drop-target="bank"
+                      onClick={() => { setModal({ type: 'viewBankCards' }); sfxClick(); }}
                       style={{
                         display: 'flex',
                         flexDirection: 'column',
@@ -5502,10 +6635,11 @@ export default function App() {
                         borderRadius: 6,
                         padding: 2,
                         boxSizing: 'border-box',
-                        transition: 'all 0.2s ease'
+                        transition: 'all 0.2s ease',
+                        cursor: 'pointer'
                       }}
                     >
-                      <span style={{ fontSize: 8, color: '#2ECC71', fontWeight: 'bold' }}>🏦 {me.bankTotal}M</span>
+                      <span style={{ fontSize: 8, color: '#2ECC71', fontWeight: 'bold' }}>🏦 <BankTicker value={me.bankTotal} /></span>
                       <div style={{ position: 'relative', width: 38, height: 52 }}>
                         {me.bank?.slice(0, 5).map((c, i) => (
                           <div
@@ -5785,87 +6919,153 @@ export default function App() {
               }}
             >
               {/* El kartları başlığı, butonlar ve emoji çubuğu (tek satır) */}
-              <div style={{
-                display: 'flex',
-                justifyContent: 'space-between',
-                alignItems: 'center',
-                marginBottom: '8px',
-                borderBottom: '1px solid rgba(255, 255, 255, 0.05)',
-                paddingBottom: '6px',
-                userSelect: 'none',
-                pointerEvents: 'auto'
-              }}>
-                {/* Toggle butonu */}
-                <div
-                  onClick={() => { sfxClick(); setHandHidden(!handHidden); }}
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '6px',
-                    cursor: 'pointer',
-                    background: 'rgba(255, 255, 255, 0.05)',
-                    padding: '3px 10px',
-                    borderRadius: '12px',
-                    border: '1px solid rgba(255, 255, 255, 0.05)',
-                    transition: 'background 0.2s',
-                    flexShrink: 0
-                  }}
-                  onMouseEnter={e => e.currentTarget.style.background = 'rgba(255, 255, 255, 0.12)'}
-                  onMouseLeave={e => e.currentTarget.style.background = 'rgba(255, 255, 255, 0.05)'}
-                >
-                  <span style={{ fontSize: '11px', color: '#FFD700', fontWeight: '900', letterSpacing: '0.5px' }}>
-                    {handHidden ? '👁️ ELİ GÖSTER' : '🃏 KARTLARIM'} ({handToRender.length})
-                  </span>
-                  <span style={{ fontSize: '9px', color: '#aaa', display: 'inline-block', transform: handHidden ? 'rotate(180deg)' : 'rotate(0deg)', transition: 'transform 0.3s' }}>
-                    ▼
-                  </span>
-                </div>
-
-                {/* Sağ: Eylem butonları */}
-                <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
-                  {isMyTurn && !discardMode && !isBlocked && gameState.canUndo && (
+              {selectedCard && isMyTurn && !isBlocked && !discardMode && isMobile ? (
+                <div style={{
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  alignItems: 'center',
+                  width: '100%',
+                  marginBottom: '8px',
+                  borderBottom: '1px solid rgba(255, 255, 255, 0.05)',
+                  paddingBottom: '6px',
+                  animation: 'toast-in 0.2s ease',
+                  pointerEvents: 'auto'
+                }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <span style={{ fontSize: 13, fontWeight: 900, color: '#FFD700' }}>
+                      {translateCard(selectedCard, lang).name}
+                    </span>
+                    <span style={{ fontSize: 10, color: '#aaa' }}>
+                      ({selectedCard.value}M)
+                    </span>
+                  </div>
+                  <div style={{ display: 'flex', gap: 8 }}>
                     <button
-                      onClick={() => { sfxClick(); handleUndoMove(); }}
+                      onClick={() => handleCardAction(selectedCard)}
                       style={{
-                        background: 'rgba(230, 126, 34, 0.15)',
-                        border: '1px solid rgba(230, 126, 34, 0.4)',
-                        color: '#E67E22',
-                        padding: '4px 10px',
-                        borderRadius: '8px',
-                        fontSize: '10px',
-                        cursor: 'pointer',
+                        ...btnStyle('linear-gradient(135deg, #E67E22, #D35400)'),
+                        padding: '8px 16px',
+                        fontSize: 12,
                         fontWeight: 'bold',
-                        transition: 'all 0.2s'
+                        borderRadius: 6,
+                        margin: 0
                       }}
-                      onMouseEnter={e => e.currentTarget.style.background = 'rgba(230, 126, 34, 0.25)'}
-                      onMouseLeave={e => e.currentTarget.style.background = 'rgba(230, 126, 34, 0.15)'}
                     >
-                      ↩️ Geri Al
+                      {lang === 'en' ? '🚀 Play' : '🚀 Oyna'}
                     </button>
-                  )}
-                  {isMyTurn && !discardMode && !isBlocked && (
+                    {selectedCard.type !== 'property' && (
+                      <button
+                        onClick={() => handlePlayCard(selectedCard, { asBankMoney: true })}
+                        style={{
+                          ...btnStyle('linear-gradient(135deg, #27AE60, #1E8449)'),
+                          padding: '8px 16px',
+                          fontSize: 12,
+                          fontWeight: 'bold',
+                          borderRadius: 6,
+                          margin: 0
+                        }}
+                      >
+                        {lang === 'en' ? '💰 Bank' : '💰 Banka'}
+                      </button>
+                    )}
                     <button
-                      onClick={() => { sfxClick(); handleEndTurn(); }}
+                      onClick={() => setSelectedCard(null)}
                       style={{
-                        background: 'linear-gradient(135deg, #9b59b6, #8e44ad)',
-                        border: 'none',
-                        color: '#fff',
-                        padding: '4px 12px',
-                        borderRadius: '8px',
-                        fontSize: '10px',
-                        cursor: 'pointer',
-                        fontWeight: '900',
-                        boxShadow: '0 4px 12px rgba(155,89,182,0.3)',
-                        transition: 'all 0.2s'
+                        ...btnStyle('rgba(255,255,255,0.15)'),
+                        padding: '8px 16px',
+                        fontSize: 12,
+                        fontWeight: 'bold',
+                        borderRadius: 6,
+                        margin: 0
                       }}
-                      onMouseEnter={e => { e.currentTarget.style.transform = 'translateY(-1px)'; e.currentTarget.style.boxShadow = '0 6px 15px rgba(155,89,182,0.4)'; }}
-                      onMouseLeave={e => { e.currentTarget.style.transform = 'translateY(0)'; e.currentTarget.style.boxShadow = '0 4px 12px rgba(155,89,182,0.3)'; }}
                     >
-                      🏁 Turu Bitir
+                      ✕
                     </button>
-                  )}
+                  </div>
                 </div>
-              </div>
+              ) : (
+                <div style={{
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  alignItems: 'center',
+                  marginBottom: '8px',
+                  borderBottom: '1px solid rgba(255, 255, 255, 0.05)',
+                  paddingBottom: '6px',
+                  userSelect: 'none',
+                  pointerEvents: 'auto'
+                }}>
+                  {/* Toggle butonu */}
+                  <div
+                    onClick={() => { sfxClick(); setHandHidden(!handHidden); }}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '6px',
+                      cursor: 'pointer',
+                      background: 'rgba(255, 255, 255, 0.05)',
+                      padding: '3px 10px',
+                      borderRadius: '12px',
+                      border: '1px solid rgba(255, 255, 255, 0.05)',
+                      transition: 'background 0.2s',
+                      flexShrink: 0
+                    }}
+                    onMouseEnter={e => e.currentTarget.style.background = 'rgba(255, 255, 255, 0.12)'}
+                    onMouseLeave={e => e.currentTarget.style.background = 'rgba(255, 255, 255, 0.05)'}
+                  >
+                    <span style={{ fontSize: '11px', color: '#FFD700', fontWeight: '900', letterSpacing: '0.5px' }}>
+                      {handHidden ? (lang === 'en' ? '👁️ SHOW HAND' : '👁️ ELİ GÖSTER') : (lang === 'en' ? '🃏 MY CARDS' : '🃏 KARTLARIM')} ({handToRender.length})
+                    </span>
+                    <span style={{ fontSize: '9px', color: '#aaa', display: 'inline-block', transform: handHidden ? 'rotate(180deg)' : 'rotate(0deg)', transition: 'transform 0.3s' }}>
+                      ▼
+                    </span>
+                  </div>
+
+                  {/* Sağ: Eylem butonları */}
+                  <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
+                    {isMyTurn && !discardMode && !isBlocked && gameState.canUndo && (
+                      <button
+                        onClick={() => { sfxClick(); handleUndoMove(); }}
+                        style={{
+                          background: 'rgba(230, 126, 34, 0.15)',
+                          border: '1px solid rgba(230, 126, 34, 0.4)',
+                          color: '#E67E22',
+                          padding: '4px 10px',
+                          borderRadius: '8px',
+                          fontSize: '10px',
+                          cursor: 'pointer',
+                          fontWeight: 'bold',
+                          transition: 'all 0.2s'
+                        }}
+                        onMouseEnter={e => e.currentTarget.style.background = 'rgba(230, 126, 34, 0.25)'}
+                        onMouseLeave={e => e.currentTarget.style.background = 'rgba(230, 126, 34, 0.15)'}
+                      >
+                        {lang === 'en' ? '↩️ Undo' : '↩️ Geri Al'}
+                      </button>
+                    )}
+                    {isMyTurn && !discardMode && !isBlocked && (
+                      <button
+                        onClick={() => { sfxClick(); handleEndTurn(); }}
+                        style={{
+                          background: 'linear-gradient(135deg, #9b59b6, #8e44ad)',
+                          border: 'none',
+                          color: '#fff',
+                          padding: '4px 12px',
+                          borderRadius: '8px',
+                          fontSize: '10px',
+                          cursor: 'pointer',
+                          fontWeight: '900',
+                          boxShadow: '0 4px 12px rgba(155,89,182,0.3)',
+                          transition: 'all 0.2s'
+                        }}
+                        onMouseEnter={e => { e.currentTarget.style.transform = 'translateY(-1px)'; e.currentTarget.style.boxShadow = '0 6px 15px rgba(155,89,182,0.4)'; }}
+                        onMouseLeave={e => { e.currentTarget.style.transform = 'translateY(0)'; e.currentTarget.style.boxShadow = '0 4px 12px rgba(155,89,182,0.3)'; }}
+                      >
+                        {lang === 'en' ? '🏁 End Turn' : '🏁 Turu Bitir'}
+                      </button>
+                    )}
+                  </div>
+                </div>
+              )}
               <div className="hand-blurred-container" style={{ overflow: 'visible', pointerEvents: handHidden ? 'none' : 'auto' }}>
                 <div
                   className={handHidden ? 'hand-blurred' : ''}
@@ -5882,7 +7082,8 @@ export default function App() {
                     margin: 0,
                     justifyContent: listJustifyContent,
                     scrollbarWidth: 'none',
-                    msOverflowStyle: 'none'
+                    msOverflowStyle: 'none',
+                    gap: isMobile ? 10 : 0
                   }}
                 >
                   {handToRender.map((card, idx) => {
@@ -5890,7 +7091,14 @@ export default function App() {
                     const cardComboClass = isJSNActive ? 'shield-glow' : getCardComboClass(card, handToRender);
                     const isCardDimmed = (!isMyTurn || isBlocked) && !discardMode && !isJSNActive;
                     const isSelected = selectedCard?.id === card.id;
-                    const overlapOffset = isMobile ? -28 : -36;
+                    const overlapOffset = isMobile ? 0 : -36;
+
+                    const cardScale = isMobile ? 0.85 : 1.5;
+                    const visualScale = isMobile ? 0.8 : 0.85;
+                    const cardW = 132 * cardScale;
+                    const cardH = 192 * cardScale;
+                    const wrapperW = cardW * visualScale;
+                    const wrapperH = cardH * visualScale;
 
                     return (
                       <motion.div
@@ -5905,6 +7113,8 @@ export default function App() {
                         onDragEnd={(e, info) => handleDragEnd(e, info, card)}
                         whileDrag={{ scale: 1.15, zIndex: 1000, cursor: 'grabbing' }}
                         style={{
+                          width: wrapperW,
+                          height: wrapperH,
                           zIndex: isSelected ? 1000 : idx,
                           position: 'relative',
                           cursor: isMyTurn && !isBlocked && !discardMode ? 'grab' : 'default',
@@ -5925,8 +7135,22 @@ export default function App() {
                             e.currentTarget.style.zIndex = idx;
                           }
                         }}
+                        onDoubleClick={() => {
+                          setZoomedCard(card);
+                          sfxClick();
+                        }}
                         onClick={() => {
                           if (draggedRef.current) return;
+                          
+                          // Mobile Double-Tap check:
+                          const now = Date.now();
+                          if (window.__lastCardTap && window.__lastCardTap.cardId === card.id && (now - window.__lastCardTap.time < 300)) {
+                            setZoomedCard(card);
+                            sfxClick();
+                            return;
+                          }
+                          window.__lastCardTap = { cardId: card.id, time: now };
+
                           if (discardMode) {
                             setDiscardSelected(prev =>
                               prev.includes(card.id) ? prev.filter(id => id !== card.id) : [...prev, card.id]
@@ -5936,7 +7160,16 @@ export default function App() {
                           }
                         }}
                       >
-                        <div style={{ transform: isMobile ? 'scale(0.8)' : 'scale(0.85)', transformOrigin: 'bottom center' }}>
+                        <div style={{
+                          width: cardW,
+                          height: cardH,
+                          transform: `scale(${visualScale})`,
+                          transformOrigin: 'bottom center',
+                          position: 'absolute',
+                          bottom: 0,
+                          left: '50%',
+                          marginLeft: -cardW / 2
+                        }}>
                           <CardVisual
                             card={card}
                             selected={discardMode ? discardSelected.includes(card.id) : selectedCard?.id === card.id}
@@ -5947,7 +7180,7 @@ export default function App() {
                         </div>
 
                         <AnimatePresence>
-                          {selectedCard?.id === card.id && isMyTurn && !isBlocked && !discardMode && (
+                          {selectedCard?.id === card.id && isMyTurn && !isBlocked && !discardMode && !isMobile && (
                             <motion.div
                               initial={{ opacity: 0 }}
                               animate={{ opacity: 1 }}
@@ -5966,11 +7199,11 @@ export default function App() {
                                 padding: 4
                               }}
                             >
-                              <button onClick={(e) => { e.stopPropagation(); handleCardAction(card); }} style={{ ...btnStyle('linear-gradient(135deg, #E67E22, #D35400)'), fontSize: 10, padding: '12px 22px', borderRadius: 4 }}>🚀 Oyna</button>
+                              <button onClick={(e) => { e.stopPropagation(); handleCardAction(card); }} style={{ ...btnStyle('linear-gradient(135deg, #E67E22, #D35400)'), fontSize: 10, padding: '12px 22px', borderRadius: 4 }}>{lang === 'en' ? '🚀 Play' : '🚀 Oyna'}</button>
                               {card.type !== 'property' && (
-                                <button onClick={(e) => { e.stopPropagation(); handlePlayCard(card, { asBankMoney: true }); }} style={{ ...btnStyle('linear-gradient(135deg, #27AE60, #1E8449)'), fontSize: 8, padding: '12px 22px', borderRadius: 4 }}>💰 Banka</button>
+                                <button onClick={(e) => { e.stopPropagation(); handlePlayCard(card, { asBankMoney: true }); }} style={{ ...btnStyle('linear-gradient(135deg, #27AE60, #1E8449)'), fontSize: 8, padding: '12px 22px', borderRadius: 4 }}>{lang === 'en' ? '💰 Bank' : '💰 Banka'}</button>
                               )}
-                              <button onClick={(e) => { e.stopPropagation(); setSelectedCard(null); }} style={{ ...btnStyle('rgba(255,255,255,0.15)'), fontSize: 10, padding: '12px 22px', borderRadius: 4 }}>Kapat✕</button>
+                              <button onClick={(e) => { e.stopPropagation(); setSelectedCard(null); }} style={{ ...btnStyle('rgba(255,255,255,0.15)'), fontSize: 10, padding: '12px 22px', borderRadius: 4 }}>{lang === 'en' ? 'Close✕' : 'Kapat✕'}</button>
                             </motion.div>
                           )}
                         </AnimatePresence>
@@ -6006,9 +7239,34 @@ export default function App() {
 
         {/* ---- SOHBET (CHAT) PENCERESİ ---- */}
         <div style={{ position: 'fixed', bottom: isMobile ? 170 : 175, right: 16, zIndex: 1500, width: isMobile ? 280 : 320, display: 'flex', flexDirection: 'column', alignItems: 'flex-end', pointerEvents: 'none' }}>
-
-
           <AnimatePresence>
+            {!isChatOpen && (
+              <motion.button
+                initial={{ scale: 0.8, opacity: 0 }}
+                animate={{ scale: 1, opacity: 1 }}
+                exit={{ scale: 0.8, opacity: 0 }}
+                onClick={() => { setIsChatOpen(true); sfxClick(); }}
+                style={{
+                  pointerEvents: 'auto',
+                  background: 'linear-gradient(135deg, #3498DB, #2980B9)',
+                  border: '1.5px solid rgba(255,255,255,0.25)',
+                  color: '#fff',
+                  width: 50,
+                  height: 50,
+                  borderRadius: '50%',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  fontSize: 22,
+                  boxShadow: '0 8px 25px rgba(52,152,219,0.4), 0 0 10px rgba(52,152,219,0.2)',
+                  cursor: 'pointer',
+                }}
+                whileHover={{ scale: 1.1 }}
+                whileTap={{ scale: 0.95 }}
+              >
+                💬
+              </motion.button>
+            )}
             {isChatOpen && (
               <motion.div initial={{ opacity: 0, y: 20, scale: 0.9 }} animate={{ opacity: 1, y: 0, scale: 1 }} exit={{ opacity: 0, y: 20, scale: 0.9 }}
                 style={{ background: 'rgba(20, 20, 30, 0.95)', pointerEvents: 'auto', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 12, padding: 12, marginTop: 10, width: '100%', display: 'flex', flexDirection: 'column', backdropFilter: 'blur(10px)', boxShadow: '0 10px 30px rgba(0,0,0,0.5)' }}>
@@ -6045,13 +7303,107 @@ export default function App() {
           </AnimatePresence>
         </div>
 
+        {/* Visual History Strip (Hamle Geçmişi Replay) */}
+        {screen === 'game' && !isMobile && gameState?.log && gameState.log.length > 0 && (
+          <div className="visual-history-strip">
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+              <div style={{ fontSize: 9, color: '#FFD700', fontWeight: 900, letterSpacing: 0.5 }}>SON HAMLELER</div>
+              <div style={{ display: 'flex', gap: 8 }}>
+                {[...gameState.log].slice(-3).reverse().map((entry, idx) => {
+                  let emoji = '📝';
+                  const msgText = entry.msg || '';
+                  if (msgText.includes('banka') || msgText.includes('para') || msgText.includes('Banka')) emoji = '🏦';
+                  else if (msgText.includes('arazi') || msgText.includes('tapu') || msgText.includes('mülk')) emoji = '🏠';
+                  else if (msgText.includes('kira') || msgText.includes('ödeme') || msgText.includes('Ödeme')) emoji = '💸';
+                  else if (msgText.includes('reddet') || msgText.includes('say no') || msgText.includes('Reddet')) emoji = '🛡️';
+                  else if (msgText.includes('hırsız') || msgText.includes('çal') || msgText.includes('Hırsız')) emoji = '🥷';
+                  
+                  return (
+                    <div key={idx} className="visual-history-item">
+                      <span style={{ fontSize: 13 }}>{emoji}</span>
+                      <span style={{ maxWidth: 90, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }} title={msgText}>{msgText}</span>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Profile Card Modal */}
+        {profilePlayer && (
+          <Modal title={`👤 ${profilePlayer.name} Profili`} onClose={() => setProfilePlayer(null)}>
+            <div style={{ textAlign: 'center', padding: '10px 0', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 16 }}>
+              <div style={{ position: 'relative' }}>
+                <img
+                  src={`https://api.dicebear.com/7.x/${profilePlayer.avatar || profilePlayer.avatarStyle || 'avataaars'}/svg?seed=${profilePlayer.name}`}
+                  alt="avatar"
+                  style={{ width: 80, height: 80, borderRadius: '50%', background: 'rgba(0,0,0,0.2)', border: '3px solid #FFD700', boxShadow: '0 0 20px rgba(255,215,0,0.2)' }}
+                />
+                {profilePlayer.isReady && <span style={{ position: 'absolute', bottom: 0, right: 0, fontSize: 16 }}>✅</span>}
+              </div>
+              <div>
+                <h3 style={{ margin: 0, fontSize: 18, color: '#FFD700' }}>{profilePlayer.name}</h3>
+                <p style={{ color: '#aaa', fontSize: 11, margin: '4px 0 0 0' }}>Oyuncu Seviyesi: Altın Üye</p>
+              </div>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, width: '100%', marginTop: 8 }}>
+                <div style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)', borderRadius: 10, padding: 10 }}>
+                  <div style={{ fontSize: 9, color: '#aaa' }}>TOPLAM MAÇ</div>
+                  <div style={{ fontSize: 16, fontWeight: 900, color: '#fff', marginTop: 4 }}>14</div>
+                </div>
+                <div style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)', borderRadius: 10, padding: 10 }}>
+                  <div style={{ fontSize: 9, color: '#aaa' }}>TOPLAM ZAFER</div>
+                  <div style={{ fontSize: 16, fontWeight: 900, color: '#FFD700', marginTop: 4 }}>{profilePlayer.isBot ? 4 : 10}</div>
+                </div>
+                <div style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)', borderRadius: 10, padding: 10 }}>
+                  <div style={{ fontSize: 9, color: '#aaa' }}>KAZANMA ORANI</div>
+                  <div style={{ fontSize: 16, fontWeight: 900, color: '#2ECC71', marginTop: 4 }}>71.4%</div>
+                </div>
+                <div style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)', borderRadius: 10, padding: 10 }}>
+                  <div style={{ fontSize: 9, color: '#aaa' }}>EN SEVİLEN KART</div>
+                  <div style={{ fontSize: 12, fontWeight: 900, color: '#3498DB', marginTop: 4, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>Haciz Kartı 🔵</div>
+                </div>
+              </div>
+              <button
+                onClick={() => {
+                  socket?.emit('sendEmote', { targetId: profilePlayer.id, emoji: '👋' });
+                  showToast(`${profilePlayer.name} oyuncusuna el salladınız! 👋`, 'success');
+                  sfxClick();
+                }}
+                style={{ ...btnStyle('linear-gradient(135deg, #3498db, #2980b9)'), width: '100%', padding: '10px', fontSize: 12, borderRadius: 8, marginTop: 8 }}
+              >
+                👋 Selam Gönder
+              </button>
+            </div>
+          </Modal>
+        )}
+
+        {/* Zoom Card Modal */}
+        {zoomedCard && (
+          <div
+            onClick={() => setZoomedCard(null)}
+            style={{
+              position: 'fixed', inset: 0, zIndex: 100000,
+              background: 'rgba(5, 7, 12, 0.93)',
+              display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+              backdropFilter: 'blur(20px)',
+              animation: 'fw-fade-in 0.25s ease-out'
+            }}
+          >
+            <div style={{ transform: 'scale(1.6)' }} onClick={e => e.stopPropagation()}>
+              <CardVisual card={zoomedCard} />
+            </div>
+            <div style={{ marginTop: 40, color: '#aaa', fontSize: 12, fontWeight: 'bold', letterSpacing: 0.5 }}>Kapatmak için herhangi bir yere dokunun</div>
+          </div>
+        )}
+
       </div>
     </ThemeContext.Provider>
   );
 }
 
 const getSmartHighlightIds = (hand, me, players) => {
-  if (!me || !hand) return [];
+  if (!me || !hand || !players) return [];
   const ids = [];
   const myProperties = me.properties || {};
 

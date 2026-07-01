@@ -6,7 +6,7 @@ const { v4: uuidv4 } = require('uuid');
 const MonopolyDealGame = require('./game');
 const { handleBotAction } = require('./bot');
 const path = require('path');
-const { registerUser, loginUser, updateUserStats, updateProfile, getLeaderboard } = require('./db');
+const { registerUser, loginUser, getUser, updateUserStats, updateProfile, getLeaderboard } = require('./db');
 
 const app = express();
 app.use(cors());
@@ -33,7 +33,7 @@ setInterval(() => {
     if (game.phase === 'playing' && game.turnTimer > 0 && game.turnStartTime && !game.hasBlockingState) {
       if (Date.now() - game.turnStartTime > game.turnTimer * 1000) { // Saniyeyi milisaniyeye çevir
         console.log(`[Room ${roomCode}] Tur süresi doldu, ${game.currentPlayer.name} turu otomatik bitiriliyor.`);
-        game.endTurn(game.currentPlayer.id); // Otomatik tur bitir
+        game.endTurn(game.currentPlayer.id, { isTimeout: true }); // Otomatik tur bitir
         broadcastState(roomCode);
       }
     }
@@ -117,6 +117,11 @@ io.on('connection', (socket) => {
 
   socket.on('updateDbAvatar', async ({ username, avatar }, cb) => {
     const res = await updateProfile(username, avatar);
+    if (cb) cb(res);
+  });
+
+  socket.on('getUserInfo', async ({ username }, cb) => {
+    const res = await getUser(username);
     if (cb) cb(res);
   });
 
@@ -228,6 +233,17 @@ io.on('connection', (socket) => {
       const player = room.game.players.find(p => p.id === socket.data.playerId);
       if (player) {
         player.avatar = newAvatar;
+        broadcastState(roomCode);
+      }
+    }
+  });
+
+  socket.on('toggleReady', ({ roomCode }) => {
+    const room = rooms[roomCode];
+    if (room) {
+      const player = room.game.players.find(p => p.id === socket.data.playerId);
+      if (player) {
+        player.isReady = !player.isReady;
         broadcastState(roomCode);
       }
     }

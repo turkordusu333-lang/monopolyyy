@@ -265,3 +265,12 @@ export function sfxHeartbeat() { playSmart({ url: '/sounds/heartbeat.mp3', volum
 export function sfxBlackMarket({ actorId } = {}) { playSmart({ url: '/sounds/blackmarket.mp3', volume: 0.85, category: 'local', actorId }); }
 export function sfxCoinsCling({ actorId } = {}) { playSmart({ url: '/sounds/coins_cling.mp3', volume: 0.85, category: 'local', actorId }); }
 export function sfxVaultClose({ actorId } = {}) { playSmart({ url: '/sounds/vault_close.mp3', volume: 0.9, category: 'local', actorId }); }
+
+export function stopAllSFX() {
+  Object.values(audioInstances).forEach(audio => {
+    try {
+      audio.pause();
+      audio.currentTime = 0;
+    } catch (e) { /* ignore */ }
+  });
+}

@@ -20,7 +20,7 @@ export function Modal({ title, children, onClose }) {
           background: 'linear-gradient(145deg, rgba(16, 24, 48, 0.95), rgba(8, 12, 28, 0.98))',
           border: '1px solid rgba(255, 215, 0, 0.25)',
           borderRadius: 16,
-          padding: 28,
+          padding: window.innerWidth < 768 ? '20px 16px' : 28,
           maxWidth: 520,
           width: '100%',
           maxHeight: '85vh',

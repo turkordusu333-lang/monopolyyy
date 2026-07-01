@@ -53,11 +53,11 @@ let _pid = 1;
 const nextPendingId = () => `pend_${_pid++}`;
 
 class MonopolyDealGame {
-  constructor(roomId, settings = {}, onEvent = () => {}) {
+  constructor(roomId, settings = {}, onEvent = () => { }) {
     this.onEvent = onEvent;
     this.roomId = roomId;
     this.autoEndTurn = settings.autoEndTurn ?? true;
-    this.turnTimer = settings.turnTimer ?? 0; // saniye cinsinden, 0 = sınırsız
+    this.turnTimer = settings.turnTimer ?? 30; // saniye cinsinden, 0 = sınırsız
     this.winSets = parseInt(settings.winSets) || 3; // Kazanma hedefi
     this.startCards = parseInt(settings.startCards) || 5; // Başlangıç kartı
     this.handLimit = parseInt(settings.handLimit) || 7; // El limiti
@@ -112,6 +112,7 @@ class MonopolyDealGame {
       connected: true,
       isAFK: false, // Otomatik geçen/uyuyan oyuncu bayrağı
       hasGambledThisTurn: false,
+      isReady: this.players.length === 0,
       stats: { rentCollected: 0, cardsDrawn: 0, stealsPerformed: 0, totalMoneyBanked: 0, actionsPlayed: 0 }
     });
     return true;
@@ -151,7 +152,7 @@ class MonopolyDealGame {
 
     let newDeck = createDeck(this.thiefSquirrelEnabled);
     // ÖZEL DESTE: Ekstra Anlaşma Bozucu Ekleme
-    for(let i = 0; i < this.extraDealBreakers; i++) {
+    for (let i = 0; i < this.extraDealBreakers; i++) {
       newDeck.push({ id: `custom_db_${i}`, type: 'action', action: 'dealbreaker', name: 'Anlaşma Bozucu (ÖZEL)', value: 5, key: 'action_dealbreaker', colors: [] });
     }
     this.deck = shuffle(newDeck);
@@ -237,7 +238,7 @@ class MonopolyDealGame {
     player.hand.push(...drawn);
     player.stats.cardsDrawn += drawn.length;
     this.addLog(`${player.name} desteden ${drawn.length} yeni kart çekti. (Deste: ${this.deck.length})`, 'draw');
-    
+
     if (this.deck.length <= 10 && this.deck.length > 0) {
       this.addLog(`⚠️ DİKKAT: Destede sadece ${this.deck.length} kart kaldı!`, 'system');
     }
@@ -254,7 +255,7 @@ class MonopolyDealGame {
 
     const player = this.currentPlayer;
     player.isAFK = false; // Oyuncu hamle yaptı, AFK'dan çıkar
-    
+
     // Geri alma işlemi için mevcut durumun kopyasını al
     const snapshot = this.getCurrentStateSnapshot();
 
@@ -332,7 +333,7 @@ class MonopolyDealGame {
     const player = this.players.find(p => p.id === playerId);
     if (!player) return { ok: false, error: 'Oyuncu bulunamadı' };
     player.isAFK = false; // Aktif olduğunu belirt
-    
+
     if (this.currentPlayer.id !== playerId) return { ok: false, error: 'Sıra sende değil' };
     if (this.hasBlockingState) return { ok: false, error: 'Önce bekleyen ödeme/itirazları çöz' };
 
@@ -365,18 +366,18 @@ class MonopolyDealGame {
   // ──────────────────────────────────────────────────────────
   playAction(player, card, idx, options) {
     switch (card.action) {
-      case 'passgo':         return this.actionPassGo(player, card, idx);
-      case 'birthday':       return this.actionBirthday(player, card, idx);
-      case 'debtcollector':  return this.actionDebtCollector(player, card, idx, options);
+      case 'passgo': return this.actionPassGo(player, card, idx);
+      case 'birthday': return this.actionBirthday(player, card, idx);
+      case 'debtcollector': return this.actionDebtCollector(player, card, idx, options);
       case 'thief_squirrel': return this.actionThiefSquirrel(player, card, idx, options);
-      case 'rent':           return this.actionRent(player, card, idx, options);
-      case 'slydeal':        return this.actionSlyDeal(player, card, idx, options);
-      case 'forceddeal':     return this.actionForcedDeal(player, card, idx, options);
-      case 'dealbreaker':    return this.actionDealBreaker(player, card, idx, options);
+      case 'rent': return this.actionRent(player, card, idx, options);
+      case 'slydeal': return this.actionSlyDeal(player, card, idx, options);
+      case 'forceddeal': return this.actionForcedDeal(player, card, idx, options);
+      case 'dealbreaker': return this.actionDealBreaker(player, card, idx, options);
       case 'house':
-      case 'hotel':          return this.actionBuilding(player, card, idx, options);
-      case 'doublerent':     return { ok: false, error: 'Bu kart Kira kartıyla birlikte oynanmalı (Kira kartını seçip "2x" seçeneğini işaretle)' };
-      case 'justsayno':      return { ok: false, error: 'Reddet! kartı sadece sana karşı oynanan bir karta yanıt olarak kullanılabilir' };
+      case 'hotel': return this.actionBuilding(player, card, idx, options);
+      case 'doublerent': return { ok: false, error: 'Bu kart Kira kartıyla birlikte oynanmalı (Kira kartını seçip "2x" seçeneğini işaretle)' };
+      case 'justsayno': return { ok: false, error: 'Reddet! kartı sadece sana karşı oynanan bir karta yanıt olarak kullanılabilir' };
       default:
         return { ok: false, error: 'Bilinmeyen aksiyon' };
     }
@@ -404,7 +405,7 @@ class MonopolyDealGame {
         data: { amount: 2, reason: `${player.name}'in Doğum Günü hediyesi` },
       });
     });
-        this.addLog(`${player.name} "Doğum Günüm!" oynadı! Herkes 2M ödeyecek (itiraz süresi)`, 'action', SOUND_EFFECTS.birthday, player.id);
+    this.addLog(`${player.name} "Doğum Günüm!" oynadı! Herkes 2M ödeyecek (itiraz süresi)`, 'action', SOUND_EFFECTS.birthday, player.id);
     return { ok: true };
   }
 
@@ -421,7 +422,7 @@ class MonopolyDealGame {
       targetId: target.id,
       data: { amount: 5, reason: `${player.name}'in Borç Tahsildarı` },
     });
-        this.addLog(`${player.name} "Borç Tahsildarı" oynadı, ${target.name}'dan 5M istiyor (itiraz süresi)`, 'action', SOUND_EFFECTS.debtcollector, player.id, target.id);
+    this.addLog(`${player.name} "Borç Tahsildarı" oynadı, ${target.name}'dan 5M istiyor (itiraz süresi)`, 'action', SOUND_EFFECTS.debtcollector, player.id, target.id);
     return { ok: true };
   }
 
@@ -490,7 +491,7 @@ class MonopolyDealGame {
         targetId: target.id,
         data: { amount: rentAmount, reason: `${player.name}'in ${COLOR_INFO[color]?.name} kirası${multiplier > 1 ? ' (2x)' : ''}` },
       });
-            this.addLog(`${player.name} "Joker Kira" oynadı! ${target.name} hedef seçildi ve ${rentAmount}M ödemesi istendi.`, 'action', SOUND_EFFECTS.rent, player.id, target.id);
+      this.addLog(`${player.name} "Joker Kira" oynadı! ${target.name} hedef seçildi ve ${rentAmount}M ödemesi istendi.`, 'action', SOUND_EFFECTS.rent, player.id, target.id);
     } else {
       const targets = this.players.filter(p => p.id !== player.id);
       const targetNames = targets.map(t => t.name).join(', ');
@@ -502,7 +503,7 @@ class MonopolyDealGame {
           data: { amount: rentAmount, reason: `${player.name}'in ${COLOR_INFO[color]?.name} kirası${multiplier > 1 ? ' (2x)' : ''}` },
         });
       });
-            this.addLog(`${player.name}, ${COLOR_INFO[color]?.name} kirası topluyor${multiplier > 1 ? ' (2X)' : ''}! ${targetNames} için ${rentAmount}M borç çıkartıldı.`, 'action', SOUND_EFFECTS.rent, player.id);
+      this.addLog(`${player.name}, ${COLOR_INFO[color]?.name} kirası topluyor${multiplier > 1 ? ' (2X)' : ''}! ${targetNames} için ${rentAmount}M borç çıkartıldı.`, 'action', SOUND_EFFECTS.rent, player.id);
     }
 
     return { ok: true, actionsUsed: doubleCard ? 2 : 1 };
@@ -531,7 +532,7 @@ class MonopolyDealGame {
       targetId: target.id,
       data: { targetColor, targetCardId, cardName: stolenCardPreview.name },
     });
-        this.addLog(`${player.name} "Sinsi Anlaşma" kullandı! ${target.name}'ın "${stolenCardPreview.name}" arazisini çalmak için hamle yaptı.`, 'action', SOUND_EFFECTS.slydeal, player.id, target.id);
+    this.addLog(`${player.name} "Sinsi Anlaşma" kullandı! ${target.name}'ın "${stolenCardPreview.name}" arazisini çalmak için hamle yaptı.`, 'action', SOUND_EFFECTS.slydeal, player.id, target.id);
     return { ok: true };
   }
 
@@ -562,7 +563,7 @@ class MonopolyDealGame {
       targetId: target.id,
       data: { targetColor, targetCardId, myColor, myCardId, theirCardName: targetProps[tIdx].name, myCardName: myProps[mIdx].name },
     });
-        this.addLog(`${player.name} zorunlu takas başlattı! ${target.name} ile arazi değiş-tokuşu istiyor.`, 'action', SOUND_EFFECTS.forceddeal, player.id, target.id);
+    this.addLog(`${player.name} zorunlu takas başlattı! ${target.name} ile arazi değiş-tokuşu istiyor.`, 'action', SOUND_EFFECTS.forceddeal, player.id, target.id);
     return { ok: true };
   }
 
@@ -584,7 +585,7 @@ class MonopolyDealGame {
       targetId: target.id,
       data: { targetColor },
     });
-        this.addLog(`${player.name} "Anlaşma Bozucu" oynadı! ${target.name}'ın tamamlanmış ${COLOR_INFO[targetColor]?.name || targetColor} setinin tamamını ele geçirmeye çalışıyor!`, 'action', SOUND_EFFECTS.dealbreaker, player.id, target.id);
+    this.addLog(`${player.name} "Anlaşma Bozucu" oynadı! ${target.name}'ın tamamlanmış ${COLOR_INFO[targetColor]?.name || targetColor} setinin tamamını ele geçirmeye çalışıyor!`, 'action', SOUND_EFFECTS.dealbreaker, player.id, target.id);
     return { ok: true };
   }
 
@@ -633,7 +634,7 @@ class MonopolyDealGame {
   openChallenge({ action, sourceId, targetId, data }) {
     this.pauseTurnTimer(3); // Araya girildi! Süreyi dondur ve +3 saniye hediye et
     this.challengeStartTime = Date.now(); // Hızlı reddet için itiraz başlangıcı
-    
+
     this.pendingChallenges.push({
       id: nextPendingId(),
       action,
@@ -654,17 +655,17 @@ class MonopolyDealGame {
     this.undoStack = [];
     const ch = this.pendingChallenges.find(c => c.id === challengeId);
     if (!ch) return { ok: false, error: 'İtiraz bulunamadı' };
-    
+
     const player = this.players.find(p => p.id === playerId);
     if (player) player.isAFK = false;
-    
+
     if (ch.responderId !== playerId) return { ok: false, error: 'Sırada sen değilsin' };
 
     if (useJustSayNo) {
       if (!this.allowCounterJustSayNo && ch.cancelled) {
         return { ok: false, error: 'Bu odada Çifte Reddet (İtiraza itiraz) kuralı kapalıdır.' };
       }
-      
+
       const cardIdx = player.hand.findIndex(c => c.action === 'justsayno');
       if (cardIdx === -1) return { ok: false, error: 'Reddet! kartın yok' };
       const jCard = player.hand.splice(cardIdx, 1)[0];
@@ -673,7 +674,7 @@ class MonopolyDealGame {
       // Sıra diğer tarafa geçer (zincir)
       ch.responderId = ch.responderId === ch.targetId ? ch.sourceId : ch.targetId;
       const playerName = player.name;
-            this.addLog(`${playerName} "Reddet!" oynadı! ${ch.cancelled ? 'Hamle geçersiz' : 'Hamle yine geçerli'} (karşı tarafa söz hakkı)`, 'action', ch.cancelled ? SOUND_EFFECTS.justsayno_counter : SOUND_EFFECTS.justsayno, player.id, ch.sourceId === player.id ? ch.targetId : ch.sourceId);
+      this.addLog(`${playerName} "Reddet!" oynadı! ${ch.cancelled ? 'Hamle geçersiz' : 'Hamle yine geçerli'} (karşı tarafa söz hakkı)`, 'action', ch.cancelled ? SOUND_EFFECTS.justsayno_counter : SOUND_EFFECTS.justsayno, player.id, ch.sourceId === player.id ? ch.targetId : ch.sourceId);
 
       // Karşı tarafın elinde Reddet! yoksa otomatik sonlandır
       const otherId = ch.responderId;
@@ -786,7 +787,7 @@ class MonopolyDealGame {
       this.addLog(`${payer.name} ödeyecek hiçbir şeyi yok, ${collector?.name} bu sefer boş döndü`, 'system');
       return;
     }
-    
+
     this.pauseTurnTimer(3); // Ödeme zorunluluğu çıktı, süreyi dondur +6 saniye ekle
     this.pendingPayments.push({
       id: nextPendingId(),
@@ -824,17 +825,17 @@ class MonopolyDealGame {
         paidAmount += card.value;
       }
     }
-    
+
     const totalAssets = payer.bank.reduce((s, c) => s + c.value, 0) + Object.values(payer.properties).flat().reduce((s, c) => s + c.value, 0);
     // Eğer oyuncunun varlıkları borcu karşılamıyorsa, her şeyini vermek zorunda.
     if (paidAmount < amount && totalAssets > 0 && totalAssets < amount) {
-        const allBankIds = payer.bank.map(c => c.id);
-        const allPropIds = Object.values(payer.properties).flat().map(c => c.id);
-        this.addLog(`[BOT] ${payer.name} borcunu ödeyemedi, tüm varlıklarına el konuldu!`, 'system');
-        this.submitPayment(payer.id, allBankIds, allPropIds);
+      const allBankIds = payer.bank.map(c => c.id);
+      const allPropIds = Object.values(payer.properties).flat().map(c => c.id);
+      this.addLog(`[BOT] ${payer.name} borcunu ödeyemedi, tüm varlıklarına el konuldu!`, 'system');
+      this.submitPayment(payer.id, allBankIds, allPropIds);
     } else {
-        this.addLog(`[BOT] ${payer.name} otomatik olarak ${paidAmount}M ödedi.`, 'system');
-        this.submitPayment(payer.id, bankToPay, propsToPay);
+      this.addLog(`[BOT] ${payer.name} otomatik olarak ${paidAmount}M ödedi.`, 'system');
+      this.submitPayment(payer.id, bankToPay, propsToPay);
     }
   }
 
@@ -908,7 +909,7 @@ class MonopolyDealGame {
     const bankItems = bankCards.map(c => `${c.value}M Nakit`);
     const propItems = propCards.map(c => `"${c.name}" arazisi`);
     const paymentDetail = [...bankItems, ...propItems].join(', ');
-    
+
     const payerBank = payer.bank.reduce((s, c) => s + (c.value || 0), 0);
     const collectorBank = collector.bank.reduce((s, c) => s + (c.value || 0), 0);
 
@@ -921,7 +922,7 @@ class MonopolyDealGame {
 
   // Eğer tüm bekleyen işler bittiyse ve sıradaki oyuncunun eli boşsa otomatik bir şey yapmaya gerek yok;
   // bu fonksiyon sadece win-check sonrası temizlik amaçlı, şu an no-op bırakıldı.
-  checkTurnDrawIfNeeded() {}
+  checkTurnDrawIfNeeded() { }
 
   recordHistory() {
     const turnNum = this.log.filter(l => l.msg.includes('--- Sıra')).length + 1;
@@ -990,11 +991,11 @@ class MonopolyDealGame {
 
     const extractCards = (player, bankIds, propIds) => {
       const bank = [], props = [];
-      bankIds.forEach(id => { const idx = player.bank.findIndex(c => c.id === id); if(idx !== -1) bank.push(player.bank.splice(idx,1)[0]); });
+      bankIds.forEach(id => { const idx = player.bank.findIndex(c => c.id === id); if (idx !== -1) bank.push(player.bank.splice(idx, 1)[0]); });
       propIds.forEach(id => {
         for (const col in player.properties) {
           const idx = player.properties[col].findIndex(c => c.id === id);
-          if(idx !== -1) { props.push(player.properties[col].splice(idx,1)[0]); if(player.properties[col].length === 0) delete player.properties[col]; break; }
+          if (idx !== -1) { props.push(player.properties[col].splice(idx, 1)[0]); if (player.properties[col].length === 0) delete player.properties[col]; break; }
         }
       });
       return { bank, props };
@@ -1004,9 +1005,9 @@ class MonopolyDealGame {
     const requestCards = extractCards(target, trade.requestBankIds, trade.requestPropIds);
 
     target.bank.push(...offerCards.bank);
-    offerCards.props.forEach(c => { const col = c.activeColor || c.color || 'wild'; if(!target.properties[col]) target.properties[col] = []; target.properties[col].push({...c, activeColor: col}); });
+    offerCards.props.forEach(c => { const col = c.activeColor || c.color || 'wild'; if (!target.properties[col]) target.properties[col] = []; target.properties[col].push({ ...c, activeColor: col }); });
     source.bank.push(...requestCards.bank);
-    requestCards.props.forEach(c => { const col = c.activeColor || c.color || 'wild'; if(!source.properties[col]) source.properties[col] = []; source.properties[col].push({...c, activeColor: col}); });
+    requestCards.props.forEach(c => { const col = c.activeColor || c.color || 'wild'; if (!source.properties[col]) source.properties[col] = []; source.properties[col].push({ ...c, activeColor: col }); });
 
     this.addLog(`${source.name} ve ${target.name} takas yaptı! 🤝`, 'property');
     this.checkWin();
@@ -1018,27 +1019,27 @@ class MonopolyDealGame {
     if (!this.streetThugs) return { ok: false, error: 'Sokak Haydutları kapalı' };
     const player = this.players.find(p => p.id === playerId);
     if (!player) return { ok: false };
-    
+
     const cardIdx = this.scavengeMarket.findIndex(c => c.id === cardId);
     if (cardIdx === -1) return { ok: false, error: 'Kart karaborsada yok' };
-    
+
     const totalBank = player.bank.reduce((s, c) => s + c.value, 0);
     if (totalBank < 2) return { ok: false, error: 'Bankanda en az 2M olmalı (sadece nakit geçerlidir)' };
-    
+
     let paid = 0;
-    const bankCards = [...player.bank].sort((a,b) => a.value - b.value);
+    const bankCards = [...player.bank].sort((a, b) => a.value - b.value);
     const cardsToPay = [];
     for (const c of bankCards) {
-        paid += c.value;
-        cardsToPay.push(c);
-        if (paid >= 2) break;
+      paid += c.value;
+      cardsToPay.push(c);
+      if (paid >= 2) break;
     }
-    
+
     cardsToPay.forEach(c => {
-        const idx = player.bank.findIndex(x => x.id === c.id);
-        if (idx !== -1) this.discard.push(player.bank.splice(idx, 1)[0]);
+      const idx = player.bank.findIndex(x => x.id === c.id);
+      if (idx !== -1) this.discard.push(player.bank.splice(idx, 1)[0]);
     });
-    
+
     const card = this.scavengeMarket.splice(cardIdx, 1)[0];
     player.hand.push(card);
     this.addLog(`${player.name}, Karaborsa'dan 2M ödeyerek çöpten kart aldı! 🕵️‍♂️`, 'draw', null, player.id);
@@ -1057,25 +1058,25 @@ class MonopolyDealGame {
     player.hasGambledThisTurn = true;
     this.actionsLeft -= 1;
     const roll = Math.floor(Math.random() * 6) + 1;
-    
+
     if (roll <= 3) {
-        if (player.hand.length > 0) {
-            const randIdx = Math.floor(Math.random() * player.hand.length);
-            const lost = player.hand.splice(randIdx, 1)[0];
-            this.discard.push(lost);
-            this.addLog(`${player.name} zar attı: 🎲 ${roll}. Kötü şans! Elinden rastgele "${lost.name}" uçup gitti.`, 'system');
-        } else {
-            this.addLog(`${player.name} zar attı: 🎲 ${roll}. Şanslı! Eli boş olduğu için bir şey kaybetmedi.`, 'system');
-        }
+      if (player.hand.length > 0) {
+        const randIdx = Math.floor(Math.random() * player.hand.length);
+        const lost = player.hand.splice(randIdx, 1)[0];
+        this.discard.push(lost);
+        this.addLog(`${player.name} zar attı: 🎲 ${roll}. Kötü şans! Elinden rastgele "${lost.name}" uçup gitti.`, 'system');
+      } else {
+        this.addLog(`${player.name} zar attı: 🎲 ${roll}. Şanslı! Eli boş olduğu için bir şey kaybetmedi.`, 'system');
+      }
     } else {
-        const drawn = this.drawCards(2);
-        player.hand.push(...drawn);
-        this.addLog(`${player.name} zar attı: 🎲 ${roll}. Jackpot! Desteden 2 kart çekti.`, 'system');
+      const drawn = this.drawCards(2);
+      player.hand.push(...drawn);
+      this.addLog(`${player.name} zar attı: 🎲 ${roll}. Jackpot! Desteden 2 kart çekti.`, 'system');
     }
-    
+
     if (this.actionsLeft === 0 && this.autoEndTurn) this.endTurn(playerId);
     else this.resetTurnTimer();
-    
+
     return { ok: true, roll };
   }
 
@@ -1083,7 +1084,7 @@ class MonopolyDealGame {
     const player = this.players.find(p => p.id === playerId);
     if (!player) return { ok: false };
     player.isAFK = false;
-    
+
     if (this.hasBlockingState) return { ok: false, error: 'Önce bekleyen ödeme/itirazları çöz' };
     const over = player.hand.length - this.handLimit;
     if (over <= 0) return { ok: true };
@@ -1108,7 +1109,14 @@ class MonopolyDealGame {
     const player = this.currentPlayer;
 
     if (player.hand.length > this.handLimit) {
-      return { ok: false, error: `El limitini aşıyorsun (${player.hand.length}/${this.handLimit}). Kart at.`, needsDiscard: true };
+      if (data.isTimeout) {
+        const over = player.hand.length - this.handLimit;
+        const discarded = player.hand.splice(0, over);
+        this.discard.push(...discarded);
+        this.addLog(`${player.name} süresi dolduğu için ${over} adet kartı sistem tarafından otomatik atıldı.`, 'draw', null, player.id);
+      } else {
+        return { ok: false, error: `El limitini aşıyorsun (${player.hand.length}/${this.handLimit}). Kart at.`, needsDiscard: true };
+      }
     }
 
     if (data.isTimeout) {
@@ -1154,6 +1162,7 @@ class MonopolyDealGame {
 
   getState(forPlayerId) {
     return {
+      serverTime: Date.now(),
       canUndo: this.currentPlayer?.id === forPlayerId && this.undoStack && this.undoStack.length > 0,
       phase: this.phase,
       theme: this.theme,

@@ -149,6 +149,36 @@ async function loginUser(username, password) {
   }
 }
 
+async function getUser(username) {
+  const normalizedUser = username.trim().toLowerCase();
+  if (useSupabase) {
+    try {
+      const res = await fetch(`${supabaseUrl}/rest/v1/users?username=eq.${encodeURIComponent(normalizedUser)}`, {
+        headers: {
+          'apikey': supabaseKey,
+          'Authorization': `Bearer ${supabaseKey}`
+        }
+      });
+      const data = await res.json();
+      if (data && data.length > 0) {
+        return { ok: true, user: data[0] };
+      }
+      return { ok: false, error: 'Kullanıcı bulunamadı.' };
+    } catch (e) {
+      console.error('[DB] Supabase getUser hatası:', e);
+      return { ok: false, error: 'Kullanıcı getirme hatası.' };
+    }
+  } else {
+    const db = readLocalDB();
+    const user = db.users.find(u => u.username === normalizedUser);
+    if (user) {
+      return { ok: true, user };
+    }
+    return { ok: false, error: 'Kullanıcı bulunamadı.' };
+  }
+}
+
+
 async function updateUserStats(username, isWinner) {
   const normalizedUser = username.trim().toLowerCase();
   if (useSupabase) {
@@ -270,6 +300,7 @@ async function getLeaderboard() {
 module.exports = {
   registerUser,
   loginUser,
+  getUser,
   updateUserStats,
   updateProfile,
   getLeaderboard

@@ -27,7 +27,7 @@ const ACTION_COLORS = {
   thief_squirrel: '#8B4513'
 };
 
-export function CardVisual({ card, selected, onClick, small, dimmed, onHover, usable, comboClass }) {
+export function CardVisual({ card, selected, onClick, small, dimmed, onHover, usable, comboClass, lang }) {
   const { themeId, manifest } = useContext(ThemeContext);
   const imgSrc = getCardImageSrc(themeId, card?.key);
   const [imgFailed, setImgFailed] = useState(false);
@@ -54,31 +54,121 @@ export function CardVisual({ card, selected, onClick, small, dimmed, onHover, us
   };
 
   if (!card) return null;
-  const isAction = card.type === 'action';
-  const isMoney = card.type === 'money';
-  const isProp = card.type === 'property';
 
-  const displayName = manifest?.names?.[card.key] || card.name;
+  const activeLang = lang || localStorage.getItem('md_lang') || 'tr';
 
-  const activeColor = isProp && card.activeColor ? COLOR_INFO[card.activeColor] : null;
-  const baseColor = isProp && card.color ? COLOR_INFO[card.color] : null;
+  const translateCardLocal = (c, lg) => {
+    if (!c) return { name: '', description: '' };
+    if (lg !== 'en') {
+      return { name: c.name, description: c.description || '' };
+    }
 
-  const dualColors = isProp && card.isDual ? card.colors.map(c => COLOR_INFO[c]).filter(Boolean) : null;
-  const isFullWild = isProp && card.isWild;
+    let name = c.name;
+    let description = c.description || '';
 
-  const isRare = isFullWild || (isAction && card.action === 'dealbreaker');
-  const actionStyle = isAction ? (ACTION_STYLE[card.action] || { icon: '⚡', bg: 'linear-gradient(135deg, #F39C12, #D68910)' }) : null;
+    if (c.type === 'money') {
+      name = `${c.value}M`;
+      description = `Bank value: ${c.value}M`;
+    } else if (c.type === 'property') {
+      if (c.isWild) {
+        name = 'WILD CARD';
+        description = 'Can be used as any property color group. Cannot be put in bank vault.';
+      } else if (c.isDual) {
+        const colorsTranslated = c.colors.map(col => {
+          const names = { brown: 'Brown', lightblue: 'Light Blue', pink: 'Pink', orange: 'Orange', red: 'Red', yellow: 'Yellow', green: 'Green', blue: 'Dark Blue', railroad: 'Railroad', utility: 'Utility' };
+          return names[col] || col;
+        });
+        name = colorsTranslated.join(' / ');
+        description = `Dual property card. Tap/Click to flip active color between: ${colorsTranslated.join(', ')}`;
+      } else {
+        const propertyEnNames = {
+          'KASIMPAŞA': 'KASIMPASA', 'DOLAPDERE': 'DOLAPDERE', 'SULTANAHMET': 'SULTANAHMET',
+          'KARAKÖY': 'KARAKOY', 'SİRKECİ': 'SIRKECI', 'BEY OĞLU': 'BEYOGLU', 'TAKSİM': 'TAKSIM',
+          'BEŞİKTAŞ': 'BESIKTAS', 'HARBİYE': 'HARBIYE', 'MECİDİYEKÖY': 'MECIDIYEKOY', 'ŞİŞLİ': 'SISLI',
+          'ERENKÖY': 'ERENKOY', 'CADDEBOSTAN': 'CADDEBOSTAN', 'BOSTANCI': 'BOSTANCI',
+          'TEŞVİKİYE': 'TESVIKIYE', 'MAÇKA': 'MACKA', 'NİŞANTAŞI': 'NISANTASI', 'BEBEK': 'BEBEK',
+          'LEVENT': 'LEVENT', 'ETİLER': 'ETILER', 'YENİKÖY': 'YENIKOY', 'TARABYA': 'TARABYA',
+          'KADIKÖY VAPUR İSKELESİ': 'KADIKOY FERRY TERMINAL', 'KABATAŞ VAPUR İSKELESİ': 'KABATAS FERRY TERMINAL',
+          'HAYDARPAŞA TREN İSTASYONU': 'HAYDARPASA TRAIN STATION', 'SİRKECİ TREN İSTASYONU': 'SIRKECI TRAIN STATION',
+          'ELEKTRİK İDARESİ': 'ELECTRIC COMPANY', 'SU İDARESİ': 'WATER WORKS'
+        };
+        name = propertyEnNames[c.name] || c.name;
+        description = `Property Card. Rent for full set: ${COLOR_INFO[c.color]?.rents?.map(r => r + 'M').join(', ') || ''}`;
+      }
+    } else if (c.type === 'action') {
+      switch (c.action) {
+        case 'passgo': name = 'PASS GO'; description = 'Draw 2 extra cards from the deck.'; break;
+        case 'dealbreaker': name = 'DEAL BREAKER'; description = 'Steal a completed property set from an opponent, including any House/Hotel on it.'; break;
+        case 'justsayno': name = 'JUST SAY NO'; description = 'Block any action card played against you.'; break;
+        case 'slydeal': name = 'SLY DEAL'; description = 'Steal a single property card from an opponent (cannot be part of a completed set).'; break;
+        case 'forceddeal': name = 'FORCED DEAL'; description = 'Swap one of your properties with an opponent\'s property (cannot be part of a completed set).'; break;
+        case 'debtcollector': name = 'DEBT COLLECTOR'; description = 'Demand 5M from any player.'; break;
+        case 'birthday': name = 'ITS MY BIRTHDAY'; description = 'Demand 2M from every player.'; break;
+        case 'house': name = 'HOUSE'; description = 'Add to any completed property set (except Railroads & Utilities) to increase rent by 3M.'; break;
+        case 'hotel': name = 'HOTEL'; description = 'Add to a property set that already has a House to increase rent by 4M. House stays.'; break;
+        case 'doublerent': name = 'DOUBLE RENT'; description = 'Double the rent amount. Must be played together with a Rent card.'; break;
+        case 'thief_squirrel': name = 'THIEF SQUIRREL'; description = 'Steal a random card from an opponent\'s hand.'; break;
+        case 'rent':
+          name = 'RENT';
+          if (c.colors && Array.isArray(c.colors)) {
+            const colorNames = c.colors.map(col => {
+              const names = { brown: 'Brown', lightblue: 'Light Blue', pink: 'Pink', orange: 'Orange', red: 'Red', yellow: 'Yellow', green: 'Green', blue: 'Dark Blue', railroad: 'Railroad', utility: 'Utility' };
+              return names[col] || col;
+            });
+            description = `Collect rent for ${colorNames.join('/')} from all players.`;
+          } else {
+            description = 'Collect rent for active colors from all players.';
+          }
+          break;
+        case 'rent_all': name = 'ANY RENT'; description = 'Collect rent for a color of your choice from any single player.'; break;
+      }
+    }
+    return { name, description };
+  };
+
+  const cardTranslated = {
+    ...card,
+    name: translateCardLocal(card, activeLang).name,
+    description: translateCardLocal(card, activeLang).description
+  };
+
+  const isAction = cardTranslated.type === 'action';
+  const isMoney = cardTranslated.type === 'money';
+  const isProp = cardTranslated.type === 'property';
+
+  const displayName = manifest?.names?.[cardTranslated.key] || cardTranslated.name;
+
+  const activeColor = isProp && cardTranslated.activeColor ? COLOR_INFO[cardTranslated.activeColor] : null;
+  const baseColor = isProp && cardTranslated.color ? COLOR_INFO[cardTranslated.color] : null;
+
+  const dualColors = isProp && cardTranslated.isDual ? cardTranslated.colors.map(c => {
+    const info = COLOR_INFO[c];
+    if (!info) return null;
+    return {
+      ...info,
+      name: activeLang === 'en' ? {
+        brown: 'Brown', lightblue: 'Light Blue', pink: 'Pink', orange: 'Orange',
+        red: 'Red', yellow: 'Yellow', green: 'Green', blue: 'Dark Blue',
+        railroad: 'Railroad', utility: 'Utility'
+      }[c] || info.name : info.name
+    };
+  }).filter(Boolean) : null;
+
+  const isFullWild = isProp && cardTranslated.isWild;
+
+  const isRare = isFullWild || (isAction && cardTranslated.action === 'dealbreaker');
+  const actionStyle = isAction ? (ACTION_STYLE[cardTranslated.action] || { icon: '⚡', bg: 'linear-gradient(135deg, #F39C12, #D68910)' }) : null;
 
   const scale = window.innerWidth < 768 ? 0.85 : 1.5;
   const w = (small ? 68 : 132) * scale;
   const h = (small ? 96 : 192) * scale;
 
   let typeBadge = null;
-  if (isMoney) typeBadge = { icon: '💵', label: 'PARA', bg: 'rgba(0,0,0,0.35)' };
-  else if (isAction) typeBadge = { icon: actionStyle.icon, label: 'AKSİYON', bg: 'rgba(0,0,0,0.35)' };
-  else if (isFullWild) typeBadge = { icon: '🃏', label: 'TAM JOKER', bg: 'rgba(0,0,0,0.5)' };
-  else if (dualColors) typeBadge = { icon: '🔀', label: 'ÇİFT RENK', bg: 'rgba(0,0,0,0.35)' };
-  else if (isProp) typeBadge = { icon: '🏠', label: 'ARAZİ', bg: 'rgba(0,0,0,0.35)' };
+  if (isMoney) typeBadge = { icon: '💵', label: activeLang === 'en' ? 'MONEY' : 'PARA', bg: 'rgba(0,0,0,0.35)' };
+  else if (isAction) typeBadge = { icon: actionStyle.icon, label: activeLang === 'en' ? 'ACTION' : 'AKSİYON', bg: 'rgba(0,0,0,0.35)' };
+  else if (isFullWild) typeBadge = { icon: '🃏', label: activeLang === 'en' ? 'WILD CARD' : 'TAM JOKER', bg: 'rgba(0,0,0,0.5)' };
+  else if (dualColors) typeBadge = { icon: '🔀', label: activeLang === 'en' ? 'DUAL COLOR' : 'ÇİFT RENK', bg: 'rgba(0,0,0,0.35)' };
+  else if (isProp) typeBadge = { icon: '🏠', label: activeLang === 'en' ? 'PROPERTY' : 'ARAZİ', bg: 'rgba(0,0,0,0.35)' };
 
   const showImage = !!imgSrc && !imgFailed;
 
@@ -104,7 +194,7 @@ export function CardVisual({ card, selected, onClick, small, dimmed, onHover, us
       onClick={handleClick}
       onMouseEnter={() => onHover && onHover(card)}
       onMouseLeave={() => onHover && onHover(null)}
-      className={`card-visual ${selected ? "selected-card" : ""} ${shaking ? "card-shake" : ""} ${usable ? "usable-card" : ""} ${isRare ? "holo-wrapper" : ""} ${comboClass || ""} ${isFlipping ? "card-flip-3d" : ""}`}
+      className={`card-visual ${card.type}-card ${selected ? "selected-card" : ""} ${shaking ? "card-shake" : ""} ${usable ? "usable-card" : ""} ${isRare ? "holo-wrapper" : ""} ${comboClass || ""} ${isFlipping ? "card-flip-3d" : ""}`}
       style={{
         width: w, height: h,
         background: getCardBg(),
@@ -125,6 +215,9 @@ export function CardVisual({ card, selected, onClick, small, dimmed, onHover, us
         boxSizing: 'border-box'
       }}
     >
+      {/* Dynamic Metalic Shimmer Swipe Layer */}
+      <div className="card-shimmer" />
+
       {showImage ? (
         <>
           <img src={imgSrc} alt={displayName} onError={() => setImgFailed(true)} style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover' }} />
@@ -307,7 +400,7 @@ export function CardVisual({ card, selected, onClick, small, dimmed, onHover, us
                       }}>
                         {baseColor.rents.map((r, i) => (
                           <div key={i} style={{ fontSize: 8.5, display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontWeight: '800', color: '#000000' }}>
-                            <span>{i + 1} Kart:</span>
+                            <span>{i + 1} {lang === 'en' ? 'Cards:' : 'Kart:'}</span>
                             <span style={{ color: '#000000' }}>{r}M</span>
                           </div>
                         ))}
@@ -343,7 +436,7 @@ export function CardVisual({ card, selected, onClick, small, dimmed, onHover, us
                         padding: '4px 6px',
                         border: '1px solid #E5E7E9'
                       }}>
-                        <div style={{ fontSize: 7.5, color: '#7F8C8D', fontWeight: 'bold', borderBottom: '1px solid #BDC3C7', paddingBottom: 2, marginBottom: 2 }}>KİRA TABLOSU</div>
+                        <div style={{ fontSize: 7.5, color: '#7F8C8D', fontWeight: 'bold', borderBottom: '1px solid #BDC3C7', paddingBottom: 2, marginBottom: 2 }}>{lang === 'en' ? 'RENT TABLE' : 'KİRA TABLOSU'}</div>
                         {baseColor.rents.map((r, i) => (
                           <div key={i} style={{ fontSize: 10.5, display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontWeight: '800', color: '#000000' }}>
                             <div style={{ display: 'flex', alignItems: 'center', gap: 3 }}>
@@ -355,7 +448,7 @@ export function CardVisual({ card, selected, onClick, small, dimmed, onHover, us
                                 display: 'inline-block',
                                 border: '0.5px solid rgba(0,0,0,0.15)'
                               }} />
-                              <span>{i + 1} Kart:</span>
+                              <span>{i + 1} {lang === 'en' ? 'Cards:' : 'Kart:'}</span>
                             </div>
                             <span style={{ color: '#000000' }}>{r}M</span>
                           </div>
@@ -396,7 +489,7 @@ export function CardVisual({ card, selected, onClick, small, dimmed, onHover, us
                         lineHeight: 1.2,
                         margin: 'auto 0'
                       }}>
-                        TÜM RENKLER İÇİN JOKER
+                        {lang === 'en' ? 'WILD FOR ALL COLORS' : 'TÜM RENKLER İÇİN JOKER'}
                       </div>
                     )}
                   </>
