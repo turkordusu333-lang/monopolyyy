@@ -1225,6 +1225,8 @@ class MonopolyDealGame {
         avatar: p.avatar,
         selectedBorder: p.selectedBorder || 'default',
         selectedCardBack: p.selectedCardBack || 'default',
+        selectedTitle: p.selectedTitle || 'default',
+        selectedPlayEffect: p.selectedPlayEffect || 'default',
         handCount: p.hand.length,
         hand: (p.id === forPlayerId || this.openHands) ? p.hand : [],
         bank: p.bank,

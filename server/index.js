@@ -153,8 +153,12 @@ io.on('connection', (socket) => {
         if (gamePlayer) {
           if (itemType === 'border') {
             gamePlayer.selectedBorder = itemId;
-          } else {
+          } else if (itemType === 'cardBack') {
             gamePlayer.selectedCardBack = itemId;
+          } else if (itemType === 'title') {
+            gamePlayer.selectedTitle = itemId;
+          } else if (itemType === 'playEffect') {
+            gamePlayer.selectedPlayEffect = itemId;
           }
           broadcastState(roomCode);
         }
@@ -186,6 +190,8 @@ io.on('connection', (socket) => {
         if (dbRes && dbRes.ok && dbRes.user) {
           gamePlayer.selectedBorder = dbRes.user.selectedBorder || 'default';
           gamePlayer.selectedCardBack = dbRes.user.selectedCardBack || 'default';
+          gamePlayer.selectedTitle = dbRes.user.selectedTitle || 'default';
+          gamePlayer.selectedPlayEffect = dbRes.user.selectedPlayEffect || 'default';
           broadcastState(roomCode);
         }
       }).catch(err => console.error('[DB] createRoom customization error:', err));
@@ -226,6 +232,8 @@ io.on('connection', (socket) => {
         if (dbRes && dbRes.ok && dbRes.user) {
           gamePlayer.selectedBorder = dbRes.user.selectedBorder || 'default';
           gamePlayer.selectedCardBack = dbRes.user.selectedCardBack || 'default';
+          gamePlayer.selectedTitle = dbRes.user.selectedTitle || 'default';
+          gamePlayer.selectedPlayEffect = dbRes.user.selectedPlayEffect || 'default';
           broadcastState(roomCode);
         }
       }).catch(err => console.error('[DB] joinRoom customization error:', err));

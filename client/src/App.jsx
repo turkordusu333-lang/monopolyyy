@@ -1424,7 +1424,25 @@ export default function App() {
   }, []);
 
   const spawnMoney = useCallback((options = {}) => {
-    const { icon = '💸', fromPos, toPos, count = 12 } = options;
+    const { icon, fromPos, toPos, count = 12 } = options;
+
+    let finalIcon = icon || '💸';
+    if (gameState?.log?.length > 0) {
+      const lastEntry = gameState.log[gameState.log.length - 1];
+      const actorId = lastEntry?.actorId;
+      if (actorId) {
+        const actor = gameState.players?.find(p => p.id === actorId);
+        const effect = actor?.selectedPlayEffect || 'default';
+        if (effect && effect !== 'default') {
+          finalIcon = {
+            gold: '✨',
+            heart: '💖',
+            flame: '🔥',
+            cosmic: '☄️'
+          }[effect] || finalIcon;
+        }
+      }
+    }
 
     let newParts = [];
     if (fromPos && toPos) {
@@ -1434,18 +1452,18 @@ export default function App() {
         const sy = fromPos.y + (Math.random() - 0.5) * 50;
         const dx = toPos.x + (Math.random() - 0.5) * 80;
         const dy = toPos.y + (Math.random() - 0.5) * 80;
-        newParts.push({ id: Math.random(), icon, sx: sx + 'px', sy: sy + 'px', dx: dx + 'px', dy: dy + 'px', dr: (Math.random() - 0.5) * 720 + 'deg' });
+        newParts.push({ id: Math.random(), icon: finalIcon, sx: sx + 'px', sy: sy + 'px', dx: dx + 'px', dy: dy + 'px', dr: (Math.random() - 0.5) * 720 + 'deg' });
       }
     } else {
       const startX = window.innerWidth / 2;
       const startY = window.innerHeight / 2;
       for (let i = 0; i < count; i++) {
-        newParts.push({ id: Math.random(), icon, sx: startX + 'px', sy: startY + 'px', dx: (Math.random() * window.innerWidth) + 'px', dy: (Math.random() * (window.innerHeight / 2)) + 'px', dr: (Math.random() - 0.5) * 720 + 'deg' });
+        newParts.push({ id: Math.random(), icon: finalIcon, sx: startX + 'px', sy: startY + 'px', dx: (Math.random() * window.innerWidth) + 'px', dy: (Math.random() * (window.innerHeight / 2)) + 'px', dr: (Math.random() - 0.5) * 720 + 'deg' });
       }
     }
     setMoneyParticles(prev => [...prev, ...newParts]);
     setTimeout(() => { setMoneyParticles(prev => prev.filter(p => !newParts.includes(p))); }, 1600);
-  }, []);
+  }, [gameState?.log, gameState?.players]);
   // ---- SÜRE BİTİMİ UYARI SESİ & OTOMATİK TUR ATLATMA ----
   useEffect(() => {
     if (screen === 'game' && isMyTurn && !isBlocked && gameState?.turnTimer > 0 && gameState?.turnStartTime && gameState?.serverTime) {
@@ -4533,12 +4551,20 @@ export default function App() {
     if (modal.type === 'shop') {
       const unlockedBorders = dbUser?.unlockedBorders || ['default'];
       const unlockedCardBacks = dbUser?.unlockedCardBacks || ['default'];
+      const unlockedTitles = dbUser?.unlockedTitles || ['default'];
+      const unlockedPlayEffects = dbUser?.unlockedPlayEffects || ['default'];
+
       const currentBorder = dbUser?.selectedBorder || 'default';
       const currentCardBack = dbUser?.selectedCardBack || 'default';
+      const currentTitle = dbUser?.selectedTitle || 'default';
+      const currentPlayEffect = dbUser?.selectedPlayEffect || 'default';
+
       const points = dbUser?.points || 0;
 
       const previewBorder = (hoveredShopItem?.type === 'border' ? hoveredShopItem.id : currentBorder);
       const previewCardBack = (hoveredShopItem?.type === 'cardBack' ? hoveredShopItem.id : currentCardBack);
+      const previewTitle = (hoveredShopItem?.type === 'title' ? hoveredShopItem.id : currentTitle);
+      const previewPlayEffect = (hoveredShopItem?.type === 'playEffect' ? hoveredShopItem.id : currentPlayEffect);
 
       const borderItems = [
         { id: 'gold', name: { tr: 'Altın Çerçeve', en: 'Gold Border' }, cost: 150, color: '#FFD700', desc: { tr: 'Göz alıcı altın ışıltısı', en: 'Premium golden glow' } },
@@ -4552,6 +4578,21 @@ export default function App() {
         { id: 'naruto', name: { tr: 'Naruto Teması', en: 'Naruto Back' }, cost: 150, symbol: '🍥', bg: 'linear-gradient(135deg, #ff5722, #e64a19)', border: '#ffeb3b', desc: { tr: 'Girdap logolu turuncu arkalık', en: 'Orange vortex card design' } },
         { id: 'onepiece', name: { tr: 'One Piece Teması', en: 'One Piece Back' }, cost: 250, symbol: '☠️', bg: 'linear-gradient(135deg, #2a2a2a, #0d0d0d)', border: '#f1c40f', desc: { tr: 'Korsan logolu karanlık arkalık', en: 'Dark Strawhat Jolly Roger design' } },
         { id: 'cyberpunk', name: { tr: 'Cyberpunk Teması', en: 'Cyberpunk Back' }, cost: 350, symbol: '⚡', bg: 'linear-gradient(135deg, #0f0f1b, #f7df1e)', border: '#39ff14', desc: { tr: 'Matris yeşili neon siber desen', en: 'Neon hacker matrix layout' } }
+      ];
+
+      const titleItems = [
+        { id: 'gold', name: { tr: '💰 Para Babası', en: '💰 Money Bag' }, cost: 100, color: '#FFD700', desc: { tr: 'Altın renkli parıldayan unvan', en: 'Gold shimmering profile title' } },
+        { id: 'flame', name: { tr: '🔥 Sinsi Hırsız', en: '🔥 Sly Thief' }, cost: 200, color: '#ff4500', desc: { tr: 'Yanan alevli sinsi unvan', en: 'Flaming red thief profile title' } },
+        { id: 'cyber', name: { tr: '⚡ Siber Kartal', en: '⚡ Cyber Falcon' }, cost: 300, color: '#39ff14', desc: { tr: 'Matris yeşili neon siber unvan', en: 'Cyberpunk glowing profile title' } },
+        { id: 'kral', name: { tr: '👑 Oyunun Kralı', en: '👑 Game King' }, cost: 450, color: '#f1c40f', desc: { tr: 'Altın renkli hareketli unvan', en: 'Golden bouncing king profile title' } },
+        { id: 'cosmic', name: { tr: '🌌 Kozmik Efendi', en: '🌌 Cosmic Lord' }, cost: 500, color: '#8e44ad', desc: { tr: 'Nebula moru dönen kozmik unvan', en: 'Space rotating celestial title' } }
+      ];
+
+      const playEffectItems = [
+        { id: 'gold', name: { tr: '✨ Yıldız Patlaması', en: '✨ Star Explosion' }, cost: 150, symbol: '✨', bg: 'linear-gradient(135deg, #FFD700, #F39C12)', border: '#ffe57f', desc: { tr: 'Kart atınca altın yıldızlar saçar', en: 'Gold stars fly out on play' } },
+        { id: 'heart', name: { tr: '💖 Neon Kalpler', en: '💖 Neon Hearts' }, cost: 250, symbol: '💖', bg: 'linear-gradient(135deg, #e91e63, #ad1457)', border: '#ff80ab', desc: { tr: 'Pembe renkli parlayan kalpler atar', en: 'Glow hearts fly out on play' } },
+        { id: 'flame', name: { tr: '🔥 Alev Topları', en: '🔥 Fireballs' }, cost: 350, symbol: '🔥', bg: 'linear-gradient(135deg, #d35400, #e67e22)', border: '#ffab40', desc: { tr: 'Yanan kırmızı alev kıvılcımları saçar', en: 'Fire ember sparks fly out on play' } },
+        { id: 'cosmic', name: { tr: '☄️ Kozmik Meteor', en: '☄️ Cosmic Meteor' }, cost: 400, symbol: '☄️', bg: 'linear-gradient(135deg, #8e44ad, #2980b9)', border: '#b388ff', desc: { tr: 'Mor renkli kayan yıldızlar saçar', en: 'Celestial stardust flies out on play' } }
       ];
 
       return (
@@ -4592,20 +4633,47 @@ export default function App() {
                       alt="avatar"
                     />
                   </div>
-                  <span style={{ fontSize: 12, fontWeight: 900, color: '#fff', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '100%', display: 'block', marginBottom: 4 }}>
+                  <span style={{ fontSize: 12, fontWeight: 900, color: '#fff', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '100%', display: 'block', marginBottom: 2 }}>
                     {myName || 'Oyuncu'}
                   </span>
-                  <span style={{ fontSize: 9, color: '#64748b', fontWeight: 'bold' }}>
-                    {lang === 'en' ? 'Profile Frame' : 'Profil Çerçevesi'}
+                  
+                  {/* PREVIEW TITLE */}
+                  <div className={`title-style-${previewTitle}`} style={{ fontSize: 9.5, fontWeight: 'bold', display: 'block', marginBottom: 6 }}>
+                    {
+                      previewTitle === 'default'
+                        ? (lang === 'en' ? 'Classic Player' : 'Klasik Oyuncu')
+                        : titleItems.find(t => t.id === previewTitle)?.name[lang] || previewTitle
+                    }
+                  </div>
+
+                  <span style={{ fontSize: 8, color: '#64748b', fontWeight: 'bold' }}>
+                    {lang === 'en' ? 'SHOP ITEM PREVIEWS' : 'MAĞAZA ÖNİZLEMELERİ'}
                   </span>
                 </div>
 
-                <div style={{ marginTop: 15, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4 }}>
-                  <span style={{ fontSize: 9, fontWeight: 900, color: '#64748b', letterSpacing: 0.5 }}>
-                    {lang === 'en' ? 'CARD BACK' : 'KART ARKALIĞI'}
-                  </span>
-                  <div style={{ width: 40, height: 56, borderRadius: 6, overflow: 'hidden', boxShadow: '0 4px 10px rgba(0,0,0,0.3)' }}>
-                    <CardBack theme={previewCardBack} small />
+                <div style={{ marginTop: 15, display: 'flex', flexDirection: 'row', alignItems: 'center', gap: 15 }}>
+                  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4 }}>
+                    <span style={{ fontSize: 8, fontWeight: 900, color: '#64748b', letterSpacing: 0.5 }}>
+                      {lang === 'en' ? 'CARD BACK' : 'KART ARKALIĞI'}
+                    </span>
+                    <div style={{ width: 30, height: 42, borderRadius: 6, overflow: 'hidden', boxShadow: '0 4px 10px rgba(0,0,0,0.3)' }}>
+                      <CardBack theme={previewCardBack} small />
+                    </div>
+                  </div>
+                  
+                  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4 }}>
+                    <span style={{ fontSize: 8, fontWeight: 900, color: '#64748b', letterSpacing: 0.5 }}>
+                      {lang === 'en' ? 'EFFECT' : 'HAMLE EFEKTİ'}
+                    </span>
+                    <div style={{
+                      width: 30, height: 42, borderRadius: 6,
+                      background: previewPlayEffect === 'default' ? 'linear-gradient(135deg, #1e293b, #0f172a)' : (playEffectItems.find(e => e.id === previewPlayEffect)?.bg || 'linear-gradient(135deg, #1e293b, #0f172a)'),
+                      border: `1px solid ${previewPlayEffect === 'default' ? 'rgba(255,255,255,0.1)' : (playEffectItems.find(e => e.id === previewPlayEffect)?.border || 'rgba(255,255,255,0.1)')}`,
+                      display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 16,
+                      boxShadow: '0 4px 10px rgba(0,0,0,0.3)'
+                    }}>
+                      {previewPlayEffect === 'default' ? '💸' : (playEffectItems.find(e => e.id === previewPlayEffect)?.symbol || '💸')}
+                    </div>
                   </div>
                 </div>
               </div>
@@ -4797,6 +4865,194 @@ export default function App() {
                           ) : (
                             <button
                               onClick={(e) => handleBuyCustomization('cardBack', item.id, item.cost, e)}
+                              disabled={points < item.cost}
+                              style={{
+                                width: '100%',
+                                background: points >= item.cost ? `linear-gradient(135deg, ${item.border}, #000)` : 'rgba(255,255,255,0.03)',
+                                color: points >= item.cost ? '#fff' : '#555',
+                                border: 'none',
+                                fontSize: 9,
+                                fontWeight: 'bold',
+                                padding: '4px 8px',
+                                borderRadius: 6,
+                                cursor: points >= item.cost ? 'pointer' : 'default',
+                                boxShadow: points >= item.cost ? `0 2px 8px ${item.border}33` : 'none'
+                              }}
+                            >
+                              🪙 {item.cost}
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Titles Section */}
+              <div style={{ marginTop: 15 }}>
+                <h3 style={{ fontSize: 11, color: '#94a3b8', borderBottom: '1px solid rgba(255,255,255,0.08)', paddingBottom: 4, marginBottom: 10, textTransform: 'uppercase', letterSpacing: 0.5 }}>
+                  {lang === 'en' ? 'Profile Titles' : 'Profil Unvanları'}
+                </h3>
+                <div className="shop-items-grid">
+                  {/* Default Title */}
+                  <div
+                    className={`shop-item-card ${currentTitle === 'default' ? 'is-active' : ''}`}
+                    style={{
+                      '--card-accent': '#64748b',
+                      '--card-glow': 'rgba(100, 116, 139, 0.15)'
+                    }}
+                    onMouseEnter={() => setHoveredShopItem({ type: 'title', id: 'default' })}
+                    onMouseLeave={() => setHoveredShopItem(null)}
+                    onClick={() => currentTitle !== 'default' && handleSelectCustomization('title', 'default')}
+                  >
+                    <div style={{ fontSize: 18, marginBottom: 6 }}>👤</div>
+                    <div style={{ fontSize: 11, fontWeight: 'bold', color: '#fff', marginBottom: 2 }}>
+                      {lang === 'en' ? 'Classic Player' : 'Klasik Oyuncu'}
+                    </div>
+                    <div style={{ fontSize: 8, color: '#64748b', height: 20, overflow: 'hidden', lineHeight: 1.1 }}>
+                      {lang === 'en' ? 'Standard profile title' : 'Standart oyuncu unvanı'}
+                    </div>
+                    <div style={{ marginTop: 8, width: '100%' }}>
+                      {currentTitle === 'default' ? (
+                        <span style={{ fontSize: 9, fontWeight: 900, color: '#39ff14', background: 'rgba(57,255,20,0.1)', padding: '3px 8px', borderRadius: 6, display: 'block' }}>{lang === 'en' ? 'ACTIVE' : 'AKTİF'}</span>
+                      ) : (
+                        <span style={{ fontSize: 9, fontWeight: 900, color: '#94a3b8', background: 'rgba(255,255,255,0.05)', padding: '3px 8px', borderRadius: 6, display: 'block' }}>{lang === 'en' ? 'EQUIP' : 'KUŞAN'}</span>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Custom Titles */}
+                  {titleItems.map(item => {
+                    const unlocked = unlockedTitles.includes(item.id);
+                    const active = currentTitle === item.id;
+
+                    return (
+                      <div
+                        key={item.id}
+                        className={`shop-item-card ${active ? 'is-active' : ''}`}
+                        style={{
+                          '--card-accent': item.color,
+                          '--card-glow': `${item.color}33`
+                        }}
+                        onMouseEnter={() => setHoveredShopItem({ type: 'title', id: item.id })}
+                        onMouseLeave={() => setHoveredShopItem(null)}
+                      >
+                        <div className={`title-style-${item.id}`} style={{ fontSize: 12, fontWeight: 'bold', height: 16, marginBottom: 12, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                          {item.name[lang]}
+                        </div>
+                        <div style={{ fontSize: 11, fontWeight: 'bold', color: item.color, marginBottom: 2 }}>
+                          {lang === 'en' ? 'Animated Title' : 'Hareketli Unvan'}
+                        </div>
+                        <div style={{ fontSize: 8, color: '#64748b', height: 20, overflow: 'hidden', lineHeight: 1.1 }}>
+                          {lang === 'en' ? item.desc.en : item.desc.tr}
+                        </div>
+                        <div style={{ marginTop: 8, width: '100%' }}>
+                          {active ? (
+                            <span style={{ fontSize: 9, fontWeight: 900, color: '#39ff14', background: 'rgba(57,255,20,0.1)', padding: '3px 8px', borderRadius: 6, display: 'block' }}>{lang === 'en' ? 'ACTIVE' : 'AKTİF'}</span>
+                          ) : unlocked ? (
+                            <button
+                              onClick={() => handleSelectCustomization('title', item.id)}
+                              style={{ width: '100%', background: 'rgba(255,255,255,0.08)', border: 'none', color: '#fff', fontSize: 9, fontWeight: 'bold', padding: '4px 8px', borderRadius: 6, cursor: 'pointer' }}
+                            >
+                              {lang === 'en' ? 'EQUIP' : 'KUŞAN'}
+                            </button>
+                          ) : (
+                            <button
+                              onClick={(e) => handleBuyCustomization('title', item.id, item.cost, e)}
+                              disabled={points < item.cost}
+                              style={{
+                                width: '100%',
+                                background: points >= item.cost ? `linear-gradient(135deg, ${item.color}, #000)` : 'rgba(255,255,255,0.03)',
+                                color: points >= item.cost ? '#fff' : '#555',
+                                border: 'none',
+                                fontSize: 9,
+                                fontWeight: 'bold',
+                                padding: '4px 8px',
+                                borderRadius: 6,
+                                cursor: points >= item.cost ? 'pointer' : 'default',
+                                boxShadow: points >= item.cost ? `0 2px 8px ${item.color}33` : 'none'
+                              }}
+                            >
+                              🪙 {item.cost}
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Play Effects Section */}
+              <div style={{ marginTop: 15 }}>
+                <h3 style={{ fontSize: 11, color: '#94a3b8', borderBottom: '1px solid rgba(255,255,255,0.08)', paddingBottom: 4, marginBottom: 10, textTransform: 'uppercase', letterSpacing: 0.5 }}>
+                  {lang === 'en' ? 'Play Card Effects' : 'Kart Fırlatma Efektleri'}
+                </h3>
+                <div className="shop-items-grid">
+                  {/* Default Play Effect */}
+                  <div
+                    className={`shop-item-card ${currentPlayEffect === 'default' ? 'is-active' : ''}`}
+                    style={{
+                      '--card-accent': '#3498db',
+                      '--card-glow': 'rgba(52, 152, 219, 0.15)'
+                    }}
+                    onMouseEnter={() => setHoveredShopItem({ type: 'playEffect', id: 'default' })}
+                    onMouseLeave={() => setHoveredShopItem(null)}
+                    onClick={() => currentPlayEffect !== 'default' && handleSelectCustomization('playEffect', 'default')}
+                  >
+                    <div style={{ width: 30, height: 40, borderRadius: 4, background: 'linear-gradient(135deg, #1e293b, #0f172a)', border: '1px solid rgba(255,255,255,0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 14, marginBottom: 8 }}>💸</div>
+                    <div style={{ fontSize: 11, fontWeight: 'bold', color: '#fff', marginBottom: 2 }}>
+                      {lang === 'en' ? 'Classic Money' : 'Para Fırlatma'}
+                    </div>
+                    <div style={{ fontSize: 8, color: '#64748b', height: 20, overflow: 'hidden', lineHeight: 1.1 }}>
+                      {lang === 'en' ? 'Standard money spray' : 'Klasik para fırlatma efekti'}
+                    </div>
+                    <div style={{ marginTop: 8, width: '100%' }}>
+                      {currentPlayEffect === 'default' ? (
+                        <span style={{ fontSize: 9, fontWeight: 900, color: '#39ff14', background: 'rgba(57,255,20,0.1)', padding: '3px 8px', borderRadius: 6, display: 'block' }}>{lang === 'en' ? 'ACTIVE' : 'AKTİF'}</span>
+                      ) : (
+                        <span style={{ fontSize: 9, fontWeight: 900, color: '#94a3b8', background: 'rgba(255,255,255,0.05)', padding: '3px 8px', borderRadius: 6, display: 'block' }}>{lang === 'en' ? 'EQUIP' : 'KUŞAN'}</span>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Custom Play Effects */}
+                  {playEffectItems.map(item => {
+                    const unlocked = unlockedPlayEffects.includes(item.id);
+                    const active = currentPlayEffect === item.id;
+
+                    return (
+                      <div
+                        key={item.id}
+                        className={`shop-item-card ${active ? 'is-active' : ''}`}
+                        style={{
+                          '--card-accent': item.border,
+                          '--card-glow': `${item.border}33`
+                        }}
+                        onMouseEnter={() => setHoveredShopItem({ type: 'playEffect', id: item.id })}
+                        onMouseLeave={() => setHoveredShopItem(null)}
+                      >
+                        <div style={{ width: 30, height: 40, borderRadius: 4, background: item.bg, border: `1.5px solid ${item.border}`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 14, color: '#fff', marginBottom: 8 }}>{item.symbol}</div>
+                        <div style={{ fontSize: 11, fontWeight: 'bold', color: item.border, marginBottom: 2 }}>
+                          {lang === 'en' ? item.name.en : item.name.tr}
+                        </div>
+                        <div style={{ fontSize: 8, color: '#64748b', height: 20, overflow: 'hidden', lineHeight: 1.1 }}>
+                          {lang === 'en' ? item.desc.en : item.desc.tr}
+                        </div>
+                        <div style={{ marginTop: 8, width: '100%' }}>
+                          {active ? (
+                            <span style={{ fontSize: 9, fontWeight: 900, color: '#39ff14', background: 'rgba(57,255,20,0.1)', padding: '3px 8px', borderRadius: 6, display: 'block' }}>{lang === 'en' ? 'ACTIVE' : 'AKTİF'}</span>
+                          ) : unlocked ? (
+                            <button
+                              onClick={() => handleSelectCustomization('playEffect', item.id)}
+                              style={{ width: '100%', background: 'rgba(255,255,255,0.08)', border: 'none', color: '#fff', fontSize: 9, fontWeight: 'bold', padding: '4px 8px', borderRadius: 6, cursor: 'pointer' }}
+                            >
+                              {lang === 'en' ? 'EQUIP' : 'KUŞAN'}
+                            </button>
+                          ) : (
+                            <button
+                              onClick={(e) => handleBuyCustomization('playEffect', item.id, item.cost, e)}
                               disabled={points < item.cost}
                               style={{
                                 width: '100%',
@@ -5762,18 +6018,18 @@ export default function App() {
           border: '1px solid rgba(255,255,255,0.06)',
           borderRadius: 16,
           boxShadow: '0 8px 32px rgba(0,0,0,0.3)',
-          marginBottom: 20,
+          marginBottom: 16,
           zIndex: 10,
           boxSizing: 'border-box'
         }}>
           {/* Logo */}
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <img src="/logo.png" alt="Chaos Deal Cart" style={{ height: 28, filter: 'drop-shadow(0 2px 6px rgba(255, 215, 0, 0.3))' }} />
-            <span style={{ color: '#FFD700', fontSize: 15, fontWeight: 950, letterSpacing: '0.5px' }}>Chaos Deal Cart</span>
+            <img src="/logo.png" alt="Chaos Deal Cart" style={{ height: 26, filter: 'drop-shadow(0 2px 6px rgba(255, 215, 0, 0.3))' }} />
+            <span style={{ color: '#FFD700', fontSize: 14, fontWeight: 950, letterSpacing: '0.5px' }}>Chaos Deal</span>
           </div>
 
-          {/* User Profile Info or Auth Buttons */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          {/* Actions: Lang, Leaderboard, Login/Logout */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
             <button
               onClick={() => {
                 const nextLang = lang === 'tr' ? 'en' : 'tr';
@@ -5785,7 +6041,7 @@ export default function App() {
                 background: 'rgba(255, 255, 255, 0.08)',
                 border: '1px solid rgba(255, 255, 255, 0.15)',
                 color: '#fff',
-                padding: '4px 8px',
+                padding: '5px 8px',
                 borderRadius: 20,
                 fontSize: 10,
                 fontWeight: 'bold',
@@ -5794,14 +6050,89 @@ export default function App() {
             >
               {lang === 'tr' ? '🇹🇷 TR' : '🇬🇧 EN'}
             </button>
+
+            <button
+              onClick={() => { handleOpenLeaderboard(); sfxClick(); }}
+              style={{
+                background: 'linear-gradient(135deg, rgba(241,196,15,0.15), rgba(243,156,18,0.15))',
+                border: '1px solid rgba(241,196,15,0.35)',
+                color: '#FFD700',
+                padding: '5px 10px',
+                borderRadius: 20,
+                fontSize: 10,
+                fontWeight: 900,
+                cursor: 'pointer',
+                boxShadow: '0 2px 6px rgba(241,196,15,0.1)'
+              }}
+            >
+              🏆 {lang === 'en' ? 'Rank' : 'Sıralama'}
+            </button>
+
             {dbUser ? (
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8, background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)', padding: '4px 10px', borderRadius: 20 }}>
+              <button
+                onClick={handleDbLogout}
+                style={{
+                  background: 'linear-gradient(135deg, rgba(231,76,60,0.15), rgba(192,57,43,0.15))',
+                  border: '1px solid rgba(231,76,60,0.35)',
+                  color: '#E74C3C',
+                  padding: '5px 10px',
+                  borderRadius: 20,
+                  fontSize: 10,
+                  fontWeight: 900,
+                  cursor: 'pointer',
+                  boxShadow: '0 2px 6px rgba(231,76,60,0.1)'
+                }}
+              >
+                🚪 {lang === 'en' ? 'Logout' : 'Çıkış'}
+              </button>
+            ) : (
+              <button
+                onClick={() => { setAuthMode('login'); setModal({ type: 'auth' }); sfxClick(); }}
+                style={{
+                  background: 'linear-gradient(135deg, #9b59b6, #8e44ad)',
+                  border: 'none',
+                  color: '#fff',
+                  padding: '5px 10px',
+                  borderRadius: 20,
+                  fontSize: 10,
+                  fontWeight: 900,
+                  cursor: 'pointer',
+                  boxShadow: '0 4px 10px rgba(155,89,182,0.2)'
+                }}
+              >
+                🔑 {lang === 'en' ? 'Login' : 'Giriş'}
+              </button>
+            )}
+          </div>
+        </header>
+
+        {/* MAIN CONTAINER */}
+        <div className="glass-card" style={{ width: '100%', maxWidth: 640, boxShadow: '0 25px 60px rgba(0, 0, 0, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.08)', padding: 18, zIndex: 1, boxSizing: 'border-box' }}>
+
+          {/* USER PROFILE DASHBOARD CARD */}
+          {dbUser && (
+            <div style={{
+              background: 'linear-gradient(135deg, rgba(255, 255, 255, 0.03), rgba(255, 255, 255, 0.01))',
+              border: '1px solid rgba(255, 255, 255, 0.08)',
+              borderRadius: 16,
+              padding: '16px',
+              marginBottom: 20,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              flexWrap: 'wrap',
+              gap: 14,
+              boxShadow: '0 8px 32px rgba(0,0,0,0.2), inset 0 1px 0 rgba(255,255,255,0.05)',
+              boxSizing: 'border-box'
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 14, minWidth: 200 }}>
                 <div
                   className={`avatar-container border-style-${dbUser.selectedBorder || 'default'}`}
                   style={{
-                    width: 24,
-                    height: 24,
-                    boxShadow: dbUser.selectedBorder && dbUser.selectedBorder !== 'default' ? 'none' : '0 2px 6px rgba(0,0,0,0.3)',
+                    width: 52,
+                    height: 52,
+                    flexShrink: 0,
+                    boxShadow: dbUser.selectedBorder && dbUser.selectedBorder !== 'default' ? 'none' : '0 4px 15px rgba(0,0,0,0.4)',
                   }}
                 >
                   <img
@@ -5809,27 +6140,54 @@ export default function App() {
                     alt="avatar"
                   />
                 </div>
-                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start' }}>
-                  <span style={{ fontSize: 10, fontWeight: 900, color: '#FFD700', lineHeight: 1.1 }}>{dbUser.displayName || dbUser.display_name || dbUser.username}</span>
-                  <span style={{ fontSize: 8, color: '#a0aec0', marginTop: 1 }}>🏆 {dbUser.wins || 0} Zafer | 🪙 {dbUser.points || 100} Puan</span>
+                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', minWidth: 0 }}>
+                  <span style={{ fontSize: 15, fontWeight: 900, color: '#FFD700', textShadow: '0 2px 10px rgba(255,215,0,0.2)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: 180 }}>
+                    {dbUser.displayName || dbUser.display_name || dbUser.username}
+                  </span>
+                  <div className={`title-style-${dbUser.selectedTitle || 'default'}`} style={{ fontSize: 9.5, fontWeight: 'bold', marginTop: 2 }}>
+                    {
+                      dbUser.selectedTitle && dbUser.selectedTitle !== 'default'
+                        ? {
+                            gold: { tr: '💰 Para Babası', en: '💰 Money Bag' },
+                            flame: { tr: '🔥 Sinsi Hırsız', en: '🔥 Sly Thief' },
+                            cyber: { tr: '⚡ Siber Kartal', en: '⚡ Cyber Falcon' },
+                            kral: { tr: '👑 Oyunun Kralı', en: '👑 Game King' },
+                            cosmic: { tr: '🌌 Kozmik Efendi', en: '🌌 Cosmic Lord' }
+                          }[dbUser.selectedTitle]?.[lang] || dbUser.selectedTitle
+                        : (lang === 'en' ? 'Classic Player' : 'Klasik Oyuncu')
+                    }
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 6, flexWrap: 'wrap' }}>
+                    <span style={{ fontSize: 10.5, color: '#e2e8f0', background: 'rgba(255,255,255,0.06)', padding: '2px 8px', borderRadius: 8, display: 'inline-flex', alignItems: 'center', gap: 4, border: '1px solid rgba(255,255,255,0.04)' }}>
+                      🏆 <b>{dbUser.wins || 0}</b> {lang === 'en' ? 'Wins' : 'Zafer'}
+                    </span>
+                    <span style={{ fontSize: 10.5, color: '#F1C40F', background: 'rgba(241,196,15,0.1)', padding: '2px 8px', borderRadius: 8, display: 'inline-flex', alignItems: 'center', gap: 4, border: '1px solid rgba(241,196,15,0.15)' }}>
+                      🪙 <b>{dbUser.points || 100}</b> {lang === 'en' ? 'Pts' : 'Puan'}
+                    </span>
+                  </div>
                 </div>
-                <button onClick={() => { setModal({ type: 'shop' }); sfxClick(); }} style={{ background: 'rgba(241, 196, 15, 0.15)', border: '1px solid rgba(241, 196, 15, 0.3)', color: '#F1C40F', padding: '1px 6px', borderRadius: 4, cursor: 'pointer', fontSize: 8, fontWeight: 'bold', marginLeft: 4 }}>🛍️ {lang === 'en' ? 'Shop' : 'Mağaza'}</button>
-                <button onClick={handleDbLogout} style={{ background: 'rgba(231, 76, 60, 0.15)', border: '1px solid rgba(231, 76, 60, 0.3)', color: '#E74C3C', padding: '1px 6px', borderRadius: 4, cursor: 'pointer', fontSize: 8, fontWeight: 'bold', marginLeft: 4 }}>{lang === 'en' ? 'Logout' : 'Çıkış'}</button>
               </div>
-            ) : (
-              <button onClick={() => { setAuthMode('login'); setModal({ type: 'auth' }); sfxClick(); }} style={{ ...btnStyle('linear-gradient(135deg, #9b59b6, #8e44ad)'), margin: 0, padding: '6px 12px', borderRadius: 20, fontSize: 10, fontWeight: 900, boxShadow: '0 4px 10px rgba(155,89,182,0.2)' }}>
-                🔑 Giriş
-              </button>
-            )}
 
-            <button onClick={() => { handleOpenLeaderboard(); sfxClick(); }} style={{ ...btnStyle('linear-gradient(135deg, #f1c40f, #f39c12)'), margin: 0, padding: '6px 12px', borderRadius: 20, fontSize: 10, fontWeight: 900, boxShadow: '0 4px 10px rgba(241,196,15,0.2)' }}>
-              🏆 Sıralama
-            </button>
-          </div>
-        </header>
-
-        {/* MAIN CONTAINER */}
-        <div className="glass-card" style={{ width: '100%', maxWidth: 640, boxShadow: '0 25px 60px rgba(0, 0, 0, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.08)', padding: 18, zIndex: 1, boxSizing: 'border-box' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, flex: '1 1 auto', justifyContent: 'flex-end', minWidth: 120 }}>
+                <button
+                  onClick={() => { setModal({ type: 'shop' }); sfxClick(); }}
+                  style={{
+                    ...btnStyle('linear-gradient(135deg, #f1c40f, #d4ac0d)'),
+                    margin: 0,
+                    padding: '10px 20px',
+                    borderRadius: 12,
+                    fontSize: 12,
+                    fontWeight: 900,
+                    boxShadow: '0 4px 15px rgba(241,196,15,0.25)',
+                    flex: 1,
+                    maxWidth: 160
+                  }}
+                >
+                  🛍️ {lang === 'en' ? 'Shop' : 'Mağaza'}
+                </button>
+              </div>
+            </div>
+          )}
 
           {/* USER IDENTITY FORM */}
           <div style={{
@@ -6783,7 +7141,7 @@ export default function App() {
 
           {/* ═══ SOL SÜTUN: OYUNCULAR ═══ */}
           <div className="players-col player-avatar-strip">
-            {gameState.players.filter(p => p.id !== playerId).map(player => {
+            {gameState.players.map(player => {
               const pIdx = gameState.players.findIndex(x => x.id === player.id);
               const playerColor = PLAYER_COLORS[pIdx % PLAYER_COLORS.length];
               const isTargeted = gameState.pendingChallenges.some(ch =>
@@ -6863,10 +7221,28 @@ export default function App() {
                         whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
                         textShadow: `0 0 10px ${playerColor}88`,
                         letterSpacing: 0.3,
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: 3
                       }}>
-                        {player.name}
+                        <span>{player.name}</span>
+                        {player.id === playerId && <span style={{ fontSize: 8, background: '#FFD700', color: '#000', padding: '0 4px', borderRadius: 4, fontWeight: 900 }}>{lang === 'en' ? 'YOU' : 'SEN'}</span>}
                         {player.isAFK && ' 💤'}
                         {player.connected === false && <span style={{ color: '#f44', fontSize: 8 }}> ●</span>}
+                      </div>
+                      {/* Active customization title */}
+                      <div className={`title-style-${player.selectedTitle || 'default'}`} style={{ fontSize: 8.5, fontWeight: 'bold', marginTop: 1 }}>
+                        {
+                          player.selectedTitle && player.selectedTitle !== 'default'
+                            ? {
+                                gold: { tr: '💰 Para Babası', en: '💰 Money Bag' },
+                                flame: { tr: '🔥 Sinsi Hırsız', en: '🔥 Sly Thief' },
+                                cyber: { tr: '⚡ Siber Kartal', en: '⚡ Cyber Falcon' },
+                                kral: { tr: '👑 Oyunun Kralı', en: '👑 Game King' },
+                                cosmic: { tr: '🌌 Kozmik Efendi', en: '🌌 Cosmic Lord' }
+                              }[player.selectedTitle]?.[lang] || player.selectedTitle
+                            : (lang === 'en' ? 'Classic' : 'Klasik')
+                        }
                       </div>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginTop: 1 }}>
                         {/* Monopoly M rozeti */}

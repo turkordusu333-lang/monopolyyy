@@ -102,8 +102,12 @@ function saveLocalUserCustomizations(username, fields) {
     custs[normalized] = {
       unlockedBorders: ['default'],
       unlockedCardBacks: ['default'],
+      unlockedTitles: ['default'],
+      unlockedPlayEffects: ['default'],
       selectedBorder: 'default',
       selectedCardBack: 'default',
+      selectedTitle: 'default',
+      selectedPlayEffect: 'default',
       winHistory: []
     };
   }
@@ -115,8 +119,12 @@ function serializeCustomizationsForSupabase(user, newFields = {}) {
   let style = 'fun-emoji';
   let currentBorder = 'default';
   let currentCardBack = 'default';
+  let currentTitle = 'default';
+  let currentPlayEffect = 'default';
   let unlockedBorders = ['default'];
   let unlockedCardBacks = ['default'];
+  let unlockedTitles = ['default'];
+  let unlockedPlayEffects = ['default'];
   let winHistory = [];
 
   if (user.avatar && user.avatar.trim().startsWith('{')) {
@@ -125,8 +133,12 @@ function serializeCustomizationsForSupabase(user, newFields = {}) {
       style = parsed.style || 'fun-emoji';
       currentBorder = parsed.selectedBorder || 'default';
       currentCardBack = parsed.selectedCardBack || 'default';
+      currentTitle = parsed.selectedTitle || 'default';
+      currentPlayEffect = parsed.selectedPlayEffect || 'default';
       unlockedBorders = parsed.unlockedBorders || ['default'];
       unlockedCardBacks = parsed.unlockedCardBacks || ['default'];
+      unlockedTitles = parsed.unlockedTitles || ['default'];
+      unlockedPlayEffects = parsed.unlockedPlayEffects || ['default'];
       winHistory = parsed.winHistory || [];
     } catch (e) {
       console.error('[DB] Error parsing existing serialized customizations:', e);
@@ -138,16 +150,24 @@ function serializeCustomizationsForSupabase(user, newFields = {}) {
 
   if (user.unlockedBorders) unlockedBorders = user.unlockedBorders;
   if (user.unlockedCardBacks) unlockedCardBacks = user.unlockedCardBacks;
+  if (user.unlockedTitles) unlockedTitles = user.unlockedTitles;
+  if (user.unlockedPlayEffects) unlockedPlayEffects = user.unlockedPlayEffects;
   if (user.selectedBorder) currentBorder = user.selectedBorder;
   if (user.selectedCardBack) currentCardBack = user.selectedCardBack;
+  if (user.selectedTitle) currentTitle = user.selectedTitle;
+  if (user.selectedPlayEffect) currentPlayEffect = user.selectedPlayEffect;
   if (user.winHistory) winHistory = user.winHistory;
 
   const merged = {
     style: newFields.avatar !== undefined ? newFields.avatar : style,
     selectedBorder: newFields.selectedBorder !== undefined ? newFields.selectedBorder : currentBorder,
     selectedCardBack: newFields.selectedCardBack !== undefined ? newFields.selectedCardBack : currentCardBack,
+    selectedTitle: newFields.selectedTitle !== undefined ? newFields.selectedTitle : currentTitle,
+    selectedPlayEffect: newFields.selectedPlayEffect !== undefined ? newFields.selectedPlayEffect : currentPlayEffect,
     unlockedBorders: newFields.unlockedBorders !== undefined ? newFields.unlockedBorders : unlockedBorders,
     unlockedCardBacks: newFields.unlockedCardBacks !== undefined ? newFields.unlockedCardBacks : unlockedCardBacks,
+    unlockedTitles: newFields.unlockedTitles !== undefined ? newFields.unlockedTitles : unlockedTitles,
+    unlockedPlayEffects: newFields.unlockedPlayEffects !== undefined ? newFields.unlockedPlayEffects : unlockedPlayEffects,
     winHistory: newFields.winHistory !== undefined ? newFields.winHistory : winHistory
   };
 
@@ -164,30 +184,46 @@ function sanitizeUserCustomizations(user) {
         const parsed = JSON.parse(user.avatar);
         user.unlockedBorders = parsed.unlockedBorders || ['default'];
         user.unlockedCardBacks = parsed.unlockedCardBacks || ['default'];
+        user.unlockedTitles = parsed.unlockedTitles || ['default'];
+        user.unlockedPlayEffects = parsed.unlockedPlayEffects || ['default'];
         user.selectedBorder = parsed.selectedBorder || 'default';
         user.selectedCardBack = parsed.selectedCardBack || 'default';
+        user.selectedTitle = parsed.selectedTitle || 'default';
+        user.selectedPlayEffect = parsed.selectedPlayEffect || 'default';
         user.winHistory = parsed.winHistory || [];
         user.avatar = parsed.style || 'fun-emoji';
       } catch (e) {
         console.error('[DB] Error parsing customizations from avatar:', e);
         user.unlockedBorders = ['default'];
         user.unlockedCardBacks = ['default'];
+        user.unlockedTitles = ['default'];
+        user.unlockedPlayEffects = ['default'];
         user.selectedBorder = 'default';
         user.selectedCardBack = 'default';
+        user.selectedTitle = 'default';
+        user.selectedPlayEffect = 'default';
         user.winHistory = [];
       }
     } else {
       user.unlockedBorders = ['default'];
       user.unlockedCardBacks = ['default'];
+      user.unlockedTitles = ['default'];
+      user.unlockedPlayEffects = ['default'];
       user.selectedBorder = 'default';
       user.selectedCardBack = 'default';
+      user.selectedTitle = 'default';
+      user.selectedPlayEffect = 'default';
       user.winHistory = [];
     }
   } else {
     if (!user.unlockedBorders) { user.unlockedBorders = ['default']; modified = true; }
     if (!user.unlockedCardBacks) { user.unlockedCardBacks = ['default']; modified = true; }
+    if (!user.unlockedTitles) { user.unlockedTitles = ['default']; modified = true; }
+    if (!user.unlockedPlayEffects) { user.unlockedPlayEffects = ['default']; modified = true; }
     if (!user.selectedBorder) { user.selectedBorder = 'default'; modified = true; }
     if (!user.selectedCardBack) { user.selectedCardBack = 'default'; modified = true; }
+    if (!user.selectedTitle) { user.selectedTitle = 'default'; modified = true; }
+    if (!user.selectedPlayEffect) { user.selectedPlayEffect = 'default'; modified = true; }
     if (!user.winHistory) { user.winHistory = []; modified = true; }
   }
 
@@ -509,16 +545,24 @@ async function buyCustomization(username, itemType, itemId, cost) {
         sanitizeUserCustomizations(tempUser);
         const unlockedBorders = tempUser.unlockedBorders || ['default'];
         const unlockedCardBacks = tempUser.unlockedCardBacks || ['default'];
+        const unlockedTitles = tempUser.unlockedTitles || ['default'];
+        const unlockedPlayEffects = tempUser.unlockedPlayEffects || ['default'];
 
         if (itemType === 'border') {
           if (unlockedBorders.includes(itemId)) return { ok: false, error: 'Bu çerçeve zaten açık.' };
           unlockedBorders.push(itemId);
-        } else {
+        } else if (itemType === 'cardBack') {
           if (unlockedCardBacks.includes(itemId)) return { ok: false, error: 'Bu kart arkalığı zaten açık.' };
           unlockedCardBacks.push(itemId);
+        } else if (itemType === 'title') {
+          if (unlockedTitles.includes(itemId)) return { ok: false, error: 'Bu unvan zaten açık.' };
+          unlockedTitles.push(itemId);
+        } else if (itemType === 'playEffect') {
+          if (unlockedPlayEffects.includes(itemId)) return { ok: false, error: 'Bu efekt zaten açık.' };
+          unlockedPlayEffects.push(itemId);
         }
 
-        const serialized = serializeCustomizationsForSupabase(user, { unlockedBorders, unlockedCardBacks });
+        const serialized = serializeCustomizationsForSupabase(user, { unlockedBorders, unlockedCardBacks, unlockedTitles, unlockedPlayEffects });
 
         const patchRes = await fetch(`${supabaseUrl}/rest/v1/users?username=eq.${encodeURIComponent(normalizedUser)}`, {
           method: 'PATCH',
@@ -552,13 +596,21 @@ async function buyCustomization(username, itemType, itemId, cost) {
 
       if (!user.unlockedBorders) user.unlockedBorders = ['default'];
       if (!user.unlockedCardBacks) user.unlockedCardBacks = ['default'];
+      if (!user.unlockedTitles) user.unlockedTitles = ['default'];
+      if (!user.unlockedPlayEffects) user.unlockedPlayEffects = ['default'];
 
       if (itemType === 'border') {
         if (user.unlockedBorders.includes(itemId)) return { ok: false, error: 'Bu çerçeve zaten açık.' };
         user.unlockedBorders.push(itemId);
-      } else {
+      } else if (itemType === 'cardBack') {
         if (user.unlockedCardBacks.includes(itemId)) return { ok: false, error: 'Bu kart arkalığı zaten açık.' };
         user.unlockedCardBacks.push(itemId);
+      } else if (itemType === 'title') {
+        if (user.unlockedTitles.includes(itemId)) return { ok: false, error: 'Bu unvan zaten açık.' };
+        user.unlockedTitles.push(itemId);
+      } else if (itemType === 'playEffect') {
+        if (user.unlockedPlayEffects.includes(itemId)) return { ok: false, error: 'Bu efekt zaten açık.' };
+        user.unlockedPlayEffects.push(itemId);
       }
 
       user.points = points - cost;
@@ -584,11 +636,20 @@ async function selectCustomization(username, itemType, itemId) {
         sanitizeUserCustomizations(tempUser);
         const unlockedBorders = tempUser.unlockedBorders || ['default'];
         const unlockedCardBacks = tempUser.unlockedCardBacks || ['default'];
+        const unlockedTitles = tempUser.unlockedTitles || ['default'];
+        const unlockedPlayEffects = tempUser.unlockedPlayEffects || ['default'];
 
         if (itemType === 'border' && !unlockedBorders.includes(itemId)) return { ok: false, error: 'Bu öge kilitli.' };
         if (itemType === 'cardBack' && !unlockedCardBacks.includes(itemId)) return { ok: false, error: 'Bu öge kilitli.' };
+        if (itemType === 'title' && !unlockedTitles.includes(itemId)) return { ok: false, error: 'Bu öge kilitli.' };
+        if (itemType === 'playEffect' && !unlockedPlayEffects.includes(itemId)) return { ok: false, error: 'Bu öge kilitli.' };
 
-        const updateObj = itemType === 'border' ? { selectedBorder: itemId } : { selectedCardBack: itemId };
+        let updateObj = {};
+        if (itemType === 'border') updateObj = { selectedBorder: itemId };
+        else if (itemType === 'cardBack') updateObj = { selectedCardBack: itemId };
+        else if (itemType === 'title') updateObj = { selectedTitle: itemId };
+        else if (itemType === 'playEffect') updateObj = { selectedPlayEffect: itemId };
+
         const serialized = serializeCustomizationsForSupabase(user, updateObj);
 
         const patchRes = await fetch(`${supabaseUrl}/rest/v1/users?username=eq.${encodeURIComponent(normalizedUser)}`, {
@@ -619,12 +680,18 @@ async function selectCustomization(username, itemType, itemId) {
     if (user) {
       const unlockedBorders = user.unlockedBorders || ['default'];
       const unlockedCardBacks = user.unlockedCardBacks || ['default'];
+      const unlockedTitles = user.unlockedTitles || ['default'];
+      const unlockedPlayEffects = user.unlockedPlayEffects || ['default'];
 
       if (itemType === 'border' && !unlockedBorders.includes(itemId)) return { ok: false, error: 'Bu öge kilitli.' };
       if (itemType === 'cardBack' && !unlockedCardBacks.includes(itemId)) return { ok: false, error: 'Bu öge kilitli.' };
+      if (itemType === 'title' && !unlockedTitles.includes(itemId)) return { ok: false, error: 'Bu öge kilitli.' };
+      if (itemType === 'playEffect' && !unlockedPlayEffects.includes(itemId)) return { ok: false, error: 'Bu öge kilitli.' };
 
       if (itemType === 'border') user.selectedBorder = itemId;
-      else user.selectedCardBack = itemId;
+      else if (itemType === 'cardBack') user.selectedCardBack = itemId;
+      else if (itemType === 'title') user.selectedTitle = itemId;
+      else if (itemType === 'playEffect') user.selectedPlayEffect = itemId;
 
       writeLocalDB(db);
       const { user: sanitizedUser } = sanitizeUserCustomizations(user);

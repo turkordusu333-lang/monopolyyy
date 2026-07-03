@@ -3386,3 +3386,86 @@ input:focus, select:focus {
   }
 }
 
+/* Animated Profile Titles Styles */
+.title-style-default {
+  color: #a0aec0;
+  font-size: 9px;
+  font-weight: 500;
+}
+
+.title-style-gold {
+  font-size: 10px;
+  font-weight: 900;
+  background: linear-gradient(90deg, #FFD700, #FFA500, #FFE57F, #FFD700);
+  background-size: 200% auto;
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  animation: shine-title 2s linear infinite;
+  text-shadow: 0 0 4px rgba(255, 215, 0, 0.25);
+  letter-spacing: 0.5px;
+}
+
+.title-style-flame {
+  font-size: 10px;
+  font-weight: 900;
+  background: linear-gradient(90deg, #ff4500, #ff8c00, #ff0000, #ff4500);
+  background-size: 200% auto;
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  animation: shine-title 1.5s linear infinite;
+  text-shadow: 0 0 5px rgba(255, 69, 0, 0.45);
+  letter-spacing: 0.5px;
+}
+
+.title-style-cyber {
+  font-size: 10px;
+  font-weight: 900;
+  font-family: monospace;
+  color: #39ff14;
+  text-shadow: 0 0 6px rgba(57, 255, 20, 0.8), 0 0 2px rgba(57, 255, 20, 0.4);
+  animation: cyber-flicker 2.5s infinite;
+  letter-spacing: 0.5px;
+}
+
+.title-style-cosmic {
+  font-size: 10px;
+  font-weight: 900;
+  background: linear-gradient(90deg, #9b59b6, #e91e63, #3498db, #9b59b6);
+  background-size: 200% auto;
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  animation: shine-title 3s linear infinite;
+  text-shadow: 0 0 6px rgba(155, 89, 182, 0.4);
+  letter-spacing: 0.5px;
+}
+
+.title-style-kral {
+  font-size: 10px;
+  font-weight: 950;
+  background: linear-gradient(90deg, #f1c40f, #f39c12, #f1c40f);
+  background-size: 200% auto;
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  animation: shine-title 2s linear infinite, title-bounce 1s ease-in-out infinite alternate;
+  text-shadow: 0 0 8px rgba(241, 196, 15, 0.6);
+  letter-spacing: 0.8px;
+}
+
+@keyframes shine-title {
+  to { background-position: 200% center; }
+}
+
+@keyframes title-bounce {
+  0% { transform: translateY(0); }
+  100% { transform: translateY(-1.5px); }
+}
+
+@keyframes cyber-flicker {
+  0%, 19%, 21%, 23%, 25%, 54%, 56%, 100% {
+    opacity: 1;
+  }
+  20%, 24%, 55% {
+    opacity: 0.7;
+  }
+}
+
