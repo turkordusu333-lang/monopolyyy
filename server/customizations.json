@@ -1,0 +1,20 @@
+{
+  "admin": {
+    "unlockedBorders": [
+      "default",
+      "gold",
+      "neon",
+      "cyber",
+      "flame"
+    ],
+    "unlockedCardBacks": [
+      "default",
+      "naruto",
+      "onepiece",
+      "cyberpunk"
+    ],
+    "selectedBorder": "flame",
+    "selectedCardBack": "onepiece",
+    "winHistory": []
+  }
+}
