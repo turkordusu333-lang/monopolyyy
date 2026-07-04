@@ -339,7 +339,7 @@ class MonopolyDealGame {
     player.hand.splice(idx, 1);
     player.bank.push(card);
     const totalBank = player.bank.reduce((s, c) => s + (c.value || 0), 0);
-    this.addLog(`${player.name} elindeki ${typeDesc} ${card.value}M olarak kasaya koydu. (Güncel Kasa: ${totalBank}M)`, 'money', SOUND_EFFECTS[`money_${card.value}`]);
+    this.addLog(`${player.name} elindeki ${typeDesc} ${card.value}M olarak kasaya koydu. (Güncel Kasa: ${totalBank}M)`, 'money', SOUND_EFFECTS[`money_${card.value}`], player.id, null, [card]);
     return { ok: true };
   }
 
@@ -354,7 +354,7 @@ class MonopolyDealGame {
     let soundKey = `prop_${slugify(card.name)}`;
     if (card.isDual) soundKey = 'dual_color_wild_property';
     if (card.isWild) soundKey = 'wild_property';
-    this.addLog(`${player.name}, ${COLOR_INFO[color]?.name || color} grubuna "${card.name}" arazisini ekledi.`, 'property', SOUND_EFFECTS[soundKey]);
+    this.addLog(`${player.name}, ${COLOR_INFO[color]?.name || color} grubuna "${card.name}" arazisini ekledi.`, 'property', SOUND_EFFECTS[soundKey], player.id, null, [card]);
     return { ok: true };
   }
 
@@ -418,7 +418,7 @@ class MonopolyDealGame {
     this.discard.push(card);
     const drawn = this.drawCards(2);
     player.hand.push(...drawn);
-    this.addLog(`${player.name} "Geç Go!" oynadı, 2 kart çekti`, 'action', SOUND_EFFECTS.passgo);
+    this.addLog(`${player.name} "Geç Go!" oynadı, 2 kart çekti`, 'action', SOUND_EFFECTS.passgo, player.id, null, [card]);
     return { ok: true };
   }
 
@@ -435,7 +435,7 @@ class MonopolyDealGame {
         data: { amount: 2, reason: `${player.name}'in Doğum Günü hediyesi` },
       });
     });
-    this.addLog(`${player.name} "Doğum Günüm!" oynadı! Herkes 2M ödeyecek (itiraz süresi)`, 'action', SOUND_EFFECTS.birthday, player.id);
+    this.addLog(`${player.name} "Doğum Günüm!" oynadı! Herkes 2M ödeyecek (itiraz süresi)`, 'action', SOUND_EFFECTS.birthday, player.id, null, [card]);
     return { ok: true };
   }
 
@@ -452,7 +452,7 @@ class MonopolyDealGame {
       targetId: target.id,
       data: { amount: 5, reason: `${player.name}'in Borç Tahsildarı` },
     });
-    this.addLog(`${player.name} "Borç Tahsildarı" oynadı, ${target.name}'dan 5M istiyor (itiraz süresi)`, 'action', SOUND_EFFECTS.debtcollector, player.id, target.id);
+    this.addLog(`${player.name} "Borç Tahsildarı" oynadı, ${target.name}'dan 5M istiyor (itiraz süresi)`, 'action', SOUND_EFFECTS.debtcollector, player.id, target.id, [card]);
     return { ok: true };
   }
 
@@ -471,7 +471,7 @@ class MonopolyDealGame {
       targetId: target.id,
       data: {},
     });
-    this.addLog(`${player.name} "Hırsız Sincap" oynadı! ${target.name}'ın elinden rastgele bir kart çalmaya çalışıyor! (itiraz süresi)`, 'action', SOUND_EFFECTS.thief_squirrel, player.id, target.id);
+    this.addLog(`${player.name} "Hırsız Sincap" oynadı! ${target.name}'ın elinden rastgele bir kart çalmaya çalışıyor! (itiraz süresi)`, 'action', SOUND_EFFECTS.thief_squirrel, player.id, target.id, [card]);
     return { ok: true };
   }
 
@@ -521,7 +521,7 @@ class MonopolyDealGame {
         targetId: target.id,
         data: { amount: rentAmount, reason: `${player.name}'in ${COLOR_INFO[color]?.name} kirası${multiplier > 1 ? ' (2x)' : ''}` },
       });
-      this.addLog(`${player.name} "Joker Kira" oynadı! ${target.name} hedef seçildi ve ${rentAmount}M ödemesi istendi.`, 'action', SOUND_EFFECTS.rent, player.id, target.id);
+      this.addLog(`${player.name} "Joker Kira" oynadı! ${target.name} hedef seçildi ve ${rentAmount}M ödemesi istendi.`, 'action', SOUND_EFFECTS.rent, player.id, target.id, [card]);
     } else {
       const targets = this.players.filter(p => p.id !== player.id);
       const targetNames = targets.map(t => t.name).join(', ');
@@ -533,7 +533,7 @@ class MonopolyDealGame {
           data: { amount: rentAmount, reason: `${player.name}'in ${COLOR_INFO[color]?.name} kirası${multiplier > 1 ? ' (2x)' : ''}` },
         });
       });
-      this.addLog(`${player.name}, ${COLOR_INFO[color]?.name} kirası topluyor${multiplier > 1 ? ' (2X)' : ''}! ${targetNames} için ${rentAmount}M borç çıkartıldı.`, 'action', SOUND_EFFECTS.rent, player.id);
+      this.addLog(`${player.name}, ${COLOR_INFO[color]?.name} kirası topluyor${multiplier > 1 ? ' (2X)' : ''}! ${targetNames} için ${rentAmount}M borç çıkartıldı.`, 'action', SOUND_EFFECTS.rent, player.id, null, doubleCard ? [card, doubleCard] : [card]);
     }
 
     return { ok: true, actionsUsed: doubleCard ? 2 : 1 };
@@ -562,7 +562,7 @@ class MonopolyDealGame {
       targetId: target.id,
       data: { targetColor, targetCardId, cardName: stolenCardPreview.name },
     });
-    this.addLog(`${player.name} "Sinsi Anlaşma" kullandı! ${target.name}'ın "${stolenCardPreview.name}" arazisini çalmak için hamle yaptı.`, 'action', SOUND_EFFECTS.slydeal, player.id, target.id);
+    this.addLog(`${player.name} "Sinsi Anlaşma" kullandı! ${target.name}'ın "${stolenCardPreview.name}" arazisini çalmak için hamle yaptı.`, 'action', SOUND_EFFECTS.slydeal, player.id, target.id, [card]);
     return { ok: true };
   }
 
@@ -593,7 +593,7 @@ class MonopolyDealGame {
       targetId: target.id,
       data: { targetColor, targetCardId, myColor, myCardId, theirCardName: targetProps[tIdx].name, myCardName: myProps[mIdx].name },
     });
-    this.addLog(`${player.name} zorunlu takas başlattı! ${target.name} ile arazi değiş-tokuşu istiyor.`, 'action', SOUND_EFFECTS.forceddeal, player.id, target.id);
+    this.addLog(`${player.name} zorunlu takas başlattı! ${target.name} ile arazi değiş-tokuşu istiyor.`, 'action', SOUND_EFFECTS.forceddeal, player.id, target.id, [card]);
     return { ok: true };
   }
 
@@ -615,7 +615,7 @@ class MonopolyDealGame {
       targetId: target.id,
       data: { targetColor },
     });
-    this.addLog(`${player.name} "Anlaşma Bozucu" oynadı! ${target.name}'ın tamamlanmış ${COLOR_INFO[targetColor]?.name || targetColor} setinin tamamını ele geçirmeye çalışıyor!`, 'action', SOUND_EFFECTS.dealbreaker, player.id, target.id);
+    this.addLog(`${player.name} "Anlaşma Bozucu" oynadı! ${target.name}'ın tamamlanmış ${COLOR_INFO[targetColor]?.name || targetColor} setinin tamamını ele geçirmeye çalışıyor!`, 'action', SOUND_EFFECTS.dealbreaker, player.id, target.id, [card]);
     return { ok: true };
   }
 
@@ -642,7 +642,7 @@ class MonopolyDealGame {
 
     player.hand.splice(idx, 1);
     this.discard.push(card);
-    this.addLog(`${player.name} muazzam bir yatırım yaptı! ${COLOR_INFO[color]?.name || color} setine bir ${card.action === 'hotel' ? '🏨 Otel' : '🏠 Ev'} inşa etti.`, 'property');
+    this.addLog(`${player.name} muazzam bir yatırım yaptı! ${COLOR_INFO[color]?.name || color} setine bir ${card.action === 'hotel' ? '🏨 Otel' : '🏠 Ev'} inşa etti.`, 'property', null, player.id, null, [card]);
     return { ok: true };
   }
 
@@ -1127,15 +1127,18 @@ class MonopolyDealGame {
     if (over <= 0) return { ok: true };
     if (cardIds.length !== over) return { ok: false, error: `${over} kart atmalısın` };
 
+    const discardedCards = [];
     cardIds.forEach(cid => {
       const idx = player.hand.findIndex(c => c.id === cid);
       if (idx !== -1) {
         const c = player.hand.splice(idx, 1)[0];
+        discardedCards.push(c);
         if (this.streetThugs) this.scavengeMarket.push(c);
         else this.discard.push(c);
       }
     });
-    this.addLog(`${player.name} ${over} kart attı`, 'draw', null, player.id);
+    const cardNames = discardedCards.map(c => `"${c.name}"`).join(', ');
+    this.addLog(`${player.name} el limitinden dolayı ${cardNames} kartını attı`, 'discard', null, player.id, null, discardedCards);
     return { ok: true };
   }
 
@@ -1150,7 +1153,8 @@ class MonopolyDealGame {
         const over = player.hand.length - this.handLimit;
         const discarded = player.hand.splice(0, over);
         this.discard.push(...discarded);
-        this.addLog(`${player.name} süresi dolduğu için ${over} adet kartı sistem tarafından otomatik atıldı.`, 'draw', null, player.id);
+        const cardNames = discarded.map(c => `"${c.name}"`).join(', ');
+        this.addLog(`${player.name} süresi dolduğu için ${cardNames} kartını sistem tarafından otomatik attı.`, 'discard', null, player.id, null, discarded);
       } else {
         return { ok: false, error: `El limitini aşıyorsun (${player.hand.length}/${this.handLimit}). Kart at.`, needsDiscard: true };
       }
@@ -1189,8 +1193,8 @@ class MonopolyDealGame {
     return false;
   }
 
-  addLog(msg, type = 'info', sound = null, actorId = null, targetId = null) {
-    this.log.push({ msg, type, time: Date.now(), actorId, targetId });
+  addLog(msg, type = 'info', sound = null, actorId = null, targetId = null, cards = null) {
+    this.log.push({ msg, type, time: Date.now(), actorId, targetId, cards });
     if (this.log.length > 80) this.log.shift();
     if (sound) {
       this.onEvent('playSound', sound);
@@ -1227,6 +1231,9 @@ class MonopolyDealGame {
         selectedCardBack: p.selectedCardBack || 'default',
         selectedTitle: p.selectedTitle || 'default',
         selectedPlayEffect: p.selectedPlayEffect || 'default',
+        selectedBadge: p.selectedBadge || 'default',
+        selectedTableTheme: p.selectedTableTheme || 'default',
+        selectedDiceSkin: p.selectedDiceSkin || 'default',
         handCount: p.hand.length,
         hand: (p.id === forPlayerId || this.openHands) ? p.hand : [],
         bank: p.bank,

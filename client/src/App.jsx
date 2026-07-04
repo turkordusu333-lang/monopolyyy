@@ -950,6 +950,9 @@ export default function App() {
   const [leaderboardPeriod, setLeaderboardPeriod] = useState('allTime');
   const [hoveredShopItem, setHoveredShopItem] = useState(null); // { type: 'border' | 'cardBack', id: string }
   const [shopCoins, setShopCoins] = useState([]);
+  const [isDiceRolling, setIsDiceRolling] = useState(false);
+  const [diceRollResult, setDiceRollResult] = useState(null);
+
 
   const [isHeaderOpen, setIsHeaderOpen] = useState(true);
   const [isMenuOpen, setIsMenuOpen] = useState(false);
@@ -1276,6 +1279,7 @@ export default function App() {
   const [boardShake, setBoardShake] = useState(false);
   const [flyingCards, setFlyingCards] = useState([]); // Animasyonlu kartlar
   const [directionalFlyingCards, setDirectionalFlyingCards] = useState([]); // Yönlü uçan ödeme kartları
+  const [discardFlyingCards, setDiscardFlyingCards] = useState([]); // Animasyonlu atılan kartlar
   const [isTimeRunningOut, setIsTimeRunningOut] = useState(false); // Zaman sınırı uyarısı
   const prevHandIds = useRef([]);
   const deckRef = useRef(null);
@@ -1409,8 +1413,7 @@ export default function App() {
   }, []);
 
   // --- Animasyon Fonksiyonları (TDZ Hatasını Önlemek İçin En Üste Taşındı) ---
-  const spawnSmoke = useCallback(() => {
-    const count = 10;
+  const spawnSmoke = useCallback((count) => {
     const newSmoke = [];
     for (let i = 0; i < count; i++) {
       newSmoke.push({
@@ -1423,24 +1426,31 @@ export default function App() {
     setTimeout(() => setSmokeParticles([]), 800);
   }, []);
 
-  const spawnMoney = useCallback((options = {}) => {
-    const { icon, fromPos, toPos, count = 12 } = options;
+  const PLAY_EFFECT_ICONS = { gold: '✨', heart: '💖', flame: '🔥', cosmic: '☄️' };
 
-    let finalIcon = icon || '💸';
-    if (gameState?.log?.length > 0) {
-      const lastEntry = gameState.log[gameState.log.length - 1];
-      const actorId = lastEntry?.actorId;
-      if (actorId) {
-        const actor = gameState.players?.find(p => p.id === actorId);
-        const effect = actor?.selectedPlayEffect || 'default';
-        if (effect && effect !== 'default') {
-          finalIcon = {
-            gold: '✨',
-            heart: '💖',
-            flame: '🔥',
-            cosmic: '☄️'
-          }[effect] || finalIcon;
+  const spawnMoney = useCallback((options = {}) => {
+    const { fromPos, toPos, count = 12, forceIcon } = options;
+
+    // Resolve the icon: first check the last log actor's selectedPlayEffect,
+    // then fall back to dbUser's own effect, then default money icon.
+    let finalIcon = '💸';
+    if (forceIcon) {
+      finalIcon = forceIcon;
+    } else {
+      // Try to get the actor from last log entry
+      let actorEffect = null;
+      if (gameState?.log?.length > 0) {
+        const lastEntry = gameState.log[gameState.log.length - 1];
+        const actorId = lastEntry?.actorId;
+        if (actorId) {
+          const actor = gameState.players?.find(p => p.id === actorId);
+          actorEffect = actor?.selectedPlayEffect;
         }
+      }
+      // Fall back to our own effect if we're the actor or no actor found
+      const effect = actorEffect || dbUser?.selectedPlayEffect || 'default';
+      if (effect && effect !== 'default') {
+        finalIcon = PLAY_EFFECT_ICONS[effect] || '💸';
       }
     }
 
@@ -1463,7 +1473,7 @@ export default function App() {
     }
     setMoneyParticles(prev => [...prev, ...newParts]);
     setTimeout(() => { setMoneyParticles(prev => prev.filter(p => !newParts.includes(p))); }, 1600);
-  }, [gameState?.log, gameState?.players]);
+  }, [gameState?.log, gameState?.players, dbUser?.selectedPlayEffect]);
   // ---- SÜRE BİTİMİ UYARI SESİ & OTOMATİK TUR ATLATMA ----
   useEffect(() => {
     if (screen === 'game' && isMyTurn && !isBlocked && gameState?.turnTimer > 0 && gameState?.turnStartTime && gameState?.serverTime) {
@@ -1840,10 +1850,47 @@ export default function App() {
     if (myCompleteSetsCount > prevCompleteSetsRef.current) {
       sfxBuild();
       showToast(lang === 'en' ? '✨ Awesome! You completed a color set!' : '✨ Muhteşem! Bir renk setini tamamladın!', 'success', 4000);
-      spawnMoney({ count: 20, icon: '✨' });
+      spawnMoney({ count: 20 }); // uses our own playEffect
     }
     prevCompleteSetsRef.current = myCompleteSetsCount;
   }, [myCompleteSetsCount, showToast, spawnMoney]);
+
+  // ---- SIRA DEĞİŞİMİ EFEKTİ — Her yeni sıra başında o oyuncunun efekti saçılır ----
+  const prevTurnPlayerIdRef = useRef(null);
+  useEffect(() => {
+    if (!gameState?.currentPlayerId || gameState?.phase !== 'playing') return;
+    const newTurnId = gameState.currentPlayerId;
+    if (newTurnId !== prevTurnPlayerIdRef.current) {
+      prevTurnPlayerIdRef.current = newTurnId;
+      // Get the new current player's play effect
+      const currentPlayer = gameState.players?.find(p => p.id === newTurnId);
+      const effect = currentPlayer?.selectedPlayEffect;
+      if (effect && effect !== 'default') {
+        const icon = { gold: '✨', heart: '💖', flame: '🔥', cosmic: '☄️' }[effect];
+        if (icon) {
+          // Small burst from that player's panel position
+          const panelEl = playerPanelRefs.current?.[newTurnId];
+          if (panelEl) {
+            const rect = panelEl.getBoundingClientRect();
+            const pos = { x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 };
+            setMoneyParticles(prev => {
+              const particles = Array.from({ length: 8 }, () => ({
+                id: Math.random(),
+                icon,
+                sx: pos.x + 'px',
+                sy: pos.y + 'px',
+                dx: (pos.x + (Math.random() - 0.5) * 200) + 'px',
+                dy: (pos.y - 80 - Math.random() * 120) + 'px',
+                dr: (Math.random() - 0.5) * 360 + 'deg'
+              }));
+              setTimeout(() => setMoneyParticles(p => p.filter(mp => !particles.includes(mp))), 1400);
+              return [...prev, ...particles];
+            });
+          }
+        }
+      }
+    }
+  }, [gameState?.currentPlayerId, gameState?.phase, gameState?.players]);
 
   // ---- RAKİP SET TAMAMLAMA FLASH EFEKTİ ----
   const [flashingPlayers, setFlashingPlayers] = useState({}); // { playerId: true }
@@ -1940,6 +1987,46 @@ export default function App() {
     }
   };
 
+  // ── Overlay subtext renk vurgulayıcı (component seviyesinde) ──────────────
+  const OVERLAY_COLOR_HEX = {
+    'Kahverengi': '#D2691E', 'Açık Mavi': '#4FA8D5', 'Pembe': '#FF69B4',
+    'Turuncu': '#FFA500',   'Kırmızı': '#FF4444',   'Sarı': '#FFD700',
+    'Yeşil': '#52BE80',     'Lacivert': '#2E86C1',
+    'Demir Yolları': '#AAAAAA', 'Kamu Hizmetleri': '#ADB5BD',
+    'Brown': '#D2691E', 'Light Blue': '#4FA8D5', 'Pink': '#FF69B4',
+    'Orange': '#FFA500', 'Red': '#FF4444', 'Yellow': '#FFD700',
+    'Green': '#52BE80', 'Navy': '#2E86C1', 'Railroad': '#AAAAAA', 'Utility': '#ADB5BD',
+  };
+  const formatSubtext = (text) => {
+    if (!text) return null;
+    const colorNames = Object.keys(OVERLAY_COLOR_HEX).sort((a, b) => b.length - a.length);
+    const colorPattern = colorNames.map(c => c.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|');
+    const tokenRe = new RegExp(`("[^"]+")|(\\d+M)|(↔|→|←)|(${colorPattern})`, 'g');
+    const parts = [];
+    let last = 0, m;
+    while ((m = tokenRe.exec(text)) !== null) {
+      if (m.index > last) parts.push(<span key={`t-${last}`}>{text.slice(last, m.index)}</span>);
+      if (m[1]) {
+        // Tırnaklı kart adı → altın sarısı
+        const inner = m[1].slice(1, -1);
+        parts.push(<span key={`q-${m.index}`} className="overlay-token-card">"<b>{inner}</b>"</span>);
+      } else if (m[2]) {
+        // Para miktarı (5M, 8M) → parlak yeşil
+        parts.push(<span key={`m-${m.index}`} className="overlay-token-money">{m[2]}</span>);
+      } else if (m[3]) {
+        // Ok sembolü → beyaz
+        parts.push(<span key={`a-${m.index}`} className="overlay-token-arrow">{m[3]}</span>);
+      } else if (m[4]) {
+        // Renk adı → o rengin gerçek rengi
+        const hex = OVERLAY_COLOR_HEX[m[4]];
+        parts.push(<span key={`c-${m.index}`} className="overlay-token-color" style={{ color: hex, textShadow: `0 0 10px ${hex}99` }}>{m[4]}</span>);
+      }
+      last = m.index + m[0].length;
+    }
+    if (last < text.length) parts.push(<span key={`t-end`}>{text.slice(last)}</span>);
+    return parts;
+  };
+
   useEffect(() => {
     if (logRef.current) logRef.current.scrollTop = 0;
 
@@ -1947,18 +2034,65 @@ export default function App() {
     if (!gameState?.log?.length) return;
     const lastEntry = gameState.log[gameState.log.length - 1];
 
-    // Aynı logu tekrar işlemiyoruz
-    if (lastEntry.time === prevLogTimeRef.current) return;
     prevLogTimeRef.current = lastEntry.time;
-
     const lastLog = lastEntry.msg.toLowerCase();
+    const rawMsg = lastEntry.msg;
     let overlay = null;
     const actorName = lastEntry.msg.split(',')[0] || lastEntry.msg.split(' ')[0] || 'Biri';
     const audioContext = { actorId: lastEntry.actorId, targetId: lastEntry.targetId };
 
-    // ÖNEMLİ: 'kasaya koydu' kontrolü EN BAŞA alındı — aksiyon/aksiyon kartının adını içerse bile doğru bildirimi verir
+    // Yardımcı: log içinden tırnaklı string çek ("..") → ["kart1", "kart2"]
+    const extractQuoted = (msg) => { const m = []; let re = /"([^"]+)"/g, x; while ((x = re.exec(msg)) !== null) m.push(x[1]); return m; };
+    // Yardımcı: log içinden sayısal değer çek (örn. "5M", "2M")
+    const extractAmount = (msg) => { const m = msg.match(/(\d+)M/i); return m ? m[1] : null; };
+    // Yardımcı: log içinden hedef oyuncu ismi çek ("X'dan", "X'ın", vb.)
+    const extractTarget = (msg) => { const m = msg.match(/(?:ile\s+)([^'"]+?)(?:'[aeiouıöü]?[ndnı]|\s+için)/i); return m ? m[1].trim() : null; };
+
+    // Eğer log nesnesinde kart metadatası varsa, uçuş animasyonunu tetikle!
+    if (lastEntry.cards && Array.isArray(lastEntry.cards) && lastEntry.cards.length > 0 && lastEntry.actorId) {
+      const fromPos = getCoordsForPlayer(lastEntry.actorId);
+      const isDiscard = lastEntry.type === 'discard';
+      const toPos = isDiscard 
+        ? { x: window.innerWidth / 2 - 80, y: window.innerHeight / 2 - 50 } 
+        : { x: window.innerWidth / 2, y: window.innerHeight / 2 - 50 };
+
+      lastEntry.cards.forEach((card, idx) => {
+        setTimeout(() => {
+          sfxWhoosh();
+          const uniqueId = `${card.id}_log_${Math.random()}`;
+          setDiscardFlyingCards(prev => [...prev, {
+            id: uniqueId,
+            card,
+            sx: fromPos.x,
+            sy: fromPos.y,
+            dx: toPos.x,
+            dy: toPos.y
+          }]);
+          setTimeout(() => {
+            setDiscardFlyingCards(prev => prev.filter(c => c.id !== uniqueId));
+            if (isDiscard) {
+              sfxCrumple(audioContext);
+              spawnSmoke(10);
+            } else {
+              sfxBuild();
+              spawnSmoke(10);
+            }
+          }, 850);
+        }, idx * 200);
+      });
+    }
+
     if (lastLog.includes('kasaya koydu')) {
-      overlay = { text: 'KASAYA YATIRILDI!', icon: '💰' };
+      const amountM = extractAmount(rawMsg);
+      const bankTotalMatch = rawMsg.match(/Güncel Kasa:\s*(\d+)M/);
+      const bankTotal = bankTotalMatch ? bankTotalMatch[1] : null;
+      const subtextTR = amountM
+        ? `${actorName} ${amountM}M kasaya yatırdı.${bankTotal ? ` (Kasa toplamı: ${bankTotal}M)` : ''}`
+        : `${actorName} banka kasasına para istifledi.`;
+      const subtextEN = amountM
+        ? `${actorName} deposited ${amountM}M into the vault.${bankTotal ? ` (Total vault: ${bankTotal}M)` : ''}`
+        : `${actorName} deposited money into the bank vault.`;
+      overlay = { text: 'KASAYA YATIRILDI!', subtext: lang === 'en' ? subtextEN : subtextTR, icon: '💰', type: 'success' };
       playTurkishVoice(`${actorName} banka kasasına para yatırdı.`);
       const match = lastLog.match(/(\d+)m\s+olarak/);
       if (match) {
@@ -1982,79 +2116,206 @@ export default function App() {
     }
 
     if (lastLog.includes('anlaşma bozucu')) {
-      overlay = { text: 'ANLAŞMA BOZULDU!', icon: '💣' };
+      // "...X'ın TAM_RENKADİ setinin tamamını ele geçirmeye çalışıyor!" veya "...X'ın RENK setini çaldı!"
+      const colorMatch = rawMsg.match(/([A-ZÇĞİÖŞÜa-zçğışöüñ]+(?:\s+[A-ZÇĞİÖŞÜa-zçğışöüñ]+)*)\s+set/);
+      const victimMatch = rawMsg.match(/([\w\u00C0-\u024F]+)'[ıi]n\s+.*?set/);
+      const colorName = colorMatch ? colorMatch[1] : '';
+      const victim = victimMatch ? victimMatch[1] : '';
+      const subtextTR = victim && colorName
+        ? `${actorName}, ${victim}'ın tüm ${colorName} setini gasp etti! 💀`
+        : `Eyvah! ${actorName} Anlaşma Bozucu oynayarak koca bir seti gasp etti!`;
+      const subtextEN = victim && colorName
+        ? `${actorName} seized ${victim}'s entire ${colorName} set! 💀`
+        : `Oh no! ${actorName} played Deal Breaker and stole a full set!`;
+      overlay = { text: 'ANLAŞMA BOZULDU!', subtext: lang === 'en' ? subtextEN : subtextTR, icon: '💣', type: 'danger' };
       playTurkishVoice(`İşte bu bir soygun! ${actorName} Anlaşma Bozucu oynadı ve koca bir seti çaldı.`);
       sfxGlassBreak(audioContext);
       setBoardShake('heavy'); setTimeout(() => setBoardShake(false), 1200);
       sfxActionDealbreaker(audioContext);
     }
     else if (lastLog.includes('hırsız sincap') || lastLog.includes('sincap')) {
-      overlay = { text: 'HIRSIZ SİNCAP!', icon: '🐿️' };
+      // "...X'ın elinden rastgele bir kart çaldı!" veya "...X'ın elinden kart çalmaya çalıştı"
+      const victimMatch = rawMsg.match(/([\w\u00C0-\u024F]+)'[ıiın]{1,2}\s+elinden/);
+      const victim = victimMatch ? victimMatch[1] : null;
+      const alreadyStolen = lastLog.includes('çaldı!');
+      const subtextTR = victim
+        ? alreadyStolen
+          ? `${actorName}, ${victim}'ın elinden gizlice bir kart kaptı! 🐿️`
+          : `${actorName}, ${victim}'ın elinden kart çalmaya çalışıyor! (itiraz süresi)`
+        : `Dikkat! ${actorName} hırsız sincap kartı oynadı ve elden kart çaldı!`;
+      const subtextEN = victim
+        ? alreadyStolen
+          ? `${actorName} sneakily snatched a card from ${victim}'s hand! 🐿️`
+          : `${actorName} is trying to steal from ${victim}'s hand! (challenge window)`
+        : `${actorName} snuck in and stole a card from hand!`;
+      overlay = { text: 'HIRSIZ SİNCAP!', subtext: lang === 'en' ? subtextEN : subtextTR, icon: '🐿️', type: 'warning' };
       playTurkishVoice(`Dikkat! ${actorName} hırsız sincap kartı oynadı ve elden kart çalıyor!`);
       sfxActionSlyDeal(audioContext);
     }
     else if (lastLog.includes('reddet') && (lastLog.includes('karşı') || lastLog.includes('karşı reddet'))) {
-      overlay = { text: 'KARŞI REDDET!', icon: '🛡️' };
+      overlay = { text: 'KARŞI REDDET!', subtext: lang === 'en' ? `Incredible! ${actorName} countered the counter-attack!` : `İnanılmaz! ${actorName} itiraza itiraz (karşı reddet) kartı fırlattı!`, icon: '🛡️', type: 'danger' };
       playTurkishVoice(`Hadi oradan! ${actorName} reddet kartı oynadı.`);
       sfxActionCounterJustSayNo(audioContext);
       sfxSwordClash(audioContext);
     }
     else if (lastLog.includes('reddet')) {
-      overlay = { text: 'REDDEDİLDİ!', icon: '🛡️' };
+      overlay = { text: 'REDDEDİLDİ!', subtext: lang === 'en' ? `${actorName} blocked the move using Just Say No!` : `${actorName} Just Say No fırlatarak hamleyi engelledi!`, icon: '🛡️', type: 'info' };
       playTurkishVoice(`Hadi oradan! ${actorName} reddet kartı oynadı.`);
       sfxActionJustSayNo(audioContext);
     }
     else if (lastLog.includes('sinsi') || lastLog.includes('çaldı') || lastLog.includes('aldı!')) {
-      overlay = { text: 'SİNSİ ANLAŞMA!', icon: '🥷' };
+      // Log format 1 (actionSlyDeal tetiklenince): "X "Sinsi Anlaşma" kullandı! Y'ın "KartAdı" arazisini çalmak için hamle yaptı."
+      // Log format 2 (finalizeChallenge): "X "KartAdı" arazisini Y'dan aldı!"
+      const quoted = extractQuoted(rawMsg);
+      const cardName = quoted.find(q => !q.includes('Sinsi') && !q.includes('Anlaşma')) || null;
+      // Hedef oyuncuyu bul
+      const victimMatch = rawMsg.match(/([\w\u00C0-\u024F]+)'[ıi](?:[nd]|\s)/) || rawMsg.match(/(\w+)'dan\s+aldı/);
+      const victim = victimMatch ? victimMatch[1] : null;
+      const subtextTR = cardName && victim
+        ? `${actorName}, ${victim}'ın "${cardName}" arazisini sinsice çaldı! 🥷`
+        : cardName
+          ? `${actorName} "${cardName}" arazisini sinsice kaptı! 🥷`
+          : `${actorName} sinsice tek bir arazi çaldı!`;
+      const subtextEN = cardName && victim
+        ? `${actorName} sneakily stole "${cardName}" from ${victim}! 🥷`
+        : cardName
+          ? `${actorName} snatched "${cardName}"! 🥷`
+          : `${actorName} sneakily stole a single property!`;
+      overlay = { text: 'SİNSİ ANLAŞMA!', subtext: lang === 'en' ? subtextEN : subtextTR, icon: '🥷', type: 'warning' };
       playTurkishVoice(`${actorName} sinsi bir şekilde arazi çaldı.`);
       sfxActionSlyDeal(audioContext);
     }
-    else if (lastLog.includes('zorunlu') || lastLog.includes('takas başlattı')) {
-      overlay = { text: 'ZORUNLU TAKAS!', icon: '🔁' };
+    else if (lastLog.includes('zorunlu') || lastLog.includes('takas başlattı') || (lastLog.includes('takas etti') && !lastLog.includes('barışçıl'))) {
+      // Log format 1 (actionForcedDeal): "X zorunlu takas başlattı! Y ile arazi değiş-tokuşu istiyor."
+      // Log format 2 (finalizeChallenge): "X, "BenimKartım" ile Y'ın "OnunKartı" arazisini takas etti!"
+      const quoted = extractQuoted(rawMsg);
+      const myCard = quoted[0] || null;
+      const theirCard = quoted[1] || null;
+      // Hedef isim: "Y ile" veya "Y'ın"
+      const victimMatch = rawMsg.match(/ile\s+([\w\u00C0-\u024F]+)'/) || rawMsg.match(/ile\s+([\w\u00C0-\u024F]+)\s+arazi/);
+      const victim = victimMatch ? victimMatch[1] : null;
+      const subtextTR = myCard && theirCard
+        ? `${actorName} "${myCard}" ↔ "${theirCard}" takasını zorla yaptırdı!`
+        : victim
+          ? `${actorName}, ${victim} ile arazi değiş-tokuşunu zorladı!`
+          : `${actorName} zorunlu takas başlattı, kartlar el değiştiriyor!`;
+      const subtextEN = myCard && theirCard
+        ? `${actorName} force-swapped "${myCard}" ↔ "${theirCard}"!`
+        : victim
+          ? `${actorName} forced a swap with ${victim}!`
+          : `${actorName} forced a property swap!`;
+      overlay = { text: 'ZORUNLU TAKAS!', subtext: lang === 'en' ? subtextEN : subtextTR, icon: '🔁', type: 'info' };
       playTurkishVoice(`${actorName} zorunlu takas oynadı! Kartlar el değiştiriyor.`);
       sfxActionForcedDeal(audioContext);
     }
-    else if (lastLog.includes('kirası topluyor') || lastLog.includes('kira istiyor') || lastLog.includes('kira kartı')) {
-      overlay = { text: 'KİRA İSTENDİ!', icon: '💸' };
+    else if (lastLog.includes('kirası topluyor') || lastLog.includes('kira istiyor') || lastLog.includes('kira kartı') || lastLog.includes('joker kira')) {
+      // Log: "X, RENK kirası topluyor! Y, Z için NM borç çıkartıldı." veya "X Joker Kira oynadı! Y hedef seçildi ve NM ödemesi istendi."
+      const amountM = extractAmount(rawMsg);
+      const doubleRent = lastLog.includes('2x') || lastLog.includes('iki kat') || lastLog.includes('çifte');
+      const colorMatch = rawMsg.match(/([A-ZÇĞİÖŞÜ][a-zçğışöüñ]+(?:\s+[A-ZÇĞİÖŞÜa-zçğışöüñ]+)*)\s+kiras/);
+      const colorName = colorMatch ? colorMatch[1] : null;
+      const subtextTR = amountM
+        ? `${actorName}${colorName ? ` (${colorName})` : ''} ${doubleRent ? '⚡×2 ' : ''}${amountM}M kira talep ediyor! Pamuk eller cebe!`
+        : `${actorName} kira talep ediyor! Pamuk eller cebe!`;
+      const subtextEN = amountM
+        ? `${actorName}${colorName ? ` (${colorName})` : ''} demands ${doubleRent ? '⚡×2 ' : ''}${amountM}M rent! Pay up!`
+        : `${actorName} is collecting rent! Pay up!`;
+      overlay = { text: 'KİRA İSTENDİ!', subtext: lang === 'en' ? subtextEN : subtextTR, icon: '💸', type: 'danger' };
       playTurkishVoice(`${actorName} kira istiyor. Pamuk eller cebe!`);
       sfxRentCardPlayed(audioContext);
     }
     else if (lastLog.includes('çifte') || lastLog.includes('iki kat') || lastLog.includes('double rent')) {
-      overlay = { text: 'İKİ KAT KİRA!', icon: '⚡' };
+      overlay = { text: 'İKİ KAT KİRA!', subtext: lang === 'en' ? `Rent value has been doubled!` : `Kira bedeli iki katına çıkartıldı!`, icon: '⚡', type: 'danger' };
       sfxDoubleRent(audioContext);
     }
     else if (lastLog.includes('borç tahsildarı') || lastLog.includes('tahsildar') || lastLog.includes('haciz') || lastLog.includes('borç')) {
-      overlay = { text: 'BORÇ İSTENDİ!', icon: '🧾' };
+      // Log: "X "Borç Tahsildarı" oynadı, Y'dan 5M istiyor"
+      const amountM = extractAmount(rawMsg);
+      const victimMatch = rawMsg.match(/,\s*([\w\u00C0-\u024F]+)'[^,]+?(\d+)M/);
+      const victim = victimMatch ? victimMatch[1] : null;
+      const subtextTR = victim && amountM
+        ? `${actorName}, ${victim}'dan ${amountM}M borç tahsil ediyor! Hemen öde!`
+        : amountM
+          ? `${actorName} borç tahsildarı oynadı! ${amountM}M ödenmeli!`
+          : `${actorName} borç tahsildarı oynadı! Herkesten 2M tahsil ediyor!`;
+      const subtextEN = victim && amountM
+        ? `${actorName} is collecting ${amountM}M debt from ${victim}! Pay up!`
+        : amountM
+          ? `${actorName} played Debt Collector! ${amountM}M due!`
+          : `${actorName} played Debt Collector! Pay 5M!`;
+      overlay = { text: 'BORÇ İSTENDİ!', subtext: lang === 'en' ? subtextEN : subtextTR, icon: '🧾', type: 'danger' };
       playTurkishVoice(`${actorName} borç tahsildarı oynadı. Paraları hemen masaya dökün.`);
       sfxActionDebtCollector(audioContext);
+      sfxActionBirthday(audioContext);
     }
     else if (lastLog.includes('doğum günü') || lastLog.includes('doğum günüm')) {
-      overlay = { text: 'MUTLU YILLAR!', icon: '🎂' };
+      // Log: "X "Doğum Günüm!" oynadı! Herkes 2M ödeyecek"
+      const amountM = extractAmount(rawMsg) || '2';
+      const subtextTR = `🎉 Bugün ${actorName}'in doğum günü! Herkes ${amountM}M hediye verecek!`;
+      const subtextEN = `🎉 It's ${actorName}'s birthday! Everyone must give ${amountM}M!`;
+      overlay = { text: 'MUTLU YILLAR!', subtext: lang === 'en' ? subtextEN : subtextTR, icon: '🎂', type: 'success' };
       playTurkishVoice(`Bugün ${actorName}'in doğum günü! Herkes hediye olarak para versin.`);
       sfxPartyHorn();
       sfxActionBirthday(audioContext);
     }
     else if (lastLog.includes('geç go') || lastLog.includes('başlangıç')) {
-      overlay = { text: 'KART ÇEKİLİYOR!', icon: '🎴' };
+      // Log: "X "Geç Go!" oynadı, 2 kart çekti"
+      const deckMatch = rawMsg.match(/Deste:\s*(\d+)/);
+      const deckCount = deckMatch ? deckMatch[1] : null;
+      const subtextTR = `${actorName} "Geç Go!" oynadı ve desteden 2 kart çekti.${deckCount ? ` (Destede ${deckCount} kart kaldı)` : ''}`;
+      const subtextEN = `${actorName} played Pass Go and drew 2 cards.${deckCount ? ` (${deckCount} cards left in deck)` : ''}`;
+      overlay = { text: 'KART ÇEKİLİYOR!', subtext: lang === 'en' ? subtextEN : subtextTR, icon: '🎴', type: 'success' };
       playTurkishVoice(`${actorName} başlangıç kartı oynadı ve desteden iki yeni kart çekti.`);
       sfxActionPassGoTwoDraw(audioContext);
     }
-    // (kasaya koydu zaten en üstte işlendi, buraya gelinmez)
     else if (lastLog.includes('otel inşa')) {
-      overlay = { text: 'OTEL İNŞA EDİLDİ!', icon: '🏨' };
+      // Log: "X muazzam bir yatırım yaptı! RENK setine bir 🏨 Otel inşa etti."
+      const colorMatch = rawMsg.match(/([A-ZÇĞİÖŞÜ][a-zçğışöüñ]+(?:\s+[A-ZÇĞİÖŞÜa-zçğışöüñ]+)*)\s+setine/);
+      const colorName = colorMatch ? colorMatch[1] : null;
+      const subtextTR = colorName
+        ? `${actorName} ${colorName} setine 🏨 Otel dikti! Bu setten geçenler yanacak!`
+        : `${actorName} mülküne otel dikti! Kira bedeli 4M arttı!`;
+      const subtextEN = colorName
+        ? `${actorName} built a 🏨 Hotel on the ${colorName} set! Anyone passing pays big!`
+        : `${actorName} built a hotel! Rent increased by 4M!`;
+      overlay = { text: 'OTEL İNŞA EDİLDİ!', subtext: lang === 'en' ? subtextEN : subtextTR, icon: '🏨', type: 'success' };
       playTurkishVoice(`Ohooo! ${actorName} yeni bir otel dikti, buradan geçen yandı!`);
       sfxHotel(audioContext);
     }
     else if (lastLog.includes('ev inşa') || (lastLog.includes('ev') && lastLog.includes('inşa'))) {
-      overlay = { text: 'EV İNŞA EDİLDİ!', icon: '🏠' };
+      const colorMatch = rawMsg.match(/([A-ZÇĞİÖŞÜ][a-zçğışöüñ]+(?:\s+[A-ZÇĞİÖŞÜa-zçğışöüñ]+)*)\s+setine/);
+      const colorName = colorMatch ? colorMatch[1] : null;
+      const subtextTR = colorName
+        ? `${actorName} ${colorName} setine 🏠 Ev dikti! Kira daha da pahalı!`
+        : `${actorName} mülküne ev dikti! Kira bedeli 3M arttı!`;
+      const subtextEN = colorName
+        ? `${actorName} built a 🏠 House on the ${colorName} set! Rent just went up!`
+        : `${actorName} built a house! Rent increased by 3M!`;
+      overlay = { text: 'EV İNŞA EDİLDİ!', subtext: lang === 'en' ? subtextEN : subtextTR, icon: '🏠', type: 'success' };
       playTurkishVoice(`Ohooo! ${actorName} yeni bir ev dikti, buradan geçen yandı!`);
       sfxHouse(audioContext);
     }
     else if (lastLog.includes('grubuna') && lastLog.includes('arazisini ekledi')) {
-      overlay = { text: 'MÜLK EKLENDİ!', icon: '🗺️' };
+      // Log: "X, RENK grubuna "KartAdı" arazisini ekledi."
+      const quoted = extractQuoted(rawMsg);
+      const cardName = quoted[0] || null;
+      const colorMatch = rawMsg.match(/,\s*([A-ZÇĞİÖŞÜ][a-zçğışöüñ]+(?:\s+[A-ZÇĞİÖŞÜa-zçğışöüñ]+)*)\s+grubuna/);
+      const colorName = colorMatch ? colorMatch[1] : null;
+      const subtextTR = cardName && colorName
+        ? `${actorName} "${cardName}" kartını ${colorName} setine koydu.`
+        : cardName
+          ? `${actorName} "${cardName}" arazisini masaya yerleştirdi.`
+          : `${actorName} masaya yeni bir mülk yerleştirdi.`;
+      const subtextEN = cardName && colorName
+        ? `${actorName} placed "${cardName}" into the ${colorName} set.`
+        : cardName
+          ? `${actorName} placed "${cardName}" on the board.`
+          : `${actorName} put a new property card on the board.`;
+      overlay = { text: 'MÜLK EKLENDİ!', subtext: lang === 'en' ? subtextEN : subtextTR, icon: '🗺️', type: 'success' };
       playTurkishVoice(`${actorName} masaya yeni bir arazi kartı yerleştirdi.`);
-      if (lastLog.includes('joker')) sfxJokerPropertyPlayed(audioContext);
-      else {
+      if (lastLog.includes('joker')) {
+        sfxJokerPropertyPlayed(audioContext);
+      } else {
         const match = (lastEntry.msg || '').match(/"([^"]+)"/);
         const propName = match ? match[1] : '';
         const slug = propName
@@ -2066,1131 +2327,1193 @@ export default function App() {
         sfxPropertyPlayed(audioContext);
       }
     }
-    else if (lastLog.includes('arazisini') && lastLog.includes('rengine taşıdı')) {
-      overlay = { text: 'RENK DEĞİŞTİ!', icon: '🎨' };
-    }
-    else if (lastLog.includes('ödedi') && lastLog.includes('kasası')) {
-      overlay = { text: 'ÖDEME YAPILDI!', icon: '💵' };
-      if (lastEntry.actorId && lastEntry.targetId) {
-        const fromPos = getCoordsForPlayer(lastEntry.actorId);
-        const toPos = getCoordsForPlayer(lastEntry.targetId);
-        const dummyCards = [
-          { id: Math.random() + '_pay_1', type: 'money', value: 1, name: 'Ödeme Kartı', key: 'money_1' },
-          { id: Math.random() + '_pay_2', type: 'money', value: 2, name: 'Ödeme Kartı', key: 'money_2' }
-        ];
-        dummyCards.forEach((card, idx) => {
+  else if (lastLog.includes('arazisini') && lastLog.includes('rengine taşıdı')) {
+    // Log: "X "KartAdı" arazisini RENK rengine taşıdı"
+    const quoted = extractQuoted(rawMsg);
+    const cardName = quoted[0] || null;
+    const colorMatch = rawMsg.match(/([A-ZÇĞİÖŞÜ][a-zçğışöüñ]+)\s+rengine\s+taşıdı/);
+    const colorName = colorMatch ? colorMatch[1] : null;
+    const subtextTR = cardName && colorName
+      ? `${actorName} "${cardName}" kartını ${colorName} rengine çevirdi!`
+      : `${actorName} çoklu renk arazi kartının yönünü değiştirdi!`;
+    const subtextEN = cardName && colorName
+      ? `${actorName} flipped "${cardName}" to the ${colorName} color!`
+      : `${actorName} rotated their multi-color property card.`;
+    overlay = { text: 'RENK DEĞİŞTİ!', subtext: lang === 'en' ? subtextEN : subtextTR, icon: '🎨', type: 'info' };
+  }
+  else if (lastLog.includes('ödedi') && lastLog.includes('kasası')) {
+    // Log: "X, Y'ın kasasına ZM ödedi."
+    const amountM = extractAmount(rawMsg);
+    const receiverMatch = rawMsg.match(/([\w\u00C0-\u024F]+)'[ıi]n\s+kasasına/);
+    const receiver = receiverMatch ? receiverMatch[1] : null;
+    const subtextTR = amountM && receiver
+      ? `${actorName}, ${receiver}'a ${amountM}M ödedi. İşlem tamamlandı.`
+      : amountM
+        ? `${actorName} ${amountM}M ödedi.`
+        : `Ödeme işlemi başarıyla tamamlandı.`;
+    const subtextEN = amountM && receiver
+      ? `${actorName} paid ${amountM}M to ${receiver}. Done!`
+      : amountM
+        ? `${actorName} paid ${amountM}M.`
+        : `Payment completed successfully.`;
+    overlay = { text: 'ÖDEME YAPILDI!', subtext: lang === 'en' ? subtextEN : subtextTR, icon: '💵', type: 'success' };
+    if (lastEntry.actorId && lastEntry.targetId) {
+      const fromPos = getCoordsForPlayer(lastEntry.actorId);
+      const toPos = getCoordsForPlayer(lastEntry.targetId);
+      const dummyCards = [
+        { id: Math.random() + '_pay_1', type: 'money', value: 1, name: 'Ödeme Kartı', key: 'money_1' },
+        { id: Math.random() + '_pay_2', type: 'money', value: 2, name: 'Ödeme Kartı', key: 'money_2' }
+      ];
+      dummyCards.forEach((card, idx) => {
+        setTimeout(() => {
+          sfxWhoosh();
+          setDirectionalFlyingCards(prev => [...prev, {
+            id: card.id,
+            card,
+            sx: fromPos.x,
+            sy: fromPos.y,
+            dx: toPos.x,
+            dy: toPos.y
+          }]);
           setTimeout(() => {
-            sfxWhoosh();
-            setDirectionalFlyingCards(prev => [...prev, {
-              id: card.id,
-              card,
-              sx: fromPos.x,
-              sy: fromPos.y,
-              dx: toPos.x,
-              dy: toPos.y
-            }]);
-            setTimeout(() => {
-              setDirectionalFlyingCards(prev => prev.filter(c => c.id !== card.id));
-              spawnMoney({ fromPos: toPos, toPos: null, count: 4 });
-            }, 800);
-          }, idx * 180);
-        });
-      }
-    }
-    else if (lastLog.includes('barışçıl bir takas yapmak istiyor')) {
-      overlay = { text: 'TAKAS TEKLİFİ!', icon: '🤝' };
-      sfxTradeProposed();
-    }
-    else if (lastLog.includes('takas yaptı') || lastLog.includes('takas gerçekleştirdi')) {
-      overlay = { text: 'TAKAS YAPILDI!', icon: '✅' };
-      sfxTradeAccepted();
-    }
-    else if (lastLog.includes('takas teklifini reddetti')) {
-      overlay = { text: 'TAKAS REDDEDİLDİ!', icon: '❌' };
-      sfxTradeRejected();
-    }
-    else if (lastLog.includes('karaborsa')) {
-      overlay = { text: 'KARABORSA!', icon: '🕵️‍♂️' };
-      sfxBlackMarket(audioContext);
-    }
-    else if (lastLog.includes('zar attı') && lastLog.includes('kötü şans')) {
-      overlay = { text: 'KÖTÜ ŞANS!', icon: '😢' };
-      sfxDiceRoll();
-      sfxWompWomp();
-    }
-    else if (lastLog.includes('zar attı') && lastLog.includes('jackpot')) {
-      overlay = { text: 'JACKPOT!', icon: '🎰' };
-      sfxDiceRoll();
-      sfxJackpot();
-    }
-    else if (lastLog.includes('zar attı') && lastLog.includes('şanslı')) {
-      overlay = { text: 'ŞANSLI RULO!', icon: '🎲' };
-      sfxDiceRoll();
-      sfxCricket();
-    }
-    else if (lastLog.includes('kart attı')) {
-      overlay = { text: 'KART ATILDI!', icon: '🗑️' };
-      sfxCrumple(audioContext);
-    }
-    else if (lastLog.includes('süresi bittiği için') || lastLog.includes('otomatik geçti')) {
-      overlay = { text: 'ZAMAN AŞIMI!', icon: '💤' };
-    }
-    else if (lastLog.includes('geri aldı') || lastLog.includes('↩️')) {
-      overlay = { text: 'HAMLE GERİ ALINDI!', icon: '↩️' };
-    }
-    else if (lastLog.includes('masayı devirdi') || lastLog.includes('ragequit') || lastLog.includes('rage_quit')) {
-      overlay = { text: 'MASAYI DEVİRDİ!', icon: '┬─┬ ︵ ┻━┻' };
-      sfxTableSlap();
-      sfxRageQuit();
-    }
-    else if (lastLog.includes('kazandi') || lastLog.includes('kazandı')) {
-      overlay = { text: 'KAZANDI! 🏆', icon: '🏆' };
-      sfxWin();
-    }
-    else if (lastLog.includes('oyun başladı')) {
-      overlay = { text: 'OYUN BAŞLADI!', icon: '🎮' };
-    }
-
-
-    if (overlay) {
-      setActionOverlay(overlay);
-      if (overlay.icon === '🧾' || overlay.icon === '💰' || overlay.icon === '💸' || overlay.icon === '💵') spawnMoney({ icon: overlay.icon === '💰' ? '💰' : '💸' });
-      setTimeout(() => setActionOverlay(null), 2500);
-    } else {
-      // Dev overlay çıkmıyorsa bile önemli olayları mini Toast ile göster
-      if (lastEntry.type === 'property' || lastEntry.type === 'payment' || lastEntry.type === 'action' || lastEntry.type === 'draw') {
-        // "(3 hamle kaldı)" gibi sistem verilerini kaldırıp temiz bir bildirim yap
-        const cleanMsg = lastEntry.msg.replace(/\(.*?\)/g, '').trim();
-        showToast(cleanMsg, 'info', 3000);
-      }
-    }
-  }, [gameState?.log, spawnMoney, showToast, playTurkishVoice]);
-
-  // ---- SÜRÜKLE BIRAK MANTIĞI ----
-  const handleDragStart = () => {
-    draggedRef.current = false;
-    setIsDragging(true);
-  };
-
-  const handleDrag = (event, info) => {
-    if (Math.abs(info.offset.x) > 5 || Math.abs(info.offset.y) > 5) {
-      draggedRef.current = true;
-    }
-    const element = document.elementFromPoint(info.point.x, info.point.y);
-    const target = element?.closest('[data-drop-target]');
-    if (target) {
-      setDragOverTarget(target.getAttribute('data-drop-target'));
-    } else {
-      setDragOverTarget(null);
-    }
-  };
-
-  const handleDragEnd = (event, info, card) => {
-    setIsDragging(false);
-    setDragTrail([]);
-    setDragOverTarget(null);
-
-    // Sürükleme bittikten hemen sonra tıklamayı tetiklememesi için kısa bir gecikme
-    setTimeout(() => { draggedRef.current = false; }, 100);
-
-    const element = document.elementFromPoint(info.point.x, info.point.y);
-    const target = element?.closest('[data-drop-target]');
-
-    if (target && draggedRef.current) {
-      const targetType = target.getAttribute('data-drop-target');
-      if (targetType === 'bank') {
-        if (card.type === 'property') {
-          setError('Tapu Senedi kartları bankaya konamaz!');
-          sfxError();
-        } else {
-          handlePlayCard(card, { asBankMoney: true });
-        }
-      } else if (targetType === 'properties') {
-        handleCardAction(card);
-      }
-    } else if (draggedRef.current) {
-      // 🚀 Swipe Gestures (Yukarı/Aşağı Hızlı Sürükleme)
-      if (info.offset.y < -120) {
-        handleCardAction(card);
-        if (navigator.vibrate) navigator.vibrate(60);
-      } else if (info.offset.y > 120) {
-        if (card.type === 'property') {
-          setError('Tapu Senedi kartları bankaya konamaz!');
-          sfxError();
-        } else {
-          handlePlayCard(card, { asBankMoney: true });
-          if (navigator.vibrate) navigator.vibrate(60);
-        }
-      }
-    }
-  };
-
-  // ── TUR DEĞİŞİMİ BİLDİRİMİ & KART ÇEKME SESİ ──
-  const prevCurrentPlayerRef = useRef(null); // Bu ref'i burada tanımlıyoruz
-  useEffect(() => {
-    if (!gameState?.currentPlayerId || !playerId || screen !== 'game') return; // Guard clause
-    const prev = prevCurrentPlayerRef.current;
-    const curr = gameState.currentPlayerId;
-    if (prev !== null && prev !== curr) {
-      if (prev === playerId) {
-        showToast(lang === 'en' ? '✅ Turn Ended' : '✅ Tur Bitti', 'success', 1800);
-        setActionOverlay({ text: lang === 'en' ? 'TURN ENDED!' : 'TUR BİTTİ!', icon: '⏳' });
-        setTimeout(() => setActionOverlay(null), 2500);
-        sfxTurnEnded();
-      }
-      if (curr === playerId) {
-        showToast(lang === 'en' ? '🎲 YOUR TURN!' : '🎲 SIRA SENDE!', 'turn', 2800);
-        setActionOverlay({ text: lang === 'en' ? 'YOUR TURN!' : 'SIRA SENDE!', icon: '🎲' });
-        setTimeout(() => setActionOverlay(null), 2500);
-        sfxYourTurn();
-        setShowTurnFlash(true);
-        setTimeout(() => setShowTurnFlash(false), 1200);
-        // Titreşim (Destekleyen cihazlar için)
-        if (navigator.vibrate) navigator.vibrate([200, 100, 200]);
-      } else {
-        const p = gameState.players.find(pl => pl.id === curr);
-        if (p) {
-          showToast(lang === 'en' ? `🎲 ${p.name}'s turn` : `🎲 ${p.name}'in sırası`, 'info', 1800);
-          setActionOverlay({ text: lang === 'en' ? `${p.name.toUpperCase()}'S TURN!` : `${p.name.toUpperCase()}'İN SIRASI!`, icon: '🎲' });
-          setTimeout(() => setActionOverlay(null), 2500);
-        }
-      }
-    }
-    prevCurrentPlayerRef.current = curr;
-  }, [gameState?.currentPlayerId, playerId, showToast]);
-
-  // ── REDDET! İTİRAZI / ÖDEME SESLERİ ──
-  const prevChallengeIdRef = useRef(null); // Bu satır zaten vardı, değişmedi
-  const prevPaymentIdRef = useRef(null);
-  useEffect(() => {
-    const ch = gameState?.myPendingChallenge;
-    if (ch && ch.id !== prevChallengeIdRef.current) {
-      sfxAlert();
-    }
-    prevChallengeIdRef.current = ch?.id || null;
-
-    const pay = gameState?.myPendingPayment;
-    if (pay && pay.id !== prevPaymentIdRef.current) {
-      if (pay.reason && pay.reason.toLowerCase().includes('kira')) {
-        sfxRentPaymentDue();
-      } else {
-        sfxPaymentDue();
-      }
-
-      // Auto-select payment selection based on rules: Cash first, then property.
-      let remaining = pay.amount;
-      const bankCards = me?.bank || [];
-      const propertyCards = Object.values(me?.properties || {}).flat();
-      const sortedBank = [...bankCards].sort((a, b) => a.value - b.value);
-      const sortedProps = [...propertyCards].sort((a, b) => a.value - b.value);
-      const bankIds = [];
-      const propIds = [];
-
-      for (const c of sortedBank) {
-        if (remaining <= 0) break;
-        bankIds.push(c.id);
-        remaining -= c.value;
-      }
-      if (remaining > 0) {
-        for (const c of sortedProps) {
-          if (remaining <= 0) break;
-          propIds.push(c.id);
-          remaining -= c.value;
-        }
-      }
-      setPaymentSelection({
-        bankCardIds: bankIds,
-        propertyCardIds: propIds
+            setDirectionalFlyingCards(prev => prev.filter(c => c.id !== card.id));
+            spawnMoney({ fromPos: toPos, toPos: null, count: 4 });
+          }, 800);
+        }, idx * 180);
       });
     }
-    prevPaymentIdRef.current = pay?.id || null;
-  }, [gameState?.myPendingChallenge, gameState?.myPendingPayment]);
-
-  // Log mesajındaki isimleri renklendiren yardımcı fonksiyon (useCallback ile optimize edildi)
-  const renderLogMsg = useCallback((entry) => {
-    const { msg, type } = (typeof entry === 'string' ? { msg: entry, type: 'info' } : entry);
-    if (!gameState?.players) return msg;
-
-    const translatedMsg = translateLog(msg, lang);
-
-    // Olay türüne göre ikon belirle
-    let icon = 'ℹ️ ';
-    switch (type) {
-      case 'money': icon = '💰 '; break;
-      case 'property': icon = '🏠 '; break;
-      case 'payment': icon = '💸 '; break;
-      case 'draw': icon = '🎴 '; break;
-      case 'system': icon = '⚙️ '; break;
-      case 'action': icon = '⚡ '; break;
-    }
-    if (translatedMsg.toLowerCase().includes('won') || translatedMsg.includes('kazandı')) icon = '🏆 ';
-    if (translatedMsg.toLowerCase().includes('no') || translatedMsg.includes('reddet')) icon = '🛡️ ';
-
-    let parts = [{ text: translatedMsg, type: 'text' }];
-
-    gameState.players.forEach((p, pIdx) => {
-      const color = PLAYER_COLORS[pIdx % PLAYER_COLORS.length];
-      let nextParts = [];
-      parts.forEach(part => {
-        if (part.type !== 'text') {
-          nextParts.push(part);
-        } else {
-          const split = part.text.split(p.name);
-          split.forEach((sub, i) => {
-            if (sub !== '') nextParts.push({ text: sub, type: 'text' });
-            if (i < split.length - 1) nextParts.push({ text: p.name, type: 'name', color });
-          });
-        }
-      });
-      parts = nextParts;
-    });
-
-    // Hamle bilgilerini (X hamle kaldı / Hamle bitti) vurgula
-    const moveRegex = lang === 'en'
-      ? /\((?:\d+ moves? left|turn ended)\)/gi
-      : /\((?:\d+ hamle kaldı|Hamle bitti)\)/g;
-    let finalParts = [];
-    parts.forEach(part => {
-      if (part.type !== 'text') {
-        finalParts.push(part);
-      } else {
-        const matches = [...part.text.matchAll(moveRegex)];
-        if (matches.length === 0) {
-          finalParts.push(part);
-        } else {
-          let lastIdx = 0;
-          matches.forEach(match => {
-            const before = part.text.slice(lastIdx, match.index);
-            if (before) finalParts.push({ text: before, type: 'text' });
-            finalParts.push({ text: match[0], type: 'move' });
-            lastIdx = match.index + match[0].length;
-          });
-          const after = part.text.slice(lastIdx);
-          if (after) finalParts.push({ text: after, type: 'text' });
-        }
-      }
-    });
-    return (
-      <span>
-        <span style={{ marginRight: 4, filter: 'grayscale(0.3)' }}>
-          {icon}
-        </span>
-
-        {finalParts.map((p, i) => {
-          if (p.type === 'name')
-            return (
-              <b key={i} style={{ color: p.color }}>
-                {p.text}
-              </b>
-            );
-
-          if (p.type === 'move')
-            return (
-              <span
-                key={i}
-                style={{
-                  color: '#40E0D0',
-                  fontStyle: 'italic',
-                  fontWeight: 'bold',
-                }}
-              >
-                {p.text}
-              </span>
-            );
-
-          return p.text;
-        })}
-      </span>
-    );
-  }, [gameState?.players]);
-
-  const handleCreate = () => {
-    if (!myName.trim()) return setError('İsim gir');
-    if (!socket || !socket.connected) return setError('Sunucuya henüz bağlanılamadı, lütfen bekleyin...');
-
-    socket.emit('createRoom', { name: myName, settings: { ...roomSettings, avatar: myAvatarStyle }, dbUsername: dbUser?.username }, (res) => {
-      if (res.ok) {
-        setRoomCode(res.roomCode);
-        setPlayerId(res.playerId);
-        localStorage.setItem('md_name', myName);
-        localStorage.setItem('md_room', res.roomCode);
-        localStorage.setItem('md_pid', res.playerId);
-        setError('');
-      } else setError(res.error);
-    });
-  };
-
-  const handleJoin = () => {
-    if (!myName.trim() || !joinCode.trim()) return setError('İsim ve kod gir');
-    if (!socket || !socket.connected) return setError('Sunucuya henüz bağlanılamadı, lütfen bekleyin...');
-
-    socket.emit('joinRoom', { roomCode: joinCode.toUpperCase(), name: myName, avatar: myAvatarStyle, dbUsername: dbUser?.username }, (res) => {
-      if (res.ok) {
-        setRoomCode(joinCode.toUpperCase());
-        setPlayerId(res.playerId);
-        localStorage.setItem('md_name', myName);
-        localStorage.setItem('md_room', joinCode.toUpperCase());
-        localStorage.setItem('md_pid', res.playerId);
-        setError('');
-      }
-      else setError(res.error);
-    });
-  };
-
-  const handleStart = () => {
-    socket.emit('startGame', { theme: selectedTheme, settings: roomSettings }, (res) => {
-      if (!res?.ok) setError(res?.error || 'Başlatılamadı');
-    });
-  };
-
-  const handleReturnToLobby = () => {
-    stopAllSFX();
-    setBgmTension(false);
-    setScreen('lobby');
-  };
-
-  const handleNewGame = () => {
-    socket.emit('startGame', { theme: activeTheme, settings: roomSettings }, (res) => {
-      if (!res?.ok) setError(res?.error || 'Başlatılamadı');
-    });
-  };
-
-  const handleExit = () => {
-    stopAllSFX();
-    setBgmTension(false);
-    localStorage.removeItem('md_room');
-    localStorage.removeItem('md_pid');
-    setRoomCode('');
-    setPlayerId(null);
-    setGameState(null);
-    setScreen('lobby');
-    setError('');
-
-    // Çıkış yaparken güncel verileri eşitle
-    const savedUser = JSON.parse(localStorage.getItem('md_db_user') || 'null');
-    if (savedUser && savedUser.username && socket) {
-      socket.emit('getUserInfo', { username: savedUser.username }, (res) => {
-        if (res && res.ok && res.user) {
-          setDbUser(res.user);
-          localStorage.setItem('md_db_user', JSON.stringify(res.user));
-        }
-      });
-    }
-  };
-
-  // ---- MASA DEVİRME (RAGE QUIT) ----
-  const handleRageQuit = () => {
-    if (!window.confirm("Gerçekten masayı devirip odadan çıkmak istiyor musun?")) return;
-    setRageQuit(true);
+  }
+  else if (lastLog.includes('barışçıl bir takas yapmak istiyor')) {
+    // Log: "X, Y ile barışçıl bir takas yapmak istiyor: ..."
+    const victimMatch = rawMsg.match(/([\w\u00C0-\u024F]+)\s+ile\s+barışçıl/);
+    const victim = victimMatch ? victimMatch[1] : null;
+    const subtextTR = victim
+      ? `${actorName}, ${victim}'e barışçıl takas teklifi sundu! Kabul edecek mi?`
+      : `${actorName} barışçıl bir takas teklifi sundu!`;
+    const subtextEN = victim
+      ? `${actorName} proposed a peaceful trade to ${victim}! Will they accept?`
+      : `${actorName} proposed a property trade.`;
+    overlay = { text: 'TAKAS TEKLİFİ!', subtext: lang === 'en' ? subtextEN : subtextTR, icon: '🤝', type: 'warning' };
+    sfxTradeProposed();
+  }
+  else if (lastLog.includes('takas yaptı') || lastLog.includes('takas gerçekleştirdi')) {
+    // Log: "X ve Y anlaşmaya vardı. X, Y'a ... verdi ve ... aldı."
+    const quoted = extractQuoted(rawMsg);
+    const subtextTR = quoted.length >= 2
+      ? `"${quoted[0]}" ↔ "${quoted[1]}" takası başarıyla gerçekleşti! ✅`
+      : `Takas taraflarca kabul edildi ve gerçekleştirildi!`;
+    const subtextEN = quoted.length >= 2
+      ? `"${quoted[0]}" ↔ "${quoted[1]}" trade completed! ✅`
+      : `The trade negotiation succeeded!`;
+    overlay = { text: 'TAKAS YAPILDI!', subtext: lang === 'en' ? subtextEN : subtextTR, icon: '✅', type: 'success' };
+    sfxTradeAccepted();
+  }
+  else if (lastLog.includes('takas teklifini reddetti')) {
+    const victimMatch = rawMsg.match(/([\w\u00C0-\u024F]+)\s+takas teklifini reddetti/);
+    const victim = victimMatch ? victimMatch[1] : null;
+    const subtextTR = victim ? `${victim} takas teklifini geri çevirdi!` : `Takas teklifi reddedildi!`;
+    const subtextEN = victim ? `${victim} declined the trade offer!` : `The trade offer was declined.`;
+    overlay = { text: 'TAKAS REDDEDİLDİ!', subtext: lang === 'en' ? subtextEN : subtextTR, icon: '❌', type: 'danger' };
+    sfxTradeRejected();
+  }
+  else if (lastLog.includes('karaborsa')) {
+    overlay = { text: 'KARABORSA!', subtext: lang === 'en' ? `${actorName} entered the dark black market!` : `${actorName} gizemli karaborsaya adım attı!`, icon: '🕵️‍♂️', type: 'warning' };
+    sfxBlackMarket(audioContext);
+  }
+  else if (lastLog.includes('zar attı') && lastLog.includes('kötü şans')) {
+    overlay = { text: 'KÖTÜ ŞANS!', subtext: lang === 'en' ? `A bad roll lost a random card!` : `Kötü şans zarı atıldı! Elden kart kaybedildi!`, icon: '😢', type: 'danger' };
+    sfxDiceRoll();
+    sfxWompWomp();
+  }
+  else if (lastLog.includes('zar attı') && lastLog.includes('jackpot')) {
+    overlay = { text: 'JACKPOT!', subtext: lang === 'en' ? `Jackpot! Drew 2 cards successfully!` : `Harika! Jackpot zarı atıldı ve 2 kart çekildi!`, icon: '🎰', type: 'success' };
+    sfxDiceRoll();
+    sfxJackpot();
+  }
+  else if (lastLog.includes('zar attı') && lastLog.includes('şanslı')) {
+    overlay = { text: 'ŞANSLI RULO!', subtext: lang === 'en' ? `Lucky roll! Saved from losing anything.` : `Şanslı! Eli boş olduğu için hiçbir şey kaybetmedi.`, icon: '🎲', type: 'info' };
+    sfxDiceRoll();
+    sfxCricket();
+  }
+  else if (lastLog.includes('kart attı')) {
+    // Log: "X, el limitini aşığı için Y kartını ıskartaya attı" gibi
+    const quoted = extractQuoted(rawMsg);
+    const cardName = quoted[0] || null;
+    const handLimitMatch = rawMsg.match(/(\d+)\s+kart/i);
+    const subtextTR = cardName
+      ? `${actorName} "${cardName}" kartını el limiti nedeniyle çöpe attı.`
+      : `${actorName} el limiti sınırından ötürü kart ıskartaya attı.`;
+    const subtextEN = cardName
+      ? `${actorName} discarded "${cardName}" due to the hand limit.`
+      : `${actorName} discarded a card due to hand limit.`;
+    overlay = { text: 'KART ATILDI!', subtext: lang === 'en' ? subtextEN : subtextTR, icon: '🗑️', type: 'info' };
+    sfxCrumple(audioContext);
+  }
+  else if (lastLog.includes('süresi bittiği için') || lastLog.includes('otomatik geçti')) {
+    overlay = { text: 'ZAMAN AŞIMI!', subtext: lang === 'en' ? `Turn skipped automatically.` : `Süre bittiği için tur otomatik olarak sonlandırıldı.`, icon: '💤', type: 'warning' };
+  }
+  else if (lastLog.includes('geri aldı') || lastLog.includes('↩️')) {
+    overlay = { text: 'HAMLE GERİ ALINDI!', subtext: lang === 'en' ? `The last action was reverted.` : `Yapılan son hamle başarıyla geri alındı.`, icon: '↩️', type: 'warning' };
+  }
+  else if (lastLog.includes('masayı devirdi') || lastLog.includes('ragequit') || lastLog.includes('rage_quit')) {
+    overlay = { text: 'MASAYI DEVİRDİ!', subtext: lang === 'en' ? `Rage quit! Table flipped!` : `Rage Quit! Sinirlenen oyuncu masayı havaya uçurdu!`, icon: '┬─┬ ︵ ┻━┻', type: 'danger' };
+    sfxTableSlap();
     sfxRageQuit();
-    setTimeout(() => {
-      handleExit();
-      setRageQuit(false);
-    }, 1500);
-  };
+  }
+  else if (lastLog.includes('kazandi') || lastLog.includes('kazandı')) {
+    overlay = { text: 'KAZANDI! 🏆', subtext: lang === 'en' ? `Victory belongs to ${actorName}!` : `Zafer ${actorName} oyuncusunun oldu!`, icon: '🏆', type: 'success' };
+    sfxWin();
+  }
+  else if (lastLog.includes('oyun başladı')) {
+    overlay = { text: 'OYUN BAŞLADI!', subtext: lang === 'en' ? `Get ready to deal!` : `Kartlar dağıtıldı, amansız mücadele başladı!`, icon: '🎮', type: 'success' };
+  }
 
-  const handlePlayCard = useCallback((card, options = {}) => {
-    // Fırlatma animasyonunu tetikle
-    sfxWhoosh();
-    setThrownCard(card);
-    setTimeout(() => {
-      setThrownCard(null);
-      spawnSmoke();
-      // Kart masaya indiğinde (600ms sonra) ekranı sars
-      setBoardShake(true);
-      setTimeout(() => setBoardShake(false), 300);
-    }, 600);
 
-    socket.emit('playCard', { cardId: card.id, options }, (res) => {
-      if (res.ok) {
-        setSelectedCard(null); setModal(null); setError('');
-        if (options.asBankMoney || card.type === 'money') sfxCoin();
-        else sfxCardPlay();
-      } else {
-        setError(res.error || 'Kart oynamadı');
-        sfxError();
-      }
-    });
-  }, [socket]);
-
-  const handleFlip = (card) => {
-    setModal({ type: 'flipColor', card });
-  };
-
-  const doFlip = (card, newColor) => {
-    socket.emit('flipProperty', { cardId: card.id, newColor }, (res) => {
-      if (res.ok) { setModal(null); setError(''); }
-      else setError(res.error || 'Renk değiştirilemedi');
-    });
-  };
-
-  const handleRespondChallenge = (challengeId, useJustSayNo) => {
-    socket.emit('respondToChallenge', { challengeId, useJustSayNo }, (res) => {
-      if (!res.ok) { setError(res.error || 'Yanıt gönderilemedi'); sfxError(); }
-      else { setError(''); if (useJustSayNo) sfxAlert(); }
-    });
-  };
-
-  const togglePaymentBankCard = (cardId) => {
-    setPaymentSelection(prev => ({
-      ...prev,
-      bankCardIds: prev.bankCardIds.includes(cardId)
-        ? prev.bankCardIds.filter(id => id !== cardId)
-        : [...prev.bankCardIds, cardId],
-    }));
-  };
-
-  const togglePaymentPropertyCard = (cardId) => {
-    setPaymentSelection(prev => ({
-      ...prev,
-      propertyCardIds: prev.propertyCardIds.includes(cardId)
-        ? prev.propertyCardIds.filter(id => id !== cardId)
-        : [...prev.propertyCardIds, cardId],
-    }));
-  };
-
-  const handleSelectAllPayment = () => {
-    const bankCardIds = (me?.bank || []).map(c => c.id);
-    const propertyCardIds = Object.values(me?.properties || {}).flat().map(c => c.id);
-    setPaymentSelection({ bankCardIds, propertyCardIds });
-  };
-
-  const selectOptimalSubset = (cards, target) => {
-    let bestSubset = null;
-    let bestSum = Infinity;
-
-    const backtrack = (index, currentSubset, currentSum) => {
-      if (currentSum >= target) {
-        if (currentSum < bestSum) {
-          bestSum = currentSum;
-          bestSubset = [...currentSubset];
-        } else if (currentSum === bestSum) {
-          if (currentSubset.length < bestSubset.length) {
-            bestSubset = [...currentSubset];
-          }
-        }
-        return;
-      }
-      if (index >= cards.length) return;
-
-      currentSubset.push(cards[index]);
-      backtrack(index + 1, currentSubset, currentSum + cards[index].value);
-      currentSubset.pop();
-
-      backtrack(index + 1, currentSubset, currentSum);
-    };
-
-    const sortedCards = [...cards].sort((a, b) => a.value - b.value);
-    backtrack(0, [], 0);
-
-    if (!bestSubset) {
-      return sortedCards;
+  if (overlay) {
+    setActionOverlay(overlay);
+    // Trigger play effect particles on ALL major game events
+    const moneyIcons = ['🧾', '💰', '💸', '💵'];
+    const celebrateIcons = ['🏆', '🎂', '✅', '✨'];
+    const actionIcons = ['🥷', '🔁', '💣', '🃏'];
+    if (moneyIcons.includes(overlay.icon) || celebrateIcons.includes(overlay.icon)) {
+      spawnMoney({ count: 16 });
+    } else if (actionIcons.includes(overlay.icon)) {
+      spawnMoney({ count: 10 });
+    } else if (overlay.icon === '🗺️' || overlay.icon === '🏠' || overlay.icon === '🏨') {
+      // Property / house / hotel — smaller burst
+      spawnMoney({ count: 8 });
+    } else if (overlay.icon === '🎴') {
+      spawnMoney({ count: 6 });
     }
-    return bestSubset;
-  };
+    setTimeout(() => setActionOverlay(null), 2500);
+  } else {
+    // Dev overlay çıkmıyorsa bile önemli olayları mini Toast ile göster
+    if (lastEntry.type === 'property' || lastEntry.type === 'payment' || lastEntry.type === 'action' || lastEntry.type === 'draw') {
+      // "(3 hamle kaldı)" gibi sistem verilerini kaldırıp temiz bir bildirim yap
+      const cleanMsg = lastEntry.msg.replace(/\(.*?\)/g, '').trim();
+      showToast(cleanMsg, 'info', 3000);
+    }
+  }
+}, [gameState?.log, spawnMoney, showToast, playTurkishVoice]);
 
-  const handleAutoSelectPayment = () => {
-    const pay = gameState?.myPendingPayment;
-    if (!pay) return;
-    const targetAmount = pay.amount;
+// ---- SÜRÜKLE BIRAK MANTIĞI ----
+const handleDragStart = () => {
+  draggedRef.current = false;
+  setIsDragging(true);
+};
+
+const handleDrag = (event, info) => {
+  if (Math.abs(info.offset.x) > 5 || Math.abs(info.offset.y) > 5) {
+    draggedRef.current = true;
+  }
+  const element = document.elementFromPoint(info.point.x, info.point.y);
+  const target = element?.closest('[data-drop-target]');
+  if (target) {
+    setDragOverTarget(target.getAttribute('data-drop-target'));
+  } else {
+    setDragOverTarget(null);
+  }
+};
+
+const handleDragEnd = (event, info, card) => {
+  setIsDragging(false);
+  setDragTrail([]);
+  setDragOverTarget(null);
+
+  // Sürükleme bittikten hemen sonra tıklamayı tetiklememesi için kısa bir gecikme
+  setTimeout(() => { draggedRef.current = false; }, 100);
+
+  const element = document.elementFromPoint(info.point.x, info.point.y);
+  const target = element?.closest('[data-drop-target]');
+
+  if (target && draggedRef.current) {
+    const targetType = target.getAttribute('data-drop-target');
+    if (targetType === 'bank') {
+      if (card.type === 'property') {
+        setError('Tapu Senedi kartları bankaya konamaz!');
+        sfxError();
+      } else {
+        handlePlayCard(card, { asBankMoney: true });
+      }
+    } else if (targetType === 'properties') {
+      handleCardAction(card);
+    }
+  } else if (draggedRef.current) {
+    // 🚀 Swipe Gestures (Yukarı/Aşağı Hızlı Sürükleme)
+    if (info.offset.y < -120) {
+      handleCardAction(card);
+      if (navigator.vibrate) navigator.vibrate(60);
+    } else if (info.offset.y > 120) {
+      if (card.type === 'property') {
+        setError('Tapu Senedi kartları bankaya konamaz!');
+        sfxError();
+      } else {
+        handlePlayCard(card, { asBankMoney: true });
+        if (navigator.vibrate) navigator.vibrate(60);
+      }
+    }
+  }
+};
+
+// ── TUR DEĞİŞİMİ BİLDİRİMİ & KART ÇEKME SESİ ──
+const prevCurrentPlayerRef = useRef(null); // Bu ref'i burada tanımlıyoruz
+useEffect(() => {
+  if (!gameState?.currentPlayerId || !playerId || screen !== 'game') return; // Guard clause
+  const prev = prevCurrentPlayerRef.current;
+  const curr = gameState.currentPlayerId;
+  if (prev !== null && prev !== curr) {
+    if (prev === playerId) {
+      showToast(lang === 'en' ? '✅ Turn Ended' : '✅ Tur Bitti', 'success', 1800);
+      setActionOverlay({ text: lang === 'en' ? 'TURN ENDED!' : 'TUR BİTTİ!', icon: '⏳' });
+      setTimeout(() => setActionOverlay(null), 2500);
+      sfxTurnEnded();
+    }
+    if (curr === playerId) {
+      showToast(lang === 'en' ? '🎲 YOUR TURN!' : '🎲 SIRA SENDE!', 'turn', 2800);
+      setActionOverlay({ text: lang === 'en' ? 'YOUR TURN!' : 'SIRA SENDE!', icon: '🎲' });
+      setTimeout(() => setActionOverlay(null), 2500);
+      sfxYourTurn();
+      setShowTurnFlash(true);
+      setTimeout(() => setShowTurnFlash(false), 1200);
+      // Titreşim (Destekleyen cihazlar için)
+      if (navigator.vibrate) navigator.vibrate([200, 100, 200]);
+    } else {
+      const p = gameState.players.find(pl => pl.id === curr);
+      if (p) {
+        showToast(lang === 'en' ? `🎲 ${p.name}'s turn` : `🎲 ${p.name}'in sırası`, 'info', 1800);
+        setActionOverlay({ text: lang === 'en' ? `${p.name.toUpperCase()}'S TURN!` : `${p.name.toUpperCase()}'İN SIRASI!`, icon: '🎲' });
+        setTimeout(() => setActionOverlay(null), 2500);
+      }
+    }
+  }
+  prevCurrentPlayerRef.current = curr;
+}, [gameState?.currentPlayerId, playerId, showToast]);
+
+// ── REDDET! İTİRAZI / ÖDEME SESLERİ ──
+const prevChallengeIdRef = useRef(null); // Bu satır zaten vardı, değişmedi
+const prevPaymentIdRef = useRef(null);
+useEffect(() => {
+  const ch = gameState?.myPendingChallenge;
+  if (ch && ch.id !== prevChallengeIdRef.current) {
+    sfxAlert();
+  }
+  prevChallengeIdRef.current = ch?.id || null;
+
+  const pay = gameState?.myPendingPayment;
+  if (pay && pay.id !== prevPaymentIdRef.current) {
+    if (pay.reason && pay.reason.toLowerCase().includes('kira')) {
+      sfxRentPaymentDue();
+    } else {
+      sfxPaymentDue();
+    }
+
+    // Auto-select payment selection based on rules: Cash first, then property.
+    let remaining = pay.amount;
     const bankCards = me?.bank || [];
     const propertyCards = Object.values(me?.properties || {}).flat();
+    const sortedBank = [...bankCards].sort((a, b) => a.value - b.value);
+    const sortedProps = [...propertyCards].sort((a, b) => a.value - b.value);
+    const bankIds = [];
+    const propIds = [];
 
-    const totalBankValue = bankCards.reduce((sum, c) => sum + c.value, 0);
+    for (const c of sortedBank) {
+      if (remaining <= 0) break;
+      bankIds.push(c.id);
+      remaining -= c.value;
+    }
+    if (remaining > 0) {
+      for (const c of sortedProps) {
+        if (remaining <= 0) break;
+        propIds.push(c.id);
+        remaining -= c.value;
+      }
+    }
+    setPaymentSelection({
+      bankCardIds: bankIds,
+      propertyCardIds: propIds
+    });
+  }
+  prevPaymentIdRef.current = pay?.id || null;
+}, [gameState?.myPendingChallenge, gameState?.myPendingPayment]);
 
-    if (totalBankValue >= targetAmount) {
-      const optimalBank = selectOptimalSubset(bankCards, targetAmount);
-      setPaymentSelection({
-        bankCardIds: optimalBank.map(c => c.id),
-        propertyCardIds: []
-      });
+// Log mesajındaki isimleri renklendiren yardımcı fonksiyon (useCallback ile optimize edildi)
+const renderLogMsg = useCallback((entry) => {
+  const { msg, type } = (typeof entry === 'string' ? { msg: entry, type: 'info' } : entry);
+  if (!gameState?.players) return msg;
+
+  const translatedMsg = translateLog(msg, lang);
+
+  // Olay türüne göre ikon belirle
+  let icon = 'ℹ️ ';
+  switch (type) {
+    case 'money': icon = '💰 '; break;
+    case 'property': icon = '🏠 '; break;
+    case 'payment': icon = '💸 '; break;
+    case 'draw': icon = '🎴 '; break;
+    case 'system': icon = '⚙️ '; break;
+    case 'action': icon = '⚡ '; break;
+  }
+  if (translatedMsg.toLowerCase().includes('won') || translatedMsg.includes('kazandı')) icon = '🏆 ';
+  if (translatedMsg.toLowerCase().includes('no') || translatedMsg.includes('reddet')) icon = '🛡️ ';
+
+  let parts = [{ text: translatedMsg, type: 'text' }];
+
+  gameState.players.forEach((p, pIdx) => {
+    const color = PLAYER_COLORS[pIdx % PLAYER_COLORS.length];
+    let nextParts = [];
+    parts.forEach(part => {
+      if (part.type !== 'text') {
+        nextParts.push(part);
+      } else {
+        const split = part.text.split(p.name);
+        split.forEach((sub, i) => {
+          if (sub !== '') nextParts.push({ text: sub, type: 'text' });
+          if (i < split.length - 1) nextParts.push({ text: p.name, type: 'name', color });
+        });
+      }
+    });
+    parts = nextParts;
+  });
+
+  // Hamle bilgilerini (X hamle kaldı / Hamle bitti) vurgula
+  const moveRegex = lang === 'en'
+    ? /\((?:\d+ moves? left|turn ended)\)/gi
+    : /\((?:\d+ hamle kaldı|Hamle bitti)\)/g;
+  let finalParts = [];
+  parts.forEach(part => {
+    if (part.type !== 'text') {
+      finalParts.push(part);
     } else {
-      const remaining = targetAmount - totalBankValue;
-      const optimalProps = selectOptimalSubset(propertyCards, remaining);
-      setPaymentSelection({
-        bankCardIds: bankCards.map(c => c.id),
-        propertyCardIds: optimalProps.map(c => c.id)
-      });
-    }
-  };
-
-  const handleClearPaymentSelection = () => {
-    setPaymentSelection({ bankCardIds: [], propertyCardIds: [] });
-  };
-
-  const handleTouchStart = (e) => {
-    const touch = e.touches ? e.touches[0] : null;
-    if (touch) {
-      e.currentTarget.setAttribute('data-start-x', touch.clientX);
-      e.currentTarget.setAttribute('data-start-y', touch.clientY);
-    }
-  };
-
-  const isClickTouchScroll = (e) => {
-    const startX = e.currentTarget.getAttribute('data-start-x');
-    const startY = e.currentTarget.getAttribute('data-start-y');
-    if (startX && startY) {
-      const diffX = Math.abs(e.clientX - parseFloat(startX));
-      const diffY = Math.abs(e.clientY - parseFloat(startY));
-      if (diffX > 10 || diffY > 10) {
-        return true;
+      const matches = [...part.text.matchAll(moveRegex)];
+      if (matches.length === 0) {
+        finalParts.push(part);
+      } else {
+        let lastIdx = 0;
+        matches.forEach(match => {
+          const before = part.text.slice(lastIdx, match.index);
+          if (before) finalParts.push({ text: before, type: 'text' });
+          finalParts.push({ text: match[0], type: 'move' });
+          lastIdx = match.index + match[0].length;
+        });
+        const after = part.text.slice(lastIdx);
+        if (after) finalParts.push({ text: after, type: 'text' });
       }
     }
-    return false;
-  };
+  });
+  return (
+    <span>
+      <span style={{ marginRight: 4, filter: 'grayscale(0.3)' }}>
+        {icon}
+      </span>
 
-  const handleSubmitPayment = () => {
-    const allSelected = [
-      ...(me.bank || []).filter(c => paymentSelection.bankCardIds.includes(c.id)),
-      ...Object.values(me.properties || {}).flat().filter(c => paymentSelection.propertyCardIds.includes(c.id))
-    ];
+      {finalParts.map((p, i) => {
+        if (p.type === 'name')
+          return (
+            <b key={i} style={{ color: p.color }}>
+              {p.text}
+            </b>
+          );
 
-    // ---- YÖNLÜ PARA ANİMASYONU ----
-    // Not: Sunucudan gelen myPendingPayment objesinde `collectorId`'nin de gönderildiğini varsayıyoruz.
-    const collector = gameState.players.find(p => p.id === gameState.myPendingPayment.collectorId);
-    const fromEl = myBankRef.current;
-    const toEl = collector ? playerPanelRefs.current[collector.id] : null;
-
-    if (fromEl && toEl) {
-      const fromRect = fromEl.getBoundingClientRect();
-      const toRect = toEl.getBoundingClientRect();
-      // Parçacıkların banka/kasa alanının ortasından çıkıp hedef oyuncu panelinin ortasına gitmesini sağla
-      const fromPos = { x: fromRect.left + fromRect.width / 2, y: fromRect.top + fromRect.height / 2 };
-      const toPos = { x: toRect.left + toRect.width / 2, y: toRect.top + toRect.height / 2 };
-      spawnMoney({ fromPos, toPos, count: allSelected.length > 5 ? 12 : 8 });
-    }
-
-    // Kartları tek tek fırlat
-    allSelected.forEach((card, idx) => {
-      setTimeout(() => {
-        sfxWhoosh();
-        setPayingFlyingCards(prev => [...prev, card]);
-        setTimeout(() => {
-          setPayingFlyingCards(prev => prev.filter(c => c.id !== card.id));
-          spawnSmoke();
-        }, 600);
-      }, idx * 150);
-    });
-
-    // Animasyonların başlaması için kısa bir gecikmeyle emit yap
-    setTimeout(() => {
-      socket.emit('submitPayment', paymentSelection, (res) => {
-        if (res.ok) { setPaymentSelection({ bankCardIds: [], propertyCardIds: [] }); setError(''); } // sfxCoin artık spawnMoney içinde
-        else { setError(res.error || 'Ödeme yapılamadı'); sfxError(); }
-      });
-    }, (allSelected.length * 150) + 100);
-  };
-
-  // ---- TAKAS MANTIĞI ----
-  const handleProposeTrade = () => {
-    socket.emit('proposeTrade', { targetId: modal.targetId, ...tradeSelection }, (res) => {
-      if (res.ok) { setModal(null); setTradeSelection({ offerBankIds: [], offerPropIds: [], requestBankIds: [], requestPropIds: [] }); setError(''); sfxClick(); }
-      else { setError(res.error); sfxError(); }
-    });
-  };
-
-  const handleRespondTrade = (tradeId, accepted) => {
-    socket.emit('respondToTrade', { tradeId, accepted }, (res) => {
-      if (!res.ok) { sfxError(); showToast(res.error, 'error'); }
-      else {
-        if (accepted) sfxTradeAccepted();
-        else sfxTradeRejected();
-      }
-    });
-  };
-
-  const handleRollGambleDice = () => {
-    sfxClick();
-    socket.emit('rollGambleDice', {}, (res) => {
-      if (!res.ok) { setError(res.error); sfxError(); }
-      else { setError(''); sfxDiceRoll(); }
-    });
-  };
-
-  const handleBuyScavenge = (cardId) => {
-    sfxCoin();
-    socket.emit('buyScavengeCard', { cardId }, (res) => {
-      if (!res.ok) { showToast(res.error, 'error'); sfxError(); }
-      else { showToast(lang === 'en' ? 'Card purchased successfully!' : 'Kart satın alındı!', 'success'); setShowScavengeModal(false); }
-    });
-  };
-
-  // ---- ISKARTA MODALI ----
-  const renderDiscardModal = () => {
-    if (!showDiscardModal) return null;
-    return (
-      <Modal title={lang === 'en' ? '🗑️ Discard Pile (Last 5 Cards)' : '🗑️ Iskarta Yığını (Son 5 Kart)'} onClose={() => setShowDiscardModal(false)}>
-        <div style={{
-          background: 'rgba(255, 255, 255, 0.02)',
-          border: '1px solid rgba(255, 255, 255, 0.05)',
-          borderRadius: 14,
-          padding: '24px 16px',
-          display: 'flex',
-          flexWrap: 'wrap',
-          gap: 16,
-          justifyContent: 'center',
-          alignItems: 'center',
-          minHeight: 120,
-          boxShadow: 'inset 0 2px 10px rgba(0, 0, 0, 0.2)'
-        }}>
-          {gameState.discard?.length > 0 ? (
-            gameState.discard.map(card => (
-              <div
-                key={card.id}
-                style={{
-                  transition: 'transform 0.2s ease',
-                  cursor: 'pointer'
-                }}
-                onMouseOver={e => e.currentTarget.style.transform = 'scale(1.05) translateY(-4px)'}
-                onMouseOut={e => e.currentTarget.style.transform = 'scale(1)'}
-              >
-                <CardVisual card={card} small onHover={handleCardHover} onClick={() => { setPreviewCard(card); setPreviewLocked(true); }} lang={lang} />
-              </div>
-            ))
-          ) : (
-            <div style={{ textAlign: 'center', color: 'rgba(255, 255, 255, 0.35)', fontSize: 13 }}>
-              <span style={{ fontSize: 32, display: 'block', marginBottom: 8 }}>🗑️</span>
-              {lang === 'en' ? 'Discard pile is empty.' : 'Iskarta yığını henüz boş.'}
-            </div>
-          )}
-        </div>
-        <p style={{ color: '#8892b0', fontSize: 11, textAlign: 'center', marginTop: 12, marginBottom: 0 }}>
-          {lang === 'en' ? 'You can click on cards to inspect their details.' : 'Kart detaylarını incelemek için kartların üzerine tıklayabilirsiniz.'}
-        </p>
-      </Modal>
-    );
-  };
-
-  // ---- KARABORSA MODALI ----
-  const renderScavengeModal = () => {
-    if (!showScavengeModal) return null;
-    return (
-      <Modal title={lang === 'en' ? '🕵️ Black Market (Discard Market)' : '🕵️ Karaborsa (Çöpteki Kartlar)'} onClose={() => setShowScavengeModal(false)}>
-        <div style={{
-          background: 'linear-gradient(135deg, rgba(231, 76, 60, 0.08), rgba(142, 68, 173, 0.08))',
-          border: '1px solid rgba(231, 76, 60, 0.2)',
-          borderRadius: 12,
-          padding: 14,
-          marginBottom: 16,
-          boxShadow: '0 4px 15px rgba(231, 76, 60, 0.05)'
-        }}>
-          <p style={{ color: '#E2E8F0', fontSize: 12, margin: 0, lineHeight: 1.5 }}>
-            {lang === 'en' ? 'You can purchase discarded cards back for' : 'Atılan kartları'} <strong style={{ color: '#FFD700' }}>2M {lang === 'en' ? 'Cash' : 'Nakit'}</strong> {lang === 'en' ? '.' : 'karşılığında geri satın alabilirsiniz.'}
-            <span style={{ display: 'block', fontSize: 10, color: '#a0aec0', marginTop: 4 }}>
-              * {lang === 'en' ? 'Property cards are not eligible. Exact change only.' : 'Arazi kartları geçerli değildir. Tam para üstü verilmez.'}
+        if (p.type === 'move')
+          return (
+            <span
+              key={i}
+              style={{
+                color: '#40E0D0',
+                fontStyle: 'italic',
+                fontWeight: 'bold',
+              }}
+            >
+              {p.text}
             </span>
-          </p>
-        </div>
+          );
 
-        <div style={{
-          background: 'rgba(255, 255, 255, 0.02)',
-          border: '1px solid rgba(255, 255, 255, 0.05)',
-          borderRadius: 14,
-          padding: 20,
-          display: 'flex',
-          flexWrap: 'wrap',
-          gap: 16,
-          justifyContent: 'center',
-          minHeight: 120
-        }}>
-          {gameState.scavengeMarket?.length > 0 ? (
-            gameState.scavengeMarket.map(card => (
-              <div
-                key={card.id}
+        return p.text;
+      })}
+    </span>
+  );
+}, [gameState?.players]);
+
+const handleCreate = () => {
+  if (!myName.trim()) return setError('İsim gir');
+  if (!socket || !socket.connected) return setError('Sunucuya henüz bağlanılamadı, lütfen bekleyin...');
+
+  socket.emit('createRoom', { name: myName, settings: { ...roomSettings, avatar: myAvatarStyle }, dbUsername: dbUser?.username }, (res) => {
+    if (res.ok) {
+      setRoomCode(res.roomCode);
+      setPlayerId(res.playerId);
+      localStorage.setItem('md_name', myName);
+      localStorage.setItem('md_room', res.roomCode);
+      localStorage.setItem('md_pid', res.playerId);
+      setError('');
+    } else setError(res.error);
+  });
+};
+
+const handleJoin = () => {
+  if (!myName.trim() || !joinCode.trim()) return setError('İsim ve kod gir');
+  if (!socket || !socket.connected) return setError('Sunucuya henüz bağlanılamadı, lütfen bekleyin...');
+
+  socket.emit('joinRoom', { roomCode: joinCode.toUpperCase(), name: myName, avatar: myAvatarStyle, dbUsername: dbUser?.username }, (res) => {
+    if (res.ok) {
+      setRoomCode(joinCode.toUpperCase());
+      setPlayerId(res.playerId);
+      localStorage.setItem('md_name', myName);
+      localStorage.setItem('md_room', joinCode.toUpperCase());
+      localStorage.setItem('md_pid', res.playerId);
+      setError('');
+    }
+    else setError(res.error);
+  });
+};
+
+const handleStart = () => {
+  socket.emit('startGame', { theme: selectedTheme, settings: roomSettings }, (res) => {
+    if (!res?.ok) setError(res?.error || 'Başlatılamadı');
+  });
+};
+
+const handleReturnToLobby = () => {
+  stopAllSFX();
+  setBgmTension(false);
+  setScreen('lobby');
+};
+
+const handleNewGame = () => {
+  socket.emit('startGame', { theme: activeTheme, settings: roomSettings }, (res) => {
+    if (!res?.ok) setError(res?.error || 'Başlatılamadı');
+  });
+};
+
+const handleExit = () => {
+  stopAllSFX();
+  setBgmTension(false);
+  localStorage.removeItem('md_room');
+  localStorage.removeItem('md_pid');
+  setRoomCode('');
+  setPlayerId(null);
+  setGameState(null);
+  setScreen('lobby');
+  setError('');
+
+  // Çıkış yaparken güncel verileri eşitle
+  const savedUser = JSON.parse(localStorage.getItem('md_db_user') || 'null');
+  if (savedUser && savedUser.username && socket) {
+    socket.emit('getUserInfo', { username: savedUser.username }, (res) => {
+      if (res && res.ok && res.user) {
+        setDbUser(res.user);
+        localStorage.setItem('md_db_user', JSON.stringify(res.user));
+      }
+    });
+  }
+};
+
+// ---- MASA DEVİRME (RAGE QUIT) ----
+const handleRageQuit = () => {
+  if (!window.confirm("Gerçekten masayı devirip odadan çıkmak istiyor musun?")) return;
+  setRageQuit(true);
+  sfxRageQuit();
+  setTimeout(() => {
+    handleExit();
+    setRageQuit(false);
+  }, 1500);
+};
+
+const handlePlayCard = useCallback((card, options = {}) => {
+  // Fırlatma animasyonunu tetikle
+  sfxWhoosh();
+  setThrownCard(card);
+  setTimeout(() => {
+    setThrownCard(null);
+    spawnSmoke();
+    // Kart masaya indiğinde (600ms sonra) ekranı sars
+    setBoardShake(true);
+    setTimeout(() => setBoardShake(false), 300);
+  }, 600);
+
+  socket.emit('playCard', { cardId: card.id, options }, (res) => {
+    if (res.ok) {
+      setSelectedCard(null); setModal(null); setError('');
+      if (options.asBankMoney || card.type === 'money') sfxCoin();
+      else sfxCardPlay();
+    } else {
+      setError(res.error || 'Kart oynamadı');
+      sfxError();
+    }
+  });
+}, [socket]);
+
+const handleFlip = (card) => {
+  setModal({ type: 'flipColor', card });
+};
+
+const doFlip = (card, newColor) => {
+  socket.emit('flipProperty', { cardId: card.id, newColor }, (res) => {
+    if (res.ok) { setModal(null); setError(''); }
+    else setError(res.error || 'Renk değiştirilemedi');
+  });
+};
+
+const handleRespondChallenge = (challengeId, useJustSayNo) => {
+  socket.emit('respondToChallenge', { challengeId, useJustSayNo }, (res) => {
+    if (!res.ok) { setError(res.error || 'Yanıt gönderilemedi'); sfxError(); }
+    else { setError(''); if (useJustSayNo) sfxAlert(); }
+  });
+};
+
+const togglePaymentBankCard = (cardId) => {
+  setPaymentSelection(prev => ({
+    ...prev,
+    bankCardIds: prev.bankCardIds.includes(cardId)
+      ? prev.bankCardIds.filter(id => id !== cardId)
+      : [...prev.bankCardIds, cardId],
+  }));
+};
+
+const togglePaymentPropertyCard = (cardId) => {
+  setPaymentSelection(prev => ({
+    ...prev,
+    propertyCardIds: prev.propertyCardIds.includes(cardId)
+      ? prev.propertyCardIds.filter(id => id !== cardId)
+      : [...prev.propertyCardIds, cardId],
+  }));
+};
+
+const handleSelectAllPayment = () => {
+  const bankCardIds = (me?.bank || []).map(c => c.id);
+  const propertyCardIds = Object.values(me?.properties || {}).flat().map(c => c.id);
+  setPaymentSelection({ bankCardIds, propertyCardIds });
+};
+
+const selectOptimalSubset = (cards, target) => {
+  let bestSubset = null;
+  let bestSum = Infinity;
+
+  const backtrack = (index, currentSubset, currentSum) => {
+    if (currentSum >= target) {
+      if (currentSum < bestSum) {
+        bestSum = currentSum;
+        bestSubset = [...currentSubset];
+      } else if (currentSum === bestSum) {
+        if (currentSubset.length < bestSubset.length) {
+          bestSubset = [...currentSubset];
+        }
+      }
+      return;
+    }
+    if (index >= cards.length) return;
+
+    currentSubset.push(cards[index]);
+    backtrack(index + 1, currentSubset, currentSum + cards[index].value);
+    currentSubset.pop();
+
+    backtrack(index + 1, currentSubset, currentSum);
+  };
+
+  const sortedCards = [...cards].sort((a, b) => a.value - b.value);
+  backtrack(0, [], 0);
+
+  if (!bestSubset) {
+    return sortedCards;
+  }
+  return bestSubset;
+};
+
+const handleAutoSelectPayment = () => {
+  const pay = gameState?.myPendingPayment;
+  if (!pay) return;
+  const targetAmount = pay.amount;
+  const bankCards = me?.bank || [];
+  const propertyCards = Object.values(me?.properties || {}).flat();
+
+  const totalBankValue = bankCards.reduce((sum, c) => sum + c.value, 0);
+
+  if (totalBankValue >= targetAmount) {
+    const optimalBank = selectOptimalSubset(bankCards, targetAmount);
+    setPaymentSelection({
+      bankCardIds: optimalBank.map(c => c.id),
+      propertyCardIds: []
+    });
+  } else {
+    const remaining = targetAmount - totalBankValue;
+    const optimalProps = selectOptimalSubset(propertyCards, remaining);
+    setPaymentSelection({
+      bankCardIds: bankCards.map(c => c.id),
+      propertyCardIds: optimalProps.map(c => c.id)
+    });
+  }
+};
+
+const handleClearPaymentSelection = () => {
+  setPaymentSelection({ bankCardIds: [], propertyCardIds: [] });
+};
+
+const handleTouchStart = (e) => {
+  const touch = e.touches ? e.touches[0] : null;
+  if (touch) {
+    e.currentTarget.setAttribute('data-start-x', touch.clientX);
+    e.currentTarget.setAttribute('data-start-y', touch.clientY);
+  }
+};
+
+const isClickTouchScroll = (e) => {
+  const startX = e.currentTarget.getAttribute('data-start-x');
+  const startY = e.currentTarget.getAttribute('data-start-y');
+  if (startX && startY) {
+    const diffX = Math.abs(e.clientX - parseFloat(startX));
+    const diffY = Math.abs(e.clientY - parseFloat(startY));
+    if (diffX > 10 || diffY > 10) {
+      return true;
+    }
+  }
+  return false;
+};
+
+const handleSubmitPayment = () => {
+  const allSelected = [
+    ...(me.bank || []).filter(c => paymentSelection.bankCardIds.includes(c.id)),
+    ...Object.values(me.properties || {}).flat().filter(c => paymentSelection.propertyCardIds.includes(c.id))
+  ];
+
+  // ---- YÖNLÜ PARA ANİMASYONU ----
+  // Not: Sunucudan gelen myPendingPayment objesinde `collectorId`'nin de gönderildiğini varsayıyoruz.
+  const collector = gameState.players.find(p => p.id === gameState.myPendingPayment.collectorId);
+  const fromEl = myBankRef.current;
+  const toEl = collector ? playerPanelRefs.current[collector.id] : null;
+
+  if (fromEl && toEl) {
+    const fromRect = fromEl.getBoundingClientRect();
+    const toRect = toEl.getBoundingClientRect();
+    // Parçacıkların banka/kasa alanının ortasından çıkıp hedef oyuncu panelinin ortasına gitmesini sağla
+    const fromPos = { x: fromRect.left + fromRect.width / 2, y: fromRect.top + fromRect.height / 2 };
+    const toPos = { x: toRect.left + toRect.width / 2, y: toRect.top + toRect.height / 2 };
+    spawnMoney({ fromPos, toPos, count: allSelected.length > 5 ? 12 : 8 });
+  }
+
+  // Kartları tek tek fırlat
+  allSelected.forEach((card, idx) => {
+    setTimeout(() => {
+      sfxWhoosh();
+      setPayingFlyingCards(prev => [...prev, card]);
+      setTimeout(() => {
+        setPayingFlyingCards(prev => prev.filter(c => c.id !== card.id));
+        spawnSmoke();
+      }, 600);
+    }, idx * 150);
+  });
+
+  // Animasyonların başlaması için kısa bir gecikmeyle emit yap
+  setTimeout(() => {
+    socket.emit('submitPayment', paymentSelection, (res) => {
+      if (res.ok) { setPaymentSelection({ bankCardIds: [], propertyCardIds: [] }); setError(''); } // sfxCoin artık spawnMoney içinde
+      else { setError(res.error || 'Ödeme yapılamadı'); sfxError(); }
+    });
+  }, (allSelected.length * 150) + 100);
+};
+
+// ---- TAKAS MANTIĞI ----
+const handleProposeTrade = () => {
+  socket.emit('proposeTrade', { targetId: modal.targetId, ...tradeSelection }, (res) => {
+    if (res.ok) { setModal(null); setTradeSelection({ offerBankIds: [], offerPropIds: [], requestBankIds: [], requestPropIds: [] }); setError(''); sfxClick(); }
+    else { setError(res.error); sfxError(); }
+  });
+};
+
+const handleRespondTrade = (tradeId, accepted) => {
+  socket.emit('respondToTrade', { tradeId, accepted }, (res) => {
+    if (!res.ok) { sfxError(); showToast(res.error, 'error'); }
+    else {
+      if (accepted) sfxTradeAccepted();
+      else sfxTradeRejected();
+    }
+  });
+};
+const handleRollGambleDice = () => {
+  sfxClick();
+  socket.emit('rollGambleDice', {}, (res) => {
+    if (!res.ok) { setError(res.error); sfxError(); }
+    else {
+      setError('');
+      // Trigger dice roll animation
+      setDiceRollResult(res.roll);
+      setIsDiceRolling(true);
+      sfxDiceRoll();
+      setTimeout(() => {
+        setIsDiceRolling(false);
+      }, 1300);
+    }
+  });
+};
+const handleBuyScavenge = (cardId) => {
+  sfxCoin();
+  socket.emit('buyScavengeCard', { cardId }, (res) => {
+    if (!res.ok) { showToast(res.error, 'error'); sfxError(); }
+    else { showToast(lang === 'en' ? 'Card purchased successfully!' : 'Kart satın alındı!', 'success'); setShowScavengeModal(false); }
+  });
+};
+
+// ---- ISKARTA MODALI ----
+const renderDiscardModal = () => {
+  if (!showDiscardModal) return null;
+  return (
+    <Modal title={lang === 'en' ? '🗑️ Discard Pile (Last 5 Cards)' : '🗑️ Iskarta Yığını (Son 5 Kart)'} onClose={() => setShowDiscardModal(false)}>
+      <div style={{
+        background: 'rgba(255, 255, 255, 0.02)',
+        border: '1px solid rgba(255, 255, 255, 0.05)',
+        borderRadius: 14,
+        padding: '24px 16px',
+        display: 'flex',
+        flexWrap: 'wrap',
+        gap: 16,
+        justifyContent: 'center',
+        alignItems: 'center',
+        minHeight: 120,
+        boxShadow: 'inset 0 2px 10px rgba(0, 0, 0, 0.2)'
+      }}>
+        {gameState.discard?.length > 0 ? (
+          gameState.discard.map(card => (
+            <div
+              key={card.id}
+              style={{
+                transition: 'transform 0.2s ease',
+                cursor: 'pointer'
+              }}
+              onMouseOver={e => e.currentTarget.style.transform = 'scale(1.05) translateY(-4px)'}
+              onMouseOut={e => e.currentTarget.style.transform = 'scale(1)'}
+            >
+              <CardVisual card={card} small onHover={handleCardHover} onClick={() => { setPreviewCard(card); setPreviewLocked(true); }} lang={lang} />
+            </div>
+          ))
+        ) : (
+          <div style={{ textAlign: 'center', color: 'rgba(255, 255, 255, 0.35)', fontSize: 13 }}>
+            <span style={{ fontSize: 32, display: 'block', marginBottom: 8 }}>🗑️</span>
+            {lang === 'en' ? 'Discard pile is empty.' : 'Iskarta yığını henüz boş.'}
+          </div>
+        )}
+      </div>
+      <p style={{ color: '#8892b0', fontSize: 11, textAlign: 'center', marginTop: 12, marginBottom: 0 }}>
+        {lang === 'en' ? 'You can click on cards to inspect their details.' : 'Kart detaylarını incelemek için kartların üzerine tıklayabilirsiniz.'}
+      </p>
+    </Modal>
+  );
+};
+
+// ---- KARABORSA MODALI ----
+const renderScavengeModal = () => {
+  if (!showScavengeModal) return null;
+  return (
+    <Modal title={lang === 'en' ? '🕵️ Black Market (Discard Market)' : '🕵️ Karaborsa (Çöpteki Kartlar)'} onClose={() => setShowScavengeModal(false)}>
+      <div style={{
+        background: 'linear-gradient(135deg, rgba(231, 76, 60, 0.08), rgba(142, 68, 173, 0.08))',
+        border: '1px solid rgba(231, 76, 60, 0.2)',
+        borderRadius: 12,
+        padding: 14,
+        marginBottom: 16,
+        boxShadow: '0 4px 15px rgba(231, 76, 60, 0.05)'
+      }}>
+        <p style={{ color: '#E2E8F0', fontSize: 12, margin: 0, lineHeight: 1.5 }}>
+          {lang === 'en' ? 'You can purchase discarded cards back for' : 'Atılan kartları'} <strong style={{ color: '#FFD700' }}>2M {lang === 'en' ? 'Cash' : 'Nakit'}</strong> {lang === 'en' ? '.' : 'karşılığında geri satın alabilirsiniz.'}
+          <span style={{ display: 'block', fontSize: 10, color: '#a0aec0', marginTop: 4 }}>
+            * {lang === 'en' ? 'Property cards are not eligible. Exact change only.' : 'Arazi kartları geçerli değildir. Tam para üstü verilmez.'}
+          </span>
+        </p>
+      </div>
+
+      <div style={{
+        background: 'rgba(255, 255, 255, 0.02)',
+        border: '1px solid rgba(255, 255, 255, 0.05)',
+        borderRadius: 14,
+        padding: 20,
+        display: 'flex',
+        flexWrap: 'wrap',
+        gap: 16,
+        justifyContent: 'center',
+        minHeight: 120
+      }}>
+        {gameState.scavengeMarket?.length > 0 ? (
+          gameState.scavengeMarket.map(card => (
+            <div
+              key={card.id}
+              style={{
+                display: 'flex',
+                flexDirection: 'column',
+                gap: 10,
+                alignItems: 'center',
+                background: 'rgba(0,0,0,0.25)',
+                padding: 12,
+                borderRadius: 12,
+                border: '1px solid rgba(255,255,255,0.05)',
+                width: 90,
+                boxSizing: 'content-box'
+              }}
+            >
+              <div style={{ cursor: 'pointer' }} onClick={() => { setPreviewCard(card); setPreviewLocked(true); }}>
+                <CardVisual card={card} small onHover={handleCardHover} lang={lang} />
+              </div>
+              <button
+                onClick={() => handleBuyScavenge(card.id)}
                 style={{
+                  ...btnStyle('linear-gradient(135deg, #2ECC71, #27AE60)'),
+                  width: '100%',
+                  fontSize: 10,
+                  padding: '6px 8px',
+                  borderRadius: 8,
+                  boxShadow: '0 2px 8px rgba(46,204,113,0.3)'
+                }}
+              >
+                {lang === 'en' ? '💵 Buy for 2M' : '💵 2M ile Al'}
+              </button>
+            </div>
+          ))
+        ) : (
+          <div style={{ textAlign: 'center', color: 'rgba(255, 255, 255, 0.35)', fontSize: 13, padding: '20px 0' }}>
+            <span style={{ fontSize: 32, display: 'block', marginBottom: 8 }}>🕵️</span>
+            {lang === 'en' ? 'Black Market is currently empty.' : 'Karaborsa şu an boş.'}
+          </div>
+        )}
+      </div>
+    </Modal>
+  );
+};
+
+// ---- GEÇMİŞ MODALI ----
+const renderHistoryModal = () => {
+  if (!showHistoryModal) return null;
+  return (
+    <Modal title="📜 Maç Geçmişi" onClose={() => setShowHistoryModal(false)}>
+      <div
+        style={{
+          maxHeight: '60vh',
+          overflowY: 'auto',
+          display: 'flex',
+          flexDirection: 'column',
+          gap: 10,
+          paddingRight: 6
+        }}
+        className="custom-scrollbar"
+      >
+        {gameState.log?.length > 0 ? (
+          gameState.log.map((entry, i) => {
+            let accentColor = '#3498DB';
+            if (entry.type === 'system') accentColor = '#FFD700';
+            else if (entry.type === 'card_play') accentColor = '#a855f7';
+            else if (entry.type === 'payment' || entry.type === 'rent') accentColor = '#2ECC71';
+            else if (entry.type === 'trade') accentColor = '#E67E22';
+            else if (entry.type === 'error' || entry.type === 'quit') accentColor = '#E74C3C';
+
+            return (
+              <div
+                key={i}
+                style={{
+                  background: 'rgba(255,255,255,0.02)',
+                  border: '1px solid rgba(255,255,255,0.04)',
+                  padding: '12px 14px',
+                  borderRadius: 12,
+                  fontSize: 13,
+                  borderLeft: `4px solid ${accentColor}`,
                   display: 'flex',
                   flexDirection: 'column',
-                  gap: 10,
-                  alignItems: 'center',
-                  background: 'rgba(0,0,0,0.25)',
-                  padding: 12,
-                  borderRadius: 12,
-                  border: '1px solid rgba(255,255,255,0.05)',
-                  width: 90,
-                  boxSizing: 'content-box'
+                  gap: 6,
+                  position: 'relative',
+                  transition: 'all 0.2s ease',
+                  boxShadow: '0 4px 12px rgba(0,0,0,0.15)'
+                }}
+                onMouseOver={e => {
+                  e.currentTarget.style.background = 'rgba(255,255,255,0.04)';
+                  e.currentTarget.style.borderColor = 'rgba(255,255,255,0.08)';
+                }}
+                onMouseOut={e => {
+                  e.currentTarget.style.background = 'rgba(255,255,255,0.02)';
+                  e.currentTarget.style.borderColor = 'rgba(255,255,255,0.04)';
                 }}
               >
-                <div style={{ cursor: 'pointer' }} onClick={() => { setPreviewCard(card); setPreviewLocked(true); }}>
-                  <CardVisual card={card} small onHover={handleCardHover} lang={lang} />
+                <div style={{ color: '#E2E8F0', lineHeight: 1.4 }}>
+                  {renderLogMsg(entry)}
                 </div>
-                <button
-                  onClick={() => handleBuyScavenge(card.id)}
-                  style={{
-                    ...btnStyle('linear-gradient(135deg, #2ECC71, #27AE60)'),
-                    width: '100%',
-                    fontSize: 10,
-                    padding: '6px 8px',
-                    borderRadius: 8,
-                    boxShadow: '0 2px 8px rgba(46,204,113,0.3)'
-                  }}
-                >
-                  {lang === 'en' ? '💵 Buy for 2M' : '💵 2M ile Al'}
-                </button>
-              </div>
-            ))
-          ) : (
-            <div style={{ textAlign: 'center', color: 'rgba(255, 255, 255, 0.35)', fontSize: 13, padding: '20px 0' }}>
-              <span style={{ fontSize: 32, display: 'block', marginBottom: 8 }}>🕵️</span>
-              {lang === 'en' ? 'Black Market is currently empty.' : 'Karaborsa şu an boş.'}
-            </div>
-          )}
-        </div>
-      </Modal>
-    );
-  };
-
-  // ---- GEÇMİŞ MODALI ----
-  const renderHistoryModal = () => {
-    if (!showHistoryModal) return null;
-    return (
-      <Modal title="📜 Maç Geçmişi" onClose={() => setShowHistoryModal(false)}>
-        <div
-          style={{
-            maxHeight: '60vh',
-            overflowY: 'auto',
-            display: 'flex',
-            flexDirection: 'column',
-            gap: 10,
-            paddingRight: 6
-          }}
-          className="custom-scrollbar"
-        >
-          {gameState.log?.length > 0 ? (
-            gameState.log.map((entry, i) => {
-              let accentColor = '#3498DB';
-              if (entry.type === 'system') accentColor = '#FFD700';
-              else if (entry.type === 'card_play') accentColor = '#a855f7';
-              else if (entry.type === 'payment' || entry.type === 'rent') accentColor = '#2ECC71';
-              else if (entry.type === 'trade') accentColor = '#E67E22';
-              else if (entry.type === 'error' || entry.type === 'quit') accentColor = '#E74C3C';
-
-              return (
-                <div
-                  key={i}
-                  style={{
-                    background: 'rgba(255,255,255,0.02)',
-                    border: '1px solid rgba(255,255,255,0.04)',
-                    padding: '12px 14px',
-                    borderRadius: 12,
-                    fontSize: 13,
-                    borderLeft: `4px solid ${accentColor}`,
-                    display: 'flex',
-                    flexDirection: 'column',
-                    gap: 6,
-                    position: 'relative',
-                    transition: 'all 0.2s ease',
-                    boxShadow: '0 4px 12px rgba(0,0,0,0.15)'
-                  }}
-                  onMouseOver={e => {
-                    e.currentTarget.style.background = 'rgba(255,255,255,0.04)';
-                    e.currentTarget.style.borderColor = 'rgba(255,255,255,0.08)';
-                  }}
-                  onMouseOut={e => {
-                    e.currentTarget.style.background = 'rgba(255,255,255,0.02)';
-                    e.currentTarget.style.borderColor = 'rgba(255,255,255,0.04)';
-                  }}
-                >
-                  <div style={{ color: '#E2E8F0', lineHeight: 1.4 }}>
-                    {renderLogMsg(entry)}
-                  </div>
-                  <div style={{
-                    fontSize: 10,
-                    color: '#718096',
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: 4,
-                    alignSelf: 'flex-end',
-                    marginTop: 2
-                  }}>
-                    🕒 {new Date(entry.time).toLocaleTimeString('tr-TR')}
-                  </div>
-                </div>
-              );
-            }).reverse()
-          ) : (
-            <div style={{ textAlign: 'center', color: 'rgba(255,255,255,0.3)', padding: '24px 0' }}>
-              <span style={{ fontSize: 24, display: 'block', marginBottom: 6 }}>📜</span>
-              Henüz bir hareket kaydı bulunmuyor.
-            </div>
-          )}
-        </div>
-      </Modal>
-    );
-  };
-
-  // ---- MOBİL MENÜ MODALI ----
-  const renderMenuModal = () => {
-    if (!isMenuOpen) return null;
-    return (
-      <Modal title="⚙️ Oyun Ayarları ve Menü" onClose={() => setIsMenuOpen(false)}>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 14, padding: '4px 0' }}>
-
-          {/* Deck Stats Row */}
-          <div style={{
-            display: 'flex',
-            justifyContent: 'space-between',
-            alignItems: 'center',
-            background: 'rgba(255,255,255,0.02)',
-            border: '1px solid rgba(255, 255, 255, 0.05)',
-            padding: '12px 16px',
-            borderRadius: 12
-          }}>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-              <span style={{ fontSize: 13, color: '#FFD700', fontWeight: '800', letterSpacing: '0.3px' }}>🎴 DESTE KARTLARI</span>
-              <span style={{ fontSize: 10, color: '#718096' }}>Destede kalan kart oranları</span>
-            </div>
-            <button
-              onClick={() => { setIsMenuOpen(false); setShowDeckStats(true); sfxClick(); }}
-              style={{
-                ...btnStyle('rgba(255, 215, 0, 0.1)'),
-                border: '1px solid rgba(255, 215, 0, 0.2)',
-                color: '#FFD700',
-                padding: '6px 12px',
-                fontSize: 11,
-                borderRadius: 8
-              }}
-            >
-              Kalan: {gameState.deckCount}
-            </button>
-          </div>
-
-          {/* Discard Pile Row */}
-          <div style={{
-            display: 'flex',
-            justifyContent: 'space-between',
-            alignItems: 'center',
-            background: 'rgba(255,255,255,0.02)',
-            border: '1px solid rgba(255, 255, 255, 0.05)',
-            padding: '12px 16px',
-            borderRadius: 12
-          }}>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-              <span style={{ fontSize: 13, color: '#E2E8F0', fontWeight: '800', letterSpacing: '0.3px' }}>🗑️ ISKARTA YIĞINI</span>
-              <span style={{ fontSize: 10, color: '#718096' }}>Son atılan kartları incele</span>
-            </div>
-            <button
-              onClick={() => { setIsMenuOpen(false); setShowDiscardModal(true); sfxClick(); }}
-              style={{
-                ...btnStyle('rgba(255,255,255,0.08)'),
-                border: '1px solid rgba(255,255,255,0.1)',
-                padding: '6px 12px',
-                fontSize: 11,
-                borderRadius: 8
-              }}
-            >
-              Gözat ({gameState.discard?.length || 0})
-            </button>
-          </div>
-
-          {/* 3D View Row */}
-          <div style={{
-            display: 'flex',
-            justifyContent: 'space-between',
-            alignItems: 'center',
-            background: 'rgba(255,255,255,0.02)',
-            border: '1px solid rgba(255, 255, 255, 0.05)',
-            padding: '12px 16px',
-            borderRadius: 12
-          }}>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-              <span style={{ fontSize: 13, color: '#E2E8F0', fontWeight: '800', letterSpacing: '0.3px' }}>👓 3D MASA GÖRÜNÜMÜ</span>
-              <span style={{ fontSize: 10, color: '#718096' }}>Kamera açısını değiştirir</span>
-            </div>
-            <button
-              onClick={() => { const next = !is3DTable; setIs3DTable(next); localStorage.setItem('md_3d', next ? 'on' : 'off'); sfxClick(); }}
-              style={{
-                ...btnStyle(is3DTable ? 'rgba(46,204,113,0.15)' : 'rgba(255,255,255,0.08)'),
-                border: is3DTable ? '1px solid rgba(46,204,113,0.3)' : '1px solid rgba(255,255,255,0.1)',
-                color: is3DTable ? '#2ECC71' : '#E2E8F0',
-                padding: '6px 14px',
-                fontSize: 11,
-                borderRadius: 8
-              }}
-            >
-              {is3DTable ? '✓ AÇIK' : 'KAPALI'}
-            </button>
-          </div>
-
-          {/* History Row */}
-          <div style={{
-            display: 'flex',
-            justifyContent: 'space-between',
-            alignItems: 'center',
-            background: 'rgba(255,255,255,0.02)',
-            border: '1px solid rgba(255, 255, 255, 0.05)',
-            padding: '12px 16px',
-            borderRadius: 12
-          }}>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-              <span style={{ fontSize: 13, color: '#3498DB', fontWeight: '800', letterSpacing: '0.3px' }}>📜 HAREKET GEÇMİŞİ</span>
-              <span style={{ fontSize: 10, color: '#718096' }}>Oyun günlüğü ve akışı</span>
-            </div>
-            <button
-              onClick={() => { setIsMenuOpen(false); setShowHistoryModal(true); sfxClick(); }}
-              style={{
-                ...btnStyle('rgba(52, 152, 219, 0.12)'),
-                border: '1px solid rgba(52, 152, 219, 0.25)',
-                color: '#3498DB',
-                padding: '6px 12px',
-                fontSize: 11,
-                borderRadius: 8
-              }}
-            >
-              Geçmişi Gör
-            </button>
-          </div>
-
-          {/* Scavenge (Black Market) Row */}
-          {gameState.streetThugs && gameState.scavengeMarket?.length > 0 && (
-            <div style={{
-              display: 'flex',
-              justifyContent: 'space-between',
-              alignItems: 'center',
-              background: 'rgba(255,255,255,0.02)',
-              border: '1px solid rgba(231, 76, 60, 0.15)',
-              padding: '12px 16px',
-              borderRadius: 12
-            }}>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-                <span style={{ fontSize: 13, color: '#E74C3C', fontWeight: '800', letterSpacing: '0.3px' }}>🕵️ KARABORSA</span>
-                <span style={{ fontSize: 10, color: '#718096' }}>Çöpe atılan kartları satın al</span>
-              </div>
-              <button
-                onClick={() => { setIsMenuOpen(false); setShowScavengeModal(true); sfxClick(); }}
-                style={{
-                  ...btnStyle('rgba(231, 76, 60, 0.12)'),
-                  border: '1px solid rgba(231, 76, 60, 0.25)',
-                  color: '#E74C3C',
-                  padding: '6px 12px',
-                  fontSize: 11,
-                  borderRadius: 8
-                }}
-              >
-                Markete Git ({gameState.scavengeMarket.length})
-              </button>
-            </div>
-          )}
-
-          {/* Sound Controls Card */}
-          <div style={{
-            display: 'flex',
-            flexDirection: 'column',
-            gap: 10,
-            background: 'rgba(255,255,255,0.02)',
-            border: '1px solid rgba(255, 255, 255, 0.05)',
-            padding: '14px 16px',
-            borderRadius: 12
-          }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-                <span style={{ fontSize: 13, color: '#E2E8F0', fontWeight: '800', letterSpacing: '0.3px' }}>🔊 SES AYARLARI</span>
-                <span style={{ fontSize: 10, color: '#718096' }}>Müzik ve efekt düzeyleri</span>
-              </div>
-              <button
-                onClick={() => { toggleSound(); sfxClick(); }}
-                style={{
-                  background: soundOn ? 'rgba(46, 204, 113, 0.15)' : 'rgba(255, 255, 255, 0.08)',
-                  border: 'none',
-                  width: 36,
-                  height: 36,
-                  borderRadius: '50%',
-                  cursor: 'pointer',
-                  color: '#fff',
-                  fontSize: 16,
+                <div style={{
+                  fontSize: 10,
+                  color: '#718096',
                   display: 'flex',
                   alignItems: 'center',
-                  justifyContent: 'center',
-                  transition: 'all 0.2s ease'
-                }}
-              >
-                {soundOn ? '🔊' : '🔇'}
-              </button>
-            </div>
-            {soundOn && (
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginTop: 8 }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                  <span style={{ fontSize: 10, color: '#718096', width: 30 }}>BGM:</span>
-                  <input
-                    type="range" min="0" max="0.5" step="0.01"
-                    value={bgmVolume}
-                    onChange={e => { setBgmVolumeState(e.target.value); setBgmVolume(e.target.value); }}
-                    style={{
-                      flex: 1,
-                      cursor: 'pointer',
-                      height: 4,
-                      borderRadius: 2,
-                      background: '#2d3748',
-                      accentColor: '#FFD700',
-                      outline: 'none'
-                    }}
-                  />
-                  <span style={{ fontSize: 10, color: '#718096', minWidth: 28, textAlign: 'right' }}>%{Math.round(bgmVolume * 200)}</span>
-                </div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                  <span style={{ fontSize: 10, color: '#718096', width: 30 }}>SFX:</span>
-                  <input
-                    type="range" min="0" max="1.0" step="0.02"
-                    value={sfxVolume}
-                    onChange={e => { setSfxVolumeState(e.target.value); setSfxVolume(e.target.value); }}
-                    style={{
-                      flex: 1,
-                      cursor: 'pointer',
-                      height: 4,
-                      borderRadius: 2,
-                      background: '#2d3748',
-                      accentColor: '#FFD700',
-                      outline: 'none'
-                    }}
-                  />
-                  <span style={{ fontSize: 10, color: '#718096', minWidth: 28, textAlign: 'right' }}>%{Math.round(sfxVolume * 100)}</span>
+                  gap: 4,
+                  alignSelf: 'flex-end',
+                  marginTop: 2
+                }}>
+                  🕒 {new Date(entry.time).toLocaleTimeString('tr-TR')}
                 </div>
               </div>
-            )}
+            );
+          }).reverse()
+        ) : (
+          <div style={{ textAlign: 'center', color: 'rgba(255,255,255,0.3)', padding: '24px 0' }}>
+            <span style={{ fontSize: 24, display: 'block', marginBottom: 6 }}>📜</span>
+            Henüz bir hareket kaydı bulunmuyor.
           </div>
+        )}
+      </div>
+    </Modal>
+  );
+};
 
-          {/* Action Buttons */}
-          <div style={{ display: 'flex', gap: 12, marginTop: 8 }}>
-            {gameState?.players?.[0]?.id === playerId ? (
-              <button
-                onClick={() => {
-                  setIsMenuOpen(false);
-                  socket.emit('returnToLobby', { roomCode }, (res) => {
-                    if (res && !res.ok) setError(res.error || 'Oyun bitirilemedi');
-                  });
-                }}
-                style={{
-                  ...btnStyle('linear-gradient(135deg, #E67E22, #D35400)'),
-                  flex: 1,
-                  padding: '12px 14px',
-                  fontSize: '12px',
-                  borderRadius: 10,
-                  boxShadow: '0 4px 12px rgba(230,126,34,0.25)'
-                }}
-              >
-                🛑 Oyunu Bitir
-              </button>
-            ) : (
-              <button
-                onClick={() => {
-                  setIsMenuOpen(false);
-                  if (!window.confirm('Odadan ayrılmak istediğinden emin misin?')) return;
-                  socket?.emit('leaveRoom', { roomCode }, () => { });
-                  handleExit();
-                }}
-                style={{
-                  ...btnStyle('linear-gradient(135deg, #E74C3C, #C0392B)'),
-                  flex: 1,
-                  padding: '12px 14px',
-                  fontSize: '12px',
-                  borderRadius: 10,
-                  boxShadow: '0 4px 12px rgba(231,76,60,0.25)'
-                }}
-              >
-                🚪 Odadan Çık
-              </button>
-            )}
+// ---- MOBİL MENÜ MODALI ----
+const renderMenuModal = () => {
+  if (!isMenuOpen) return null;
+  return (
+    <Modal title="⚙️ Oyun Ayarları ve Menü" onClose={() => setIsMenuOpen(false)}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 14, padding: '4px 0' }}>
+
+        {/* Deck Stats Row */}
+        <div style={{
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          background: 'rgba(255,255,255,0.02)',
+          border: '1px solid rgba(255, 255, 255, 0.05)',
+          padding: '12px 16px',
+          borderRadius: 12
+        }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+            <span style={{ fontSize: 13, color: '#FFD700', fontWeight: '800', letterSpacing: '0.3px' }}>🎴 DESTE KARTLARI</span>
+            <span style={{ fontSize: 10, color: '#718096' }}>Destede kalan kart oranları</span>
+          </div>
+          <button
+            onClick={() => { setIsMenuOpen(false); setShowDeckStats(true); sfxClick(); }}
+            style={{
+              ...btnStyle('rgba(255, 215, 0, 0.1)'),
+              border: '1px solid rgba(255, 215, 0, 0.2)',
+              color: '#FFD700',
+              padding: '6px 12px',
+              fontSize: 11,
+              borderRadius: 8
+            }}
+          >
+            Kalan: {gameState.deckCount}
+          </button>
+        </div>
+
+        {/* Discard Pile Row */}
+        <div style={{
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          background: 'rgba(255,255,255,0.02)',
+          border: '1px solid rgba(255, 255, 255, 0.05)',
+          padding: '12px 16px',
+          borderRadius: 12
+        }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+            <span style={{ fontSize: 13, color: '#E2E8F0', fontWeight: '800', letterSpacing: '0.3px' }}>🗑️ ISKARTA YIĞINI</span>
+            <span style={{ fontSize: 10, color: '#718096' }}>Son atılan kartları incele</span>
+          </div>
+          <button
+            onClick={() => { setIsMenuOpen(false); setShowDiscardModal(true); sfxClick(); }}
+            style={{
+              ...btnStyle('rgba(255,255,255,0.08)'),
+              border: '1px solid rgba(255,255,255,0.1)',
+              padding: '6px 12px',
+              fontSize: 11,
+              borderRadius: 8
+            }}
+          >
+            Gözat ({gameState.discard?.length || 0})
+          </button>
+        </div>
+
+        {/* 3D View Row */}
+        <div style={{
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          background: 'rgba(255,255,255,0.02)',
+          border: '1px solid rgba(255, 255, 255, 0.05)',
+          padding: '12px 16px',
+          borderRadius: 12
+        }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+            <span style={{ fontSize: 13, color: '#E2E8F0', fontWeight: '800', letterSpacing: '0.3px' }}>👓 3D MASA GÖRÜNÜMÜ</span>
+            <span style={{ fontSize: 10, color: '#718096' }}>Kamera açısını değiştirir</span>
+          </div>
+          <button
+            onClick={() => { const next = !is3DTable; setIs3DTable(next); localStorage.setItem('md_3d', next ? 'on' : 'off'); sfxClick(); }}
+            style={{
+              ...btnStyle(is3DTable ? 'rgba(46,204,113,0.15)' : 'rgba(255,255,255,0.08)'),
+              border: is3DTable ? '1px solid rgba(46,204,113,0.3)' : '1px solid rgba(255,255,255,0.1)',
+              color: is3DTable ? '#2ECC71' : '#E2E8F0',
+              padding: '6px 14px',
+              fontSize: 11,
+              borderRadius: 8
+            }}
+          >
+            {is3DTable ? '✓ AÇIK' : 'KAPALI'}
+          </button>
+        </div>
+
+        {/* History Row */}
+        <div style={{
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          background: 'rgba(255,255,255,0.02)',
+          border: '1px solid rgba(255, 255, 255, 0.05)',
+          padding: '12px 16px',
+          borderRadius: 12
+        }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+            <span style={{ fontSize: 13, color: '#3498DB', fontWeight: '800', letterSpacing: '0.3px' }}>📜 HAREKET GEÇMİŞİ</span>
+            <span style={{ fontSize: 10, color: '#718096' }}>Oyun günlüğü ve akışı</span>
+          </div>
+          <button
+            onClick={() => { setIsMenuOpen(false); setShowHistoryModal(true); sfxClick(); }}
+            style={{
+              ...btnStyle('rgba(52, 152, 219, 0.12)'),
+              border: '1px solid rgba(52, 152, 219, 0.25)',
+              color: '#3498DB',
+              padding: '6px 12px',
+              fontSize: 11,
+              borderRadius: 8
+            }}
+          >
+            Geçmişi Gör
+          </button>
+        </div>
+
+        {/* Scavenge (Black Market) Row */}
+        {gameState.streetThugs && gameState.scavengeMarket?.length > 0 && (
+          <div style={{
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center',
+            background: 'rgba(255,255,255,0.02)',
+            border: '1px solid rgba(231, 76, 60, 0.15)',
+            padding: '12px 16px',
+            borderRadius: 12
+          }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+              <span style={{ fontSize: 13, color: '#E74C3C', fontWeight: '800', letterSpacing: '0.3px' }}>🕵️ KARABORSA</span>
+              <span style={{ fontSize: 10, color: '#718096' }}>Çöpe atılan kartları satın al</span>
+            </div>
             <button
-              onClick={() => { setIsMenuOpen(false); handleRageQuit(); }}
+              onClick={() => { setIsMenuOpen(false); setShowScavengeModal(true); sfxClick(); }}
+              style={{
+                ...btnStyle('rgba(231, 76, 60, 0.12)'),
+                border: '1px solid rgba(231, 76, 60, 0.25)',
+                color: '#E74C3C',
+                padding: '6px 12px',
+                fontSize: 11,
+                borderRadius: 8
+              }}
+            >
+              Markete Git ({gameState.scavengeMarket.length})
+            </button>
+          </div>
+        )}
+
+        {/* Sound Controls Card */}
+        <div style={{
+          display: 'flex',
+          flexDirection: 'column',
+          gap: 10,
+          background: 'rgba(255,255,255,0.02)',
+          border: '1px solid rgba(255, 255, 255, 0.05)',
+          padding: '14px 16px',
+          borderRadius: 12
+        }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+              <span style={{ fontSize: 13, color: '#E2E8F0', fontWeight: '800', letterSpacing: '0.3px' }}>🔊 SES AYARLARI</span>
+              <span style={{ fontSize: 10, color: '#718096' }}>Müzik ve efekt düzeyleri</span>
+            </div>
+            <button
+              onClick={() => { toggleSound(); sfxClick(); }}
+              style={{
+                background: soundOn ? 'rgba(46, 204, 113, 0.15)' : 'rgba(255, 255, 255, 0.08)',
+                border: 'none',
+                width: 36,
+                height: 36,
+                borderRadius: '50%',
+                cursor: 'pointer',
+                color: '#fff',
+                fontSize: 16,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                transition: 'all 0.2s ease'
+              }}
+            >
+              {soundOn ? '🔊' : '🔇'}
+            </button>
+          </div>
+          {soundOn && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 6, marginTop: 8 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                <span style={{ fontSize: 10, color: '#718096', width: 30 }}>BGM:</span>
+                <input
+                  type="range" min="0" max="0.5" step="0.01"
+                  value={bgmVolume}
+                  onChange={e => { setBgmVolumeState(e.target.value); setBgmVolume(e.target.value); }}
+                  style={{
+                    flex: 1,
+                    cursor: 'pointer',
+                    height: 4,
+                    borderRadius: 2,
+                    background: '#2d3748',
+                    accentColor: '#FFD700',
+                    outline: 'none'
+                  }}
+                />
+                <span style={{ fontSize: 10, color: '#718096', minWidth: 28, textAlign: 'right' }}>%{Math.round(bgmVolume * 200)}</span>
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                <span style={{ fontSize: 10, color: '#718096', width: 30 }}>SFX:</span>
+                <input
+                  type="range" min="0" max="1.0" step="0.02"
+                  value={sfxVolume}
+                  onChange={e => { setSfxVolumeState(e.target.value); setSfxVolume(e.target.value); }}
+                  style={{
+                    flex: 1,
+                    cursor: 'pointer',
+                    height: 4,
+                    borderRadius: 2,
+                    background: '#2d3748',
+                    accentColor: '#FFD700',
+                    outline: 'none'
+                  }}
+                />
+                <span style={{ fontSize: 10, color: '#718096', minWidth: 28, textAlign: 'right' }}>%{Math.round(sfxVolume * 100)}</span>
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Action Buttons */}
+        <div style={{ display: 'flex', gap: 12, marginTop: 8 }}>
+          {gameState?.players?.[0]?.id === playerId ? (
+            <button
+              onClick={() => {
+                setIsMenuOpen(false);
+                socket.emit('returnToLobby', { roomCode }, (res) => {
+                  if (res && !res.ok) setError(res.error || 'Oyun bitirilemedi');
+                });
+              }}
+              style={{
+                ...btnStyle('linear-gradient(135deg, #E67E22, #D35400)'),
+                flex: 1,
+                padding: '12px 14px',
+                fontSize: '12px',
+                borderRadius: 10,
+                boxShadow: '0 4px 12px rgba(230,126,34,0.25)'
+              }}
+            >
+              🛑 Oyunu Bitir
+            </button>
+          ) : (
+            <button
+              onClick={() => {
+                setIsMenuOpen(false);
+                if (!window.confirm('Odadan ayrılmak istediğinden emin misin?')) return;
+                socket?.emit('leaveRoom', { roomCode }, () => { });
+                handleExit();
+              }}
               style={{
                 ...btnStyle('linear-gradient(135deg, #E74C3C, #C0392B)'),
                 flex: 1,
@@ -3200,651 +3523,766 @@ export default function App() {
                 boxShadow: '0 4px 12px rgba(231,76,60,0.25)'
               }}
             >
-              💥 Masayı Devir
+              🚪 Odadan Çık
             </button>
-          </div>
-
-        </div>
-      </Modal>
-    );
-  };
-
-  // ---- OYUNCU DETAY MODALI (RAKİP TAHTASI) ----
-  const renderPlayerDetailsModal = () => {
-    if (!viewingPlayerId) return null;
-    const p = gameState.players.find(x => x.id === viewingPlayerId);
-    if (!p) return null;
-
-    // Group bank cards by value
-    const bankGroups = {};
-    (p.bank || []).forEach(c => {
-      const val = c.value || 0;
-      if (!bankGroups[val]) bankGroups[val] = [];
-      bankGroups[val].push(c);
-    });
-
-    const EMOTES = ['😂', '😡', '😭', '😱', '👏', '🔥', '💸', '🤝'];
-    return (
-      <Modal title={lang === 'en' ? `${p.name} - All Assets` : `${p.name} - Tüm Varlıklar`} onClose={() => setViewingPlayerId(null)}>
-        {/* EMOTE CONTAINER */}
-        <div style={{
-          marginBottom: 16,
-          padding: 14,
-          background: 'rgba(255,255,255,0.02)',
-          border: '1px solid rgba(255, 255, 255, 0.05)',
-          borderRadius: 12
-        }}>
-          <div style={{
-            fontSize: 11,
-            color: '#FFD700',
-            marginBottom: 10,
-            fontWeight: '800',
-            letterSpacing: '0.5px',
-            textAlign: 'center'
-          }}>
-            {lang === 'en' ? 'SEND EMOTE' : 'İFADE GÖNDER'}
-          </div>
-          <div style={{ display: 'flex', gap: 10, justifyContent: 'center', flexWrap: 'wrap' }}>
-            {EMOTES.map(emoji => (
-              <button
-                key={emoji}
-                onClick={() => {
-                  socket.emit('sendEmote', { targetId: p.id, emoji });
-                  setViewingPlayerId(null);
-                }}
-                style={{
-                  background: 'rgba(255,255,255,0.05)',
-                  border: '1px solid rgba(255,255,255,0.1)',
-                  borderRadius: '50%',
-                  width: 42,
-                  height: 42,
-                  fontSize: 22,
-                  cursor: 'pointer',
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  transition: 'all 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275)'
-                }}
-                onMouseOver={e => {
-                  e.currentTarget.style.transform = 'scale(1.2)';
-                  e.currentTarget.style.background = 'rgba(255, 215, 0, 0.15)';
-                  e.currentTarget.style.borderColor = '#FFD700';
-                }}
-                onMouseOut={e => {
-                  e.currentTarget.style.transform = 'scale(1)';
-                  e.currentTarget.style.background = 'rgba(255,255,255,0.05)';
-                  e.currentTarget.style.borderColor = 'rgba(255,255,255,0.1)';
-                }}
-              >
-                {emoji}
-              </button>
-            ))}
-          </div>
-        </div>
-
-        {gameState?.allowTrades && isMyTurn && !isBlocked && p.id !== playerId && (
+          )}
           <button
-            onClick={() => {
-              setViewingPlayerId(null);
-              setTradeSelection({ offerBankIds: [], offerPropIds: [], requestBankIds: [], requestPropIds: [] });
-              setModal({ type: 'proposeTrade', targetId: p.id });
-            }}
+            onClick={() => { setIsMenuOpen(false); handleRageQuit(); }}
             style={{
-              ...btnStyle('linear-gradient(135deg, #3498DB, #2980B9)'),
-              width: '100%',
-              padding: '12px',
-              marginBottom: 16,
-              fontSize: 13,
+              ...btnStyle('linear-gradient(135deg, #E74C3C, #C0392B)'),
+              flex: 1,
+              padding: '12px 14px',
+              fontSize: '12px',
               borderRadius: 10,
-              boxShadow: '0 4px 12px rgba(52,152,219,0.25)'
+              boxShadow: '0 4px 12px rgba(231,76,60,0.25)'
             }}
           >
-            {lang === 'en' ? '🤝 Propose Peaceful Trade (Commerce)' : '🤝 Barışçıl Takas Teklif Et (Ticaret)'}
+            💥 Masayı Devir
           </button>
-        )}
-
-        {/* BANK ASSETS CONTAINER (GROUPED VAULT) */}
-        <div style={{
-          marginBottom: 16,
-          padding: 14,
-          background: 'rgba(255,255,255,0.02)',
-          border: '1px solid rgba(255,255,255,0.05)',
-          borderRadius: 12
-        }}>
-          <div style={{ fontSize: 12, color: '#aaa', marginBottom: 12, fontWeight: '800', letterSpacing: '0.4px' }}>
-            {lang === 'en' ? `🏦 BANK VAULT (${p.bankTotal}M)` : `🏦 BANKA KASASI (${p.bankTotal}M)`}
-          </div>
-          <div style={{
-            display: 'flex',
-            flexWrap: 'wrap',
-            gap: 8,
-            alignItems: 'center',
-            padding: '4px 0'
-          }}>
-            {Object.entries(bankGroups)
-              .sort((a, b) => Number(b[0]) - Number(a[0]))
-              .map(([val, cards]) => {
-                const cardValue = Number(val);
-                const billColor = cardValue >= 10 ? '#FFD700' : cardValue >= 5 ? '#9B59B6' : cardValue >= 3 ? '#3498DB' : '#2ECC71';
-                return (
-                  <div
-                    key={val}
-                    style={{
-                      background: `linear-gradient(135deg, ${billColor}25, rgba(0,0,0,0.6))`,
-                      border: `1.5px solid ${billColor}66`,
-                      borderRadius: 8,
-                      padding: '6px 12px',
-                      display: 'flex',
-                      alignItems: 'center',
-                      gap: 8,
-                      boxShadow: '0 2px 6px rgba(0,0,0,0.3)',
-                      transition: 'transform 0.2s',
-                      cursor: 'pointer'
-                    }}
-                    onClick={() => {
-                      if (cards[0]) {
-                        setPreviewCard(cards[0]);
-                        setPreviewLocked(true);
-                      }
-                    }}
-                    onMouseOver={(e) => { e.currentTarget.style.transform = 'translateY(-2px)'; }}
-                    onMouseOut={(e) => { e.currentTarget.style.transform = 'translateY(0)'; }}
-                  >
-                    <div style={{
-                      width: 24,
-                      height: 16,
-                      borderRadius: 3,
-                      background: billColor,
-                      color: '#000',
-                      fontSize: 9,
-                      fontWeight: 900,
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      boxShadow: 'inset 0 0 3px rgba(0,0,0,0.5)'
-                    }}>
-                      {val}M
-                    </div>
-                    <span style={{ fontSize: 11, fontWeight: 'bold', color: '#fff' }}>
-                      x{cards.length}
-                    </span>
-                  </div>
-                );
-              })}
-            {(!p.bank || p.bank.length === 0) && (
-              <span style={{ color: 'rgba(255,255,255,0.3)', fontSize: 12, fontStyle: 'italic' }}>
-                {lang === 'en' ? 'No cash in the bank...' : 'Bankada hiç nakit yok...'}
-              </span>
-            )}
-          </div>
         </div>
 
-        {/* PROPERTIES CONTAINER (COMPACT GRID) */}
+      </div>
+    </Modal>
+  );
+};
+
+// ---- OYUNCU DETAY MODALI (RAKİP TAHTASI) ----
+const renderPlayerDetailsModal = () => {
+  if (!viewingPlayerId) return null;
+  const p = gameState.players.find(x => x.id === viewingPlayerId);
+  if (!p) return null;
+
+  // Group bank cards by value
+  const bankGroups = {};
+  (p.bank || []).forEach(c => {
+    const val = c.value || 0;
+    if (!bankGroups[val]) bankGroups[val] = [];
+    bankGroups[val].push(c);
+  });
+
+  const EMOTES = ['😂', '😡', '😭', '😱', '👏', '🔥', '💸', '🤝'];
+  return (
+    <Modal title={lang === 'en' ? `${p.name} - All Assets` : `${p.name} - Tüm Varlıklar`} onClose={() => setViewingPlayerId(null)}>
+      {/* EMOTE CONTAINER */}
+      <div style={{
+        marginBottom: 16,
+        padding: 14,
+        background: 'rgba(255,255,255,0.02)',
+        border: '1px solid rgba(255, 255, 255, 0.05)',
+        borderRadius: 12
+      }}>
         <div style={{
-          padding: 14,
-          background: 'rgba(255,255,255,0.02)',
-          border: '1px solid rgba(255,255,255,0.05)',
-          borderRadius: 12
+          fontSize: 11,
+          color: '#FFD700',
+          marginBottom: 10,
+          fontWeight: '800',
+          letterSpacing: '0.5px',
+          textAlign: 'center'
         }}>
-          <div style={{ fontSize: 12, color: '#aaa', marginBottom: 12, fontWeight: '800', letterSpacing: '0.4px' }}>
-            {lang === 'en' ? '🏘️ PROPERTIES & SETS' : '🏘️ ARSALAR VE SETLER'}
-          </div>
-          {Object.keys(p.properties || {}).length > 0 && Object.values(p.properties || {}).flat().length > 0 ? (
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(135px, 1fr))', gap: 8 }}>
-              {Object.entries(p.properties || {}).map(([color, cards]) => (
-                cards.length > 0 && (
-                  <CompactPropertySet
-                    key={color}
-                    color={color}
-                    cards={cards}
-                    buildings={p.buildings}
-                    lang={lang}
-                  />
-                )
-              ))}
-            </div>
-          ) : (
-            <div style={{ color: 'rgba(255,255,255,0.3)', fontSize: 12, fontStyle: 'italic', textAlign: 'center', padding: '16px 0' }}>
-              {lang === 'en' ? 'No properties on the board.' : 'Masada hiç arsası bulunmuyor.'}
-            </div>
-          )}
+          {lang === 'en' ? 'SEND EMOTE' : 'İFADE GÖNDER'}
         </div>
-      </Modal>
-    );
-  };
+        <div style={{ display: 'flex', gap: 10, justifyContent: 'center', flexWrap: 'wrap' }}>
+          {EMOTES.map(emoji => (
+            <button
+              key={emoji}
+              onClick={() => {
+                socket.emit('sendEmote', { targetId: p.id, emoji });
+                setViewingPlayerId(null);
+              }}
+              style={{
+                background: 'rgba(255,255,255,0.05)',
+                border: '1px solid rgba(255,255,255,0.1)',
+                borderRadius: '50%',
+                width: 42,
+                height: 42,
+                fontSize: 22,
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                transition: 'all 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275)'
+              }}
+              onMouseOver={e => {
+                e.currentTarget.style.transform = 'scale(1.2)';
+                e.currentTarget.style.background = 'rgba(255, 215, 0, 0.15)';
+                e.currentTarget.style.borderColor = '#FFD700';
+              }}
+              onMouseOut={e => {
+                e.currentTarget.style.transform = 'scale(1)';
+                e.currentTarget.style.background = 'rgba(255,255,255,0.05)';
+                e.currentTarget.style.borderColor = 'rgba(255,255,255,0.1)';
+              }}
+            >
+              {emoji}
+            </button>
+          ))}
+        </div>
+      </div>
 
-  const handleEndTurn = () => {
-    socket.emit('endTurn', {}, (res) => {
-      if (res.ok) { setSelectedCard(null); setError(''); }
-      else {
-        if (res.needsDiscard) { setDiscardMode(true); setDiscardSelected([]); }
-        setError(res.error || 'Tur bitmedi');
-        sfxError();
-      }
-    });
-  };
+      {gameState?.allowTrades && isMyTurn && !isBlocked && p.id !== playerId && (
+        <button
+          onClick={() => {
+            setViewingPlayerId(null);
+            setTradeSelection({ offerBankIds: [], offerPropIds: [], requestBankIds: [], requestPropIds: [] });
+            setModal({ type: 'proposeTrade', targetId: p.id });
+          }}
+          style={{
+            ...btnStyle('linear-gradient(135deg, #3498DB, #2980B9)'),
+            width: '100%',
+            padding: '12px',
+            marginBottom: 16,
+            fontSize: 13,
+            borderRadius: 10,
+            boxShadow: '0 4px 12px rgba(52,152,219,0.25)'
+          }}
+        >
+          {lang === 'en' ? '🤝 Propose Peaceful Trade (Commerce)' : '🤝 Barışçıl Takas Teklif Et (Ticaret)'}
+        </button>
+      )}
 
-  const handleUndoMove = () => {
-    if (!socket) return;
-    socket.emit('undoMove', {}, (res) => {
-      if (res.ok) {
-        setSelectedCard(null);
-        setError('');
-        sfxWhoosh();
-      } else {
-        setError(res.error || 'Hamle geri alınamadı');
-        sfxError();
-      }
-    });
-  };
-
-  const handleSendChat = (e) => {
-    e.preventDefault();
-    if (!chatInput.trim() || !socket) return;
-    socket.emit('sendChatMessage', { text: chatInput.trim() });
-    setChatInput('');
-    sfxChatSent();
-  };
-  useEffect(() => { if (isChatOpen) chatEndRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [chatMessages, isChatOpen]);
-
-  const handleDiscard = () => {
-    const over = (me?.hand?.length || 0) - (gameState?.handLimit || 7);
-    if (discardSelected.length !== over) return setError(`${over} kart seçmelisin`);
-    socket.emit('discardCards', { cardIds: discardSelected }, (res) => {
-      if (res.ok) { setDiscardMode(false); setDiscardSelected([]); setError(''); handleEndTurn(); }
-      else setError(res.error);
-    });
-  };
-
-  const openCardModal = (card) => {
-    if (!isMyTurn || !me) return;
-    if (gameState.pendingChallenges?.length > 0 || gameState.pendingPayments?.length > 0) return;
-    if (gameState.actionsLeft <= 0) return setError('Aksiyon hakkın bitti (3/3 kullandın)');
-    setSelectedCard(selectedCard?.id === card.id ? null : card);
-  };
-
-  const handleCardAction = (card) => {
-    if (!card) return;
-
-    // Para → direkt bankaya
-    if (card.type === 'money') {
-      handlePlayCard(card);
-      return;
-    }
-
-    // Arazi
-    if (card.type === 'property') {
-      if (card.isWild || card.isDual) {
-        setModal({ type: 'chooseColor', card, colors: card.colors });
-      } else {
-        handlePlayCard(card, { color: card.color });
-      }
-      return;
-    }
-
-    // Aksiyon
-    if (card.type === 'action') {
-      switch (card.action) {
-        case 'passgo':
-          handlePlayCard(card);
-          break;
-        case 'birthday':
-          handlePlayCard(card);
-          break;
-        case 'justsayno':
-          setError('"Reddet!" kartını sadece sana karşı oynanan bir hamleye yanıt olarak kullanabilirsin. İstersen "Bankaya Koy" ile para olarak kullanabilirsin.');
-          break;
-        case 'debtcollector':
-          setModal({ type: 'selectTarget', card, action: 'debtcollector' });
-          break;
-        case 'thief_squirrel':
-          setModal({ type: 'selectTarget', card, action: 'thief_squirrel' });
-          break;
-        case 'rent':
-          setModal({ type: 'selectRentColor', card });
-          break;
-        case 'slydeal':
-          setModal({ type: 'selectTarget', card, action: 'slydeal' });
-          break;
-        case 'forceddeal':
-          setModal({ type: 'selectTarget', card, action: 'forceddeal' });
-          break;
-        case 'dealbreaker':
-          setModal({ type: 'selectTarget', card, action: 'dealbreaker' });
-          break;
-        case 'house':
-        case 'hotel':
-          setModal({ type: 'selectMyColor', card });
-          break;
-        default:
-          handlePlayCard(card);
-      }
-    }
-  };
-
-  // Render modals
-  const renderModal = () => {
-    if (!modal) return null;
-    const { card } = modal;
-
-    if (modal.type === 'chooseColor') {
-      return (
-        <Modal title={lang === 'en' ? 'Select Color' : 'Renk Seç'} onClose={() => setModal(null)}>
-          <div style={{ color: '#94a3b8', fontSize: 13, marginBottom: 20 }}>
-            {lang === 'en' ? 'Which color group would you like to use this wild property card for?' : 'Bu joker mülk kartını hangi renk grubu için kullanmak istersiniz?'}
-          </div>
-          <div className="premium-option-grid">
-            {modal.colors.map(color => {
-              const infoRaw = COLOR_INFO[color] || { hex: '#475569', name: color, light: '#64748b' };
-              const info = {
-                ...infoRaw,
-                name: getColorName(color, lang)
-              };
+      {/* BANK ASSETS CONTAINER (GROUPED VAULT) */}
+      <div style={{
+        marginBottom: 16,
+        padding: 14,
+        background: 'rgba(255,255,255,0.02)',
+        border: '1px solid rgba(255,255,255,0.05)',
+        borderRadius: 12
+      }}>
+        <div style={{ fontSize: 12, color: '#aaa', marginBottom: 12, fontWeight: '800', letterSpacing: '0.4px' }}>
+          {lang === 'en' ? `🏦 BANK VAULT (${p.bankTotal}M)` : `🏦 BANKA KASASI (${p.bankTotal}M)`}
+        </div>
+        <div style={{
+          display: 'flex',
+          flexWrap: 'wrap',
+          gap: 8,
+          alignItems: 'center',
+          padding: '4px 0'
+        }}>
+          {Object.entries(bankGroups)
+            .sort((a, b) => Number(b[0]) - Number(a[0]))
+            .map(([val, cards]) => {
+              const cardValue = Number(val);
+              const billColor = cardValue >= 10 ? '#FFD700' : cardValue >= 5 ? '#9B59B6' : cardValue >= 3 ? '#3498DB' : '#2ECC71';
               return (
                 <div
-                  key={color}
-                  className="premium-option-card"
-                  style={{ '--card-accent': info.hex }}
-                  onClick={() => handlePlayCard(card, { color })}
+                  key={val}
+                  style={{
+                    background: `linear-gradient(135deg, ${billColor}25, rgba(0,0,0,0.6))`,
+                    border: `1.5px solid ${billColor}66`,
+                    borderRadius: 8,
+                    padding: '6px 12px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 8,
+                    boxShadow: '0 2px 6px rgba(0,0,0,0.3)',
+                    transition: 'transform 0.2s',
+                    cursor: 'pointer'
+                  }}
+                  onClick={() => {
+                    if (cards[0]) {
+                      setPreviewCard(cards[0]);
+                      setPreviewLocked(true);
+                    }
+                  }}
+                  onMouseOver={(e) => { e.currentTarget.style.transform = 'translateY(-2px)'; }}
+                  onMouseOut={(e) => { e.currentTarget.style.transform = 'translateY(0)'; }}
                 >
                   <div style={{
-                    width: 28, height: 28, borderRadius: '50%',
-                    background: `linear-gradient(135deg, ${info.hex}, ${info.light || info.hex})`,
-                    boxShadow: `0 4px 10px ${info.hex}44, 0 0 0 2.5px rgba(255,255,255,0.12)`,
-                  }} />
-                  <span className="premium-option-label" style={{ color: '#fff', marginTop: 4 }}>
-                    {info.name || color}
+                    width: 24,
+                    height: 16,
+                    borderRadius: 3,
+                    background: billColor,
+                    color: '#000',
+                    fontSize: 9,
+                    fontWeight: 900,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    boxShadow: 'inset 0 0 3px rgba(0,0,0,0.5)'
+                  }}>
+                    {val}M
+                  </div>
+                  <span style={{ fontSize: 11, fontWeight: 'bold', color: '#fff' }}>
+                    x{cards.length}
                   </span>
                 </div>
               );
             })}
-          </div>
-        </Modal>
-      );
-    }
-
-    if (modal.type === 'selectTarget') {
-      const others = gameState.players.filter(p => p.id !== playerId);
-      const filteredOthers = modal.step === 2 && modal.targetId
-        ? others.filter(p => p.id === modal.targetId)
-        : others;
-      return (
-        <Modal
-          title={lang === 'en'
-            ? `${{ slydeal: 'Sly Deal', forceddeal: 'Forced Deal', dealbreaker: 'Deal Breaker', debtcollector: 'Debt Collector', thief_squirrel: 'Thief Squirrel' }[modal.action] || 'Action'} - Select Target`
-            : `${ACTION_NAMES[modal.action] || 'Aksiyon'} - Hedef Seç`}
-          onClose={() => setModal(null)}
-        >
-          <div style={{ color: '#94a3b8', fontSize: 13, marginBottom: 20 }}>
-            {lang === 'en' ? 'Who do you want to play this card against? Select a player and target below.' : 'Bu kartı kime karşı kullanmak istiyorsunuz? Aşağıdan bir oyuncu ve hedef seçin.'}
-          </div>
-          {(modal.action === 'slydeal' || modal.action === 'forceddeal' || modal.action === 'dealbreaker') && (
-            <div style={{
-              background: 'rgba(255, 255, 255, 0.03)',
-              border: '1px solid rgba(255, 255, 255, 0.08)',
-              borderRadius: 12,
-              padding: 12,
-              marginBottom: 16,
-              boxShadow: 'inset 0 1px 0 rgba(255, 255, 255, 0.05)'
-            }}>
-              <div style={{ fontSize: 11, fontWeight: 'bold', color: '#FFD700', marginBottom: 6, display: 'flex', alignItems: 'center', gap: 4 }}>
-                {lang === 'en' ? '👤 Your Current Properties:' : '👤 Senin Mevcut Arazilerin:'}
-              </div>
-              <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
-                {Object.entries(me?.properties || {}).filter(([, cards]) => cards.length > 0).map(([color, cards]) => {
-                  const infoRaw = COLOR_INFO[color] || { hex: '#aaa' };
-                  const info = {
-                    ...infoRaw,
-                    name: getColorName(color, lang)
-                  };
-                  const isComplete = isSetComplete(cards, color);
-                  const setSize = SET_SIZES[color] || 2;
-                  return (
-                    <div
-                      key={color}
-                      style={{
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: 4,
-                        background: isComplete ? `${info.hex}25` : 'rgba(255,255,255,0.05)',
-                        border: `1px solid ${isComplete ? info.hex : 'rgba(255,255,255,0.1)'}`,
-                        borderRadius: 6,
-                        padding: '3px 8px',
-                        fontSize: 9,
-                        fontWeight: 'bold',
-                        color: isComplete ? '#FFD700' : '#fff'
-                      }}
-                    >
-                      <span style={{ width: 8, height: 8, borderRadius: '50%', background: info.hex }} />
-                      <span>{info.name} ({cards.length}/{setSize})</span>
-                      {isComplete && <span style={{ fontSize: 8 }}>⭐</span>}
-                    </div>
-                  );
-                })}
-                {(!me?.properties || Object.values(me.properties).every(c => c.length === 0)) && (
-                  <div style={{ fontSize: 10, color: '#555', fontStyle: 'italic' }}>{lang === 'en' ? 'You have no properties on the board.' : 'Masada hiç araziniz bulunmuyor.'}</div>
-                )}
-              </div>
-            </div>
+          {(!p.bank || p.bank.length === 0) && (
+            <span style={{ color: 'rgba(255,255,255,0.3)', fontSize: 12, fontStyle: 'italic' }}>
+              {lang === 'en' ? 'No cash in the bank...' : 'Bankada hiç nakit yok...'}
+            </span>
           )}
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-            {filteredOthers.map(p => {
-              // Mini arazi renk badge'ları
-              const propEntries = Object.entries(p.properties || {}).filter(([, cards]) => cards.length > 0);
-              return (
-                <div key={p.id} className="modal-profile-card">
-                  <div className="modal-profile-header">
-                    <div className="modal-profile-name">
-                      <img
-                        src={`https://api.dicebear.com/7.x/${p.avatar || 'avataaars'}/svg?seed=${p.name}`}
-                        alt=""
-                        style={{ width: 36, height: 36, borderRadius: '50%', background: 'rgba(255,255,255,0.05)' }}
-                      />
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                        <span>{p.name}</span>
-                        {/* Mini arazi renk badge'ları */}
-                        {propEntries.length > 0 && (
-                          <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
-                            {propEntries.map(([color, cards]) => {
-                              const infoRaw = COLOR_INFO[color] || { hex: '#aaa' };
-                              const info = {
-                                ...infoRaw,
-                                name: getColorName(color, lang)
-                              };
-                              const complete = isSetComplete(cards, color);
-                              const sz = SET_SIZES[color] || 2;
-                              return (
-                                <div key={color} title={`${info.name}: ${cards.length}/${sz}${complete ? (lang === 'en' ? ' ✓ FULL SET' : ' ✓ TAM SET') : ''}`}
-                                  style={{
-                                    display: 'flex', alignItems: 'center', gap: 2,
-                                    background: complete ? `${info.hex}30` : 'rgba(255,255,255,0.06)',
-                                    border: complete ? `1px solid ${info.hex}` : `1px solid ${info.hex}55`,
-                                    borderRadius: 5, padding: '2px 5px',
-                                    boxShadow: complete ? `0 0 6px ${info.hex}66` : 'none'
-                                  }}>
-                                  <div style={{ width: 8, height: 8, borderRadius: '50%', background: info.hex, flexShrink: 0 }} />
-                                  <span style={{ fontSize: 9, fontWeight: 900, color: complete ? '#FFD700' : '#ccc' }}>
-                                    {cards.length}/{sz}{complete ? '★' : ''}
-                                  </span>
-                                </div>
-                              );
-                            })}
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                    <span style={{ fontSize: 11, color: '#94a3b8', background: 'rgba(255,255,255,0.05)', padding: '2px 8px', borderRadius: 12, alignSelf: 'flex-start' }}>
-                      {lang === 'en' ? 'Bank:' : 'Banka:'} {p.bankTotal}M
-                    </span>
+        </div>
+      </div>
+
+      {/* PROPERTIES CONTAINER (COMPACT GRID) */}
+      <div style={{
+        padding: 14,
+        background: 'rgba(255,255,255,0.02)',
+        border: '1px solid rgba(255,255,255,0.05)',
+        borderRadius: 12
+      }}>
+        <div style={{ fontSize: 12, color: '#aaa', marginBottom: 12, fontWeight: '800', letterSpacing: '0.4px' }}>
+          {lang === 'en' ? '🏘️ PROPERTIES & SETS' : '🏘️ ARSALAR VE SETLER'}
+        </div>
+        {Object.keys(p.properties || {}).length > 0 && Object.values(p.properties || {}).flat().length > 0 ? (
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(135px, 1fr))', gap: 8 }}>
+            {Object.entries(p.properties || {}).map(([color, cards]) => (
+              cards.length > 0 && (
+                <CompactPropertySet
+                  key={color}
+                  color={color}
+                  cards={cards}
+                  buildings={p.buildings}
+                  lang={lang}
+                />
+              )
+            ))}
+          </div>
+        ) : (
+          <div style={{ color: 'rgba(255,255,255,0.3)', fontSize: 12, fontStyle: 'italic', textAlign: 'center', padding: '16px 0' }}>
+            {lang === 'en' ? 'No properties on the board.' : 'Masada hiç arsası bulunmuyor.'}
+          </div>
+        )}
+      </div>
+    </Modal>
+  );
+};
+
+const handleEndTurn = () => {
+  socket.emit('endTurn', {}, (res) => {
+    if (res.ok) { setSelectedCard(null); setError(''); }
+    else {
+      if (res.needsDiscard) { setDiscardMode(true); setDiscardSelected([]); }
+      setError(res.error || 'Tur bitmedi');
+      sfxError();
+    }
+  });
+};
+
+const handleUndoMove = () => {
+  if (!socket) return;
+  socket.emit('undoMove', {}, (res) => {
+    if (res.ok) {
+      setSelectedCard(null);
+      setError('');
+      sfxWhoosh();
+    } else {
+      setError(res.error || 'Hamle geri alınamadı');
+      sfxError();
+    }
+  });
+};
+
+const handleSendChat = (e) => {
+  e.preventDefault();
+  if (!chatInput.trim() || !socket) return;
+  socket.emit('sendChatMessage', { text: chatInput.trim() });
+  setChatInput('');
+  sfxChatSent();
+};
+useEffect(() => { if (isChatOpen) chatEndRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [chatMessages, isChatOpen]);
+
+const handleDiscard = () => {
+  const over = (me?.hand?.length || 0) - (gameState?.handLimit || 7);
+  if (discardSelected.length !== over) return setError(`${over} kart seçmelisin`);
+  socket.emit('discardCards', { cardIds: discardSelected }, (res) => {
+    if (res.ok) { setDiscardMode(false); setDiscardSelected([]); setError(''); handleEndTurn(); }
+    else setError(res.error);
+  });
+};
+
+const openCardModal = (card) => {
+  if (!isMyTurn || !me) return;
+  if (gameState.pendingChallenges?.length > 0 || gameState.pendingPayments?.length > 0) return;
+  if (gameState.actionsLeft <= 0) return setError('Aksiyon hakkın bitti (3/3 kullandın)');
+  setSelectedCard(selectedCard?.id === card.id ? null : card);
+};
+
+const handleCardAction = (card) => {
+  if (!card) return;
+
+  // Para → direkt bankaya
+  if (card.type === 'money') {
+    handlePlayCard(card);
+    return;
+  }
+
+  // Arazi
+  if (card.type === 'property') {
+    if (card.isWild || card.isDual) {
+      setModal({ type: 'chooseColor', card, colors: card.colors });
+    } else {
+      handlePlayCard(card, { color: card.color });
+    }
+    return;
+  }
+
+  // Aksiyon
+  if (card.type === 'action') {
+    switch (card.action) {
+      case 'passgo':
+        handlePlayCard(card);
+        break;
+      case 'birthday':
+        handlePlayCard(card);
+        break;
+      case 'justsayno':
+        setError('"Reddet!" kartını sadece sana karşı oynanan bir hamleye yanıt olarak kullanabilirsin. İstersen "Bankaya Koy" ile para olarak kullanabilirsin.');
+        break;
+      case 'debtcollector':
+        setModal({ type: 'selectTarget', card, action: 'debtcollector' });
+        break;
+      case 'thief_squirrel':
+        setModal({ type: 'selectTarget', card, action: 'thief_squirrel' });
+        break;
+      case 'rent':
+        setModal({ type: 'selectRentColor', card });
+        break;
+      case 'slydeal':
+        setModal({ type: 'selectTarget', card, action: 'slydeal' });
+        break;
+      case 'forceddeal':
+        setModal({ type: 'selectTarget', card, action: 'forceddeal' });
+        break;
+      case 'dealbreaker':
+        setModal({ type: 'selectTarget', card, action: 'dealbreaker' });
+        break;
+      case 'house':
+      case 'hotel':
+        setModal({ type: 'selectMyColor', card });
+        break;
+      default:
+        handlePlayCard(card);
+    }
+  }
+};
+
+// Render modals
+const renderModal = () => {
+  if (!modal) return null;
+  const { card } = modal;
+
+  if (modal.type === 'chooseColor') {
+    return (
+      <Modal title={lang === 'en' ? 'Select Color' : 'Renk Seç'} onClose={() => setModal(null)}>
+        <div style={{ color: '#94a3b8', fontSize: 13, marginBottom: 20 }}>
+          {lang === 'en' ? 'Which color group would you like to use this wild property card for?' : 'Bu joker mülk kartını hangi renk grubu için kullanmak istersiniz?'}
+        </div>
+        <div className="premium-option-grid">
+          {modal.colors.map(color => {
+            const infoRaw = COLOR_INFO[color] || { hex: '#475569', name: color, light: '#64748b' };
+            const info = {
+              ...infoRaw,
+              name: getColorName(color, lang)
+            };
+            return (
+              <div
+                key={color}
+                className="premium-option-card"
+                style={{ '--card-accent': info.hex }}
+                onClick={() => handlePlayCard(card, { color })}
+              >
+                <div style={{
+                  width: 28, height: 28, borderRadius: '50%',
+                  background: `linear-gradient(135deg, ${info.hex}, ${info.light || info.hex})`,
+                  boxShadow: `0 4px 10px ${info.hex}44, 0 0 0 2.5px rgba(255,255,255,0.12)`,
+                }} />
+                <span className="premium-option-label" style={{ color: '#fff', marginTop: 4 }}>
+                  {info.name || color}
+                </span>
+              </div>
+            );
+          })}
+        </div>
+      </Modal>
+    );
+  }
+
+  if (modal.type === 'selectTarget') {
+    const others = gameState.players.filter(p => p.id !== playerId);
+    const filteredOthers = modal.step === 2 && modal.targetId
+      ? others.filter(p => p.id === modal.targetId)
+      : others;
+    return (
+      <Modal
+        title={lang === 'en'
+          ? `${{ slydeal: 'Sly Deal', forceddeal: 'Forced Deal', dealbreaker: 'Deal Breaker', debtcollector: 'Debt Collector', thief_squirrel: 'Thief Squirrel' }[modal.action] || 'Action'} - Select Target`
+          : `${ACTION_NAMES[modal.action] || 'Aksiyon'} - Hedef Seç`}
+        onClose={() => setModal(null)}
+      >
+        <div style={{ color: '#94a3b8', fontSize: 13, marginBottom: 20 }}>
+          {lang === 'en' ? 'Who do you want to play this card against? Select a player and target below.' : 'Bu kartı kime karşı kullanmak istiyorsunuz? Aşağıdan bir oyuncu ve hedef seçin.'}
+        </div>
+        {(modal.action === 'slydeal' || modal.action === 'forceddeal' || modal.action === 'dealbreaker') && (
+          <div style={{
+            background: 'rgba(255, 255, 255, 0.03)',
+            border: '1px solid rgba(255, 255, 255, 0.08)',
+            borderRadius: 12,
+            padding: 12,
+            marginBottom: 16,
+            boxShadow: 'inset 0 1px 0 rgba(255, 255, 255, 0.05)'
+          }}>
+            <div style={{ fontSize: 11, fontWeight: 'bold', color: '#FFD700', marginBottom: 6, display: 'flex', alignItems: 'center', gap: 4 }}>
+              {lang === 'en' ? '👤 Your Current Properties:' : '👤 Senin Mevcut Arazilerin:'}
+            </div>
+            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+              {Object.entries(me?.properties || {}).filter(([, cards]) => cards.length > 0).map(([color, cards]) => {
+                const infoRaw = COLOR_INFO[color] || { hex: '#aaa' };
+                const info = {
+                  ...infoRaw,
+                  name: getColorName(color, lang)
+                };
+                const isComplete = isSetComplete(cards, color);
+                const setSize = SET_SIZES[color] || 2;
+                return (
+                  <div
+                    key={color}
+                    style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 4,
+                      background: isComplete ? `${info.hex}25` : 'rgba(255,255,255,0.05)',
+                      border: `1px solid ${isComplete ? info.hex : 'rgba(255,255,255,0.1)'}`,
+                      borderRadius: 6,
+                      padding: '3px 8px',
+                      fontSize: 9,
+                      fontWeight: 'bold',
+                      color: isComplete ? '#FFD700' : '#fff'
+                    }}
+                  >
+                    <span style={{ width: 8, height: 8, borderRadius: '50%', background: info.hex }} />
+                    <span>{info.name} ({cards.length}/{setSize})</span>
+                    {isComplete && <span style={{ fontSize: 8 }}>⭐</span>}
                   </div>
-
-                  {modal.action === 'debtcollector' && (
-                    <button onClick={() => handlePlayCard(card, { targetId: p.id })} style={{ ...btnStyle('#E74C3C'), width: '100%', padding: '12px 16px', borderRadius: 8, margin: 0 }}>
-                      {lang === 'en' ? `💸 Collect 5M from ${p.name}` : `💸 ${p.name}'den 5M Tahsil Et`}
-                    </button>
-                  )}
-
-                  {modal.action === 'thief_squirrel' && (
-                    <button
-                      disabled={p.handCount === 0}
-                      onClick={() => handlePlayCard(card, { targetId: p.id })}
-                      style={{
-                        ...btnStyle(p.handCount === 0 ? '#555' : '#8B4513'),
-                        width: '100%',
-                        padding: '12px 16px',
-                        borderRadius: 8,
-                        margin: 0,
-                        cursor: p.handCount === 0 ? 'not-allowed' : 'pointer',
-                        opacity: p.handCount === 0 ? 0.5 : 1
-                      }}
-                    >
-                      {lang === 'en' ? `🐿️ Steal Card from ${p.name} (Has ${p.handCount || 0} Cards)` : `🐿️ ${p.name}'dan Kart Çal (Elde ${p.handCount || 0} Kart var)`}
-                    </button>
-                  )}
-
-                  {modal.action === 'dealbreaker' && (
-                    <div>
-                      <div style={{ color: '#a855f7', fontWeight: 'bold', fontSize: 12, marginBottom: 10 }}>{lang === 'en' ? 'Select the completed set you want to steal:' : 'Çalmak istediğiniz tamamlanmış seti seçin:'}</div>
-                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12 }}>
-                        {Object.entries(p.properties || {}).filter(([color, cards]) => isSetComplete(cards, color)).map(([color, cards]) => {
-                          const infoRaw = COLOR_INFO[color] || { hex: '#444', name: color, light: '#666' };
-                          const info = {
-                            ...infoRaw,
-                            name: getColorName(color, lang)
-                          };
-                          const b = p.buildings?.[color];
-                          return (
-                            <div key={color} style={{ background: 'rgba(0,0,0,0.3)', padding: 12, borderRadius: 10, border: `1.5px solid ${info.hex}`, display: 'flex', flexDirection: 'column', alignItems: 'center', minWidth: 110 }}>
-                              <div style={{ color: info.light || '#fff', fontSize: 10, fontWeight: 900, marginBottom: 6, textTransform: 'uppercase', letterSpacing: 0.5 }}>{info.name.toUpperCase()} {lang === 'en' ? 'SET' : 'SETİ'}</div>
-
-                              {/* Card Previews */}
-                              <div style={{ display: 'flex', gap: 3, marginBottom: 8 }}>
-                                {cards.map(c => (
-                                  <div key={c.id} style={{
-                                    width: 16, height: 22, backgroundColor: '#fff',
-                                    border: `1.2px solid ${info.hex}`, borderRadius: 3,
-                                    display: 'flex', flexDirection: 'column', alignItems: 'center', overflow: 'hidden'
-                                  }}>
-                                    <div style={{ width: '100%', height: 3, background: c.isWild ? 'linear-gradient(90deg, #E74C3C, #F39C12, #2ECC71, #3498DB)' : (c.isDual && c.colors ? `linear-gradient(90deg, ${COLOR_INFO[c.colors[0]]?.hex} 0%, ${COLOR_INFO[c.colors[0]]?.hex} 50%, ${COLOR_INFO[c.colors[1]]?.hex} 50%, ${COLOR_INFO[c.colors[1]]?.hex} 100%)` : info.hex) }} />
-                                    <span style={{ fontSize: 6, fontWeight: 900, color: '#333', transform: 'scale(0.8)', marginTop: 2 }}>{c.isWild ? '★' : c.value}</span>
-                                  </div>
-                                ))}
+                );
+              })}
+              {(!me?.properties || Object.values(me.properties).every(c => c.length === 0)) && (
+                <div style={{ fontSize: 10, color: '#555', fontStyle: 'italic' }}>{lang === 'en' ? 'You have no properties on the board.' : 'Masada hiç araziniz bulunmuyor.'}</div>
+              )}
+            </div>
+          </div>
+        )}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+          {filteredOthers.map(p => {
+            // Mini arazi renk badge'ları
+            const propEntries = Object.entries(p.properties || {}).filter(([, cards]) => cards.length > 0);
+            return (
+              <div key={p.id} className="modal-profile-card">
+                <div className="modal-profile-header">
+                  <div className="modal-profile-name">
+                    <img
+                      src={`https://api.dicebear.com/7.x/${p.avatar || 'avataaars'}/svg?seed=${p.name}`}
+                      alt=""
+                      style={{ width: 36, height: 36, borderRadius: '50%', background: 'rgba(255,255,255,0.05)' }}
+                    />
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                      <span>{p.name}</span>
+                      {/* Mini arazi renk badge'ları */}
+                      {propEntries.length > 0 && (
+                        <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
+                          {propEntries.map(([color, cards]) => {
+                            const infoRaw = COLOR_INFO[color] || { hex: '#aaa' };
+                            const info = {
+                              ...infoRaw,
+                              name: getColorName(color, lang)
+                            };
+                            const complete = isSetComplete(cards, color);
+                            const sz = SET_SIZES[color] || 2;
+                            return (
+                              <div key={color} title={`${info.name}: ${cards.length}/${sz}${complete ? (lang === 'en' ? ' ✓ FULL SET' : ' ✓ TAM SET') : ''}`}
+                                style={{
+                                  display: 'flex', alignItems: 'center', gap: 2,
+                                  background: complete ? `${info.hex}30` : 'rgba(255,255,255,0.06)',
+                                  border: complete ? `1px solid ${info.hex}` : `1px solid ${info.hex}55`,
+                                  borderRadius: 5, padding: '2px 5px',
+                                  boxShadow: complete ? `0 0 6px ${info.hex}66` : 'none'
+                                }}>
+                                <div style={{ width: 8, height: 8, borderRadius: '50%', background: info.hex, flexShrink: 0 }} />
+                                <span style={{ fontSize: 9, fontWeight: 900, color: complete ? '#FFD700' : '#ccc' }}>
+                                  {cards.length}/{sz}{complete ? '★' : ''}
+                                </span>
                               </div>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                  <span style={{ fontSize: 11, color: '#94a3b8', background: 'rgba(255,255,255,0.05)', padding: '2px 8px', borderRadius: 12, alignSelf: 'flex-start' }}>
+                    {lang === 'en' ? 'Bank:' : 'Banka:'} {p.bankTotal}M
+                  </span>
+                </div>
 
-                              {/* Buildings indicator */}
-                              {b && (b.houses > 0 || b.hotel) && (
-                                <div style={{ display: 'flex', gap: 3, marginBottom: 8, background: 'rgba(255,255,255,0.05)', padding: '2px 6px', borderRadius: 4, border: '1px solid rgba(255,255,255,0.1)' }}>
-                                  {b.houses > 0 && <span title="Ev" style={{ fontSize: 10 }}>🏠</span>}
-                                  {b.hotel && <span title="Otel" style={{ fontSize: 10 }}>🏨</span>}
+                {modal.action === 'debtcollector' && (
+                  <button onClick={() => handlePlayCard(card, { targetId: p.id })} style={{ ...btnStyle('#E74C3C'), width: '100%', padding: '12px 16px', borderRadius: 8, margin: 0 }}>
+                    {lang === 'en' ? `💸 Collect 5M from ${p.name}` : `💸 ${p.name}'den 5M Tahsil Et`}
+                  </button>
+                )}
+
+                {modal.action === 'thief_squirrel' && (
+                  <button
+                    disabled={p.handCount === 0}
+                    onClick={() => handlePlayCard(card, { targetId: p.id })}
+                    style={{
+                      ...btnStyle(p.handCount === 0 ? '#555' : '#8B4513'),
+                      width: '100%',
+                      padding: '12px 16px',
+                      borderRadius: 8,
+                      margin: 0,
+                      cursor: p.handCount === 0 ? 'not-allowed' : 'pointer',
+                      opacity: p.handCount === 0 ? 0.5 : 1
+                    }}
+                  >
+                    {lang === 'en' ? `🐿️ Steal Card from ${p.name} (Has ${p.handCount || 0} Cards)` : `🐿️ ${p.name}'dan Kart Çal (Elde ${p.handCount || 0} Kart var)`}
+                  </button>
+                )}
+
+                {modal.action === 'dealbreaker' && (
+                  <div>
+                    <div style={{ color: '#a855f7', fontWeight: 'bold', fontSize: 12, marginBottom: 10 }}>{lang === 'en' ? 'Select the completed set you want to steal:' : 'Çalmak istediğiniz tamamlanmış seti seçin:'}</div>
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 12 }}>
+                      {Object.entries(p.properties || {}).filter(([color, cards]) => isSetComplete(cards, color)).map(([color, cards]) => {
+                        const infoRaw = COLOR_INFO[color] || { hex: '#444', name: color, light: '#666' };
+                        const info = {
+                          ...infoRaw,
+                          name: getColorName(color, lang)
+                        };
+                        const b = p.buildings?.[color];
+                        return (
+                          <div key={color} style={{ background: 'rgba(0,0,0,0.3)', padding: 12, borderRadius: 10, border: `1.5px solid ${info.hex}`, display: 'flex', flexDirection: 'column', alignItems: 'center', minWidth: 110 }}>
+                            <div style={{ color: info.light || '#fff', fontSize: 10, fontWeight: 900, marginBottom: 6, textTransform: 'uppercase', letterSpacing: 0.5 }}>{info.name.toUpperCase()} {lang === 'en' ? 'SET' : 'SETİ'}</div>
+
+                            {/* Card Previews */}
+                            <div style={{ display: 'flex', gap: 3, marginBottom: 8 }}>
+                              {cards.map(c => (
+                                <div key={c.id} style={{
+                                  width: 16, height: 22, backgroundColor: '#fff',
+                                  border: `1.2px solid ${info.hex}`, borderRadius: 3,
+                                  display: 'flex', flexDirection: 'column', alignItems: 'center', overflow: 'hidden'
+                                }}>
+                                  <div style={{ width: '100%', height: 3, background: c.isWild ? 'linear-gradient(90deg, #E74C3C, #F39C12, #2ECC71, #3498DB)' : (c.isDual && c.colors ? `linear-gradient(90deg, ${COLOR_INFO[c.colors[0]]?.hex} 0%, ${COLOR_INFO[c.colors[0]]?.hex} 50%, ${COLOR_INFO[c.colors[1]]?.hex} 50%, ${COLOR_INFO[c.colors[1]]?.hex} 100%)` : info.hex) }} />
+                                  <span style={{ fontSize: 6, fontWeight: 900, color: '#333', transform: 'scale(0.8)', marginTop: 2 }}>{c.isWild ? '★' : c.value}</span>
                                 </div>
-                              )}
+                              ))}
+                            </div>
 
-                              <button onClick={() => handlePlayCard(card, { targetId: p.id, targetColor: color })} style={{ ...btnStyle('#a855f7'), padding: '6px 14px', fontSize: 11, width: '100%', margin: 0 }}>
-                                {lang === 'en' ? '💣 STEAL' : '💣 ÇAL'}
-                              </button>
+                            {/* Buildings indicator */}
+                            {b && (b.houses > 0 || b.hotel) && (
+                              <div style={{ display: 'flex', gap: 3, marginBottom: 8, background: 'rgba(255,255,255,0.05)', padding: '2px 6px', borderRadius: 4, border: '1px solid rgba(255,255,255,0.1)' }}>
+                                {b.houses > 0 && <span title="Ev" style={{ fontSize: 10 }}>🏠</span>}
+                                {b.hotel && <span title="Otel" style={{ fontSize: 10 }}>🏨</span>}
+                              </div>
+                            )}
+
+                            <button onClick={() => handlePlayCard(card, { targetId: p.id, targetColor: color })} style={{ ...btnStyle('#a855f7'), padding: '6px 14px', fontSize: 11, width: '100%', margin: 0 }}>
+                              {lang === 'en' ? '💣 STEAL' : '💣 ÇAL'}
+                            </button>
+                          </div>
+                        );
+                      })}
+                      {Object.entries(p.properties || {}).filter(([color, cards]) => isSetComplete(cards, color)).length === 0 && (
+                        <div style={{ color: '#64748b', fontSize: 12, fontStyle: 'italic', padding: '4px 0' }}>{lang === 'en' ? 'No completed property sets found.' : 'Tamamlanmış mülk seti bulunmuyor.'}</div>
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                {modal.action === 'slydeal' && (
+                  <div>
+                    <div style={{ color: '#3b82f6', fontWeight: 'bold', fontSize: 12, marginBottom: 10 }}>{lang === 'en' ? 'Select the single property card you want to steal (excluding completed sets):' : 'Çalmak istediğiniz bağımsız araziyi seçin (Setler Hariç):'}</div>
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+                      {Object.entries(p.properties || {}).flatMap(([color, cards]) =>
+                        !isSetComplete(cards, color) ? cards.map(propCard => {
+                          // Akıllı Uyarı Mantığı (Profitable Glow)
+                          let isProfitable = false;
+                          const me = gameState.players.find(pl => pl.id === playerId);
+                          if (me) {
+                            if (propCard.isWild) isProfitable = true;
+                            else {
+                              const pColors = propCard.isDual ? propCard.colors : [propCard.color];
+                              isProfitable = pColors.some(clr => me.properties?.[clr]?.length > 0);
+                            }
+                          }
+
+                          return (
+                            <div
+                              key={propCard.id}
+                              className={isProfitable ? 'profitable-glow' : ''}
+                              onClick={() => handlePlayCard(card, { targetId: p.id, targetColor: color, targetCardId: propCard.id })}
+                              style={{
+                                cursor: 'pointer',
+                                transition: 'all 0.2s ease',
+                                borderRadius: 8,
+                                overflow: 'hidden',
+                                border: '2px solid transparent'
+                              }}
+                              onMouseOver={(e) => {
+                                e.currentTarget.style.transform = 'translateY(-4px) scale(1.05)';
+                                e.currentTarget.style.borderColor = '#3b82f6';
+                              }}
+                              onMouseOut={(e) => {
+                                e.currentTarget.style.transform = 'none';
+                                e.currentTarget.style.borderColor = 'transparent';
+                              }}
+                            >
+                              <CardVisual card={propCard} small lang={lang} />
                             </div>
                           );
-                        })}
-                        {Object.entries(p.properties || {}).filter(([color, cards]) => isSetComplete(cards, color)).length === 0 && (
-                          <div style={{ color: '#64748b', fontSize: 12, fontStyle: 'italic', padding: '4px 0' }}>{lang === 'en' ? 'No completed property sets found.' : 'Tamamlanmış mülk seti bulunmuyor.'}</div>
-                        )}
-                      </div>
+                        }) : []
+                      )}
+                      {Object.entries(p.properties || {}).every(([c, cards]) => isSetComplete(cards, c) || cards.length === 0) && (
+                        <div style={{ color: '#64748b', fontSize: 12, fontStyle: 'italic', padding: '4px 0' }}>Çalınabilecek bağımsız arsa bulunmuyor.</div>
+                      )}
                     </div>
-                  )}
+                  </div>
+                )}
 
-                  {modal.action === 'slydeal' && (
-                    <div>
-                      <div style={{ color: '#3b82f6', fontWeight: 'bold', fontSize: 12, marginBottom: 10 }}>{lang === 'en' ? 'Select the single property card you want to steal (excluding completed sets):' : 'Çalmak istediğiniz bağımsız araziyi seçin (Setler Hariç):'}</div>
+                {modal.action === 'forceddeal' && (
+                  <div className="stepper-container">
+                    {/* Step 1 */}
+                    <div className={`step-card ${modal.step !== 2 ? 'active' : 'inactive'}`}>
+                      <div className="step-header" style={{ color: '#e11d48' }}>
+                        <span>①</span> {lang === 'en' ? `Select Card to Take from ${p.name}` : `${p.name}'den Alacağınız Kartı Seçin`}
+                      </div>
                       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-                        {Object.entries(p.properties || {}).flatMap(([color, cards]) =>
-                          !isSetComplete(cards, color) ? cards.map(propCard => {
-                            // Akıllı Uyarı Mantığı (Profitable Glow)
+                        {Object.entries(p.properties || {}).flatMap(([color, cards]) => {
+                          const isSetDone = isSetComplete(cards, color);
+                          return cards.map(propCard => {
+                            const isSelected = modal.targetCardId === propCard.id;
                             let isProfitable = false;
                             const me = gameState.players.find(pl => pl.id === playerId);
-                            if (me) {
+                            if (me && !isSetDone) {
                               if (propCard.isWild) isProfitable = true;
                               else {
                                 const pColors = propCard.isDual ? propCard.colors : [propCard.color];
                                 isProfitable = pColors.some(clr => me.properties?.[clr]?.length > 0);
                               }
                             }
-
                             return (
                               <div
                                 key={propCard.id}
-                                className={isProfitable ? 'profitable-glow' : ''}
-                                onClick={() => handlePlayCard(card, { targetId: p.id, targetColor: color, targetCardId: propCard.id })}
+                                className={isSetDone ? '' : (isProfitable && !isSelected ? 'profitable-glow' : '')}
+                                onClick={() => {
+                                  if (isSetDone) {
+                                    showToast(lang === 'en' ? "You cannot take cards from a completed set!" : "Tamamlanmış bir setten kart alamazsınız!", "warning");
+                                    return;
+                                  }
+                                  setModal({ ...modal, targetId: p.id, targetColor: color, targetCardId: propCard.id, step: 2 });
+                                }}
                                 style={{
-                                  cursor: 'pointer',
+                                  cursor: isSetDone ? 'not-allowed' : 'pointer',
                                   transition: 'all 0.2s ease',
+                                  transform: isSelected ? 'scale(1.08)' : 'none',
+                                  outline: isSelected ? '2.5px solid #e11d48' : 'none',
                                   borderRadius: 8,
                                   overflow: 'hidden',
-                                  border: '2px solid transparent'
-                                }}
-                                onMouseOver={(e) => {
-                                  e.currentTarget.style.transform = 'translateY(-4px) scale(1.05)';
-                                  e.currentTarget.style.borderColor = '#3b82f6';
-                                }}
-                                onMouseOut={(e) => {
-                                  e.currentTarget.style.transform = 'none';
-                                  e.currentTarget.style.borderColor = 'transparent';
+                                  boxShadow: isSelected ? '0 0 15px rgba(225,29,72,0.5)' : 'none',
+                                  opacity: isSetDone ? 0.45 : 1,
+                                  filter: isSetDone ? 'grayscale(80%)' : 'none',
+                                  position: 'relative'
                                 }}
                               >
                                 <CardVisual card={propCard} small lang={lang} />
+                                {isSetDone && (
+                                  <div style={{
+                                    position: 'absolute', inset: 0,
+                                    background: 'rgba(0,0,0,0.6)',
+                                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                    fontSize: 8, fontWeight: 900, color: '#fff', textAlign: 'center',
+                                    padding: 2,
+                                    zIndex: 2
+                                  }}>
+                                    🔒 SET
+                                  </div>
+                                )}
                               </div>
                             );
-                          }) : []
-                        )}
-                        {Object.entries(p.properties || {}).every(([c, cards]) => isSetComplete(cards, c) || cards.length === 0) && (
-                          <div style={{ color: '#64748b', fontSize: 12, fontStyle: 'italic', padding: '4px 0' }}>Çalınabilecek bağımsız arsa bulunmuyor.</div>
+                          });
+                        })}
+                        {Object.entries(p.properties || {}).every(([c, cards]) => cards.length === 0) && (
+                          <div style={{ color: '#64748b', fontSize: 11, fontStyle: 'italic' }}>{lang === 'en' ? 'No property available to take.' : 'Alınabilecek arsa bulunmuyor.'}</div>
                         )}
                       </div>
                     </div>
-                  )}
 
-                  {modal.action === 'forceddeal' && (
-                    <div className="stepper-container">
-                      {/* Step 1 */}
-                      <div className={`step-card ${modal.step !== 2 ? 'active' : 'inactive'}`}>
-                        <div className="step-header" style={{ color: '#e11d48' }}>
-                          <span>①</span> {lang === 'en' ? `Select Card to Take from ${p.name}` : `${p.name}'den Alacağınız Kartı Seçin`}
-                        </div>
-                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
-                          {Object.entries(p.properties || {}).flatMap(([color, cards]) => {
+                    {/* Step 2 */}
+                    <div className={`step-card ${modal.step === 2 ? 'active' : 'inactive'}`}>
+                      <div className="step-header" style={{ color: '#10b981', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <span><span>②</span> {lang === 'en' ? 'Select Card to Give from Yours' : 'Kendi Kartlarınızdan Vereceğinizi Seçin'}</span>
+                        {modal.step === 2 && (
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setModal({ ...modal, step: 1, targetId: null, targetColor: null, targetCardId: null });
+                            }}
+                            style={{
+                              background: 'rgba(255,255,255,0.1)',
+                              border: '1px solid rgba(255,255,255,0.2)',
+                              color: '#fff',
+                              borderRadius: 4,
+                              padding: '2px 8px',
+                              fontSize: 10,
+                              cursor: 'pointer',
+                              margin: 0
+                            }}
+                          >
+                            {lang === 'en' ? '◀ Back' : '◀ Geri Dön'}
+                          </button>
+                        )}
+                      </div>
+                      {modal.step === 2 && (
+                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, animation: 'toast-in 0.25s ease' }}>
+                          {Object.entries(me?.properties || {}).flatMap(([color, cards]) => {
                             const isSetDone = isSetComplete(cards, color);
                             return cards.map(propCard => {
-                              const isSelected = modal.targetCardId === propCard.id;
-                              let isProfitable = false;
-                              const me = gameState.players.find(pl => pl.id === playerId);
-                              if (me && !isSetDone) {
-                                if (propCard.isWild) isProfitable = true;
+                              let isDangerous = false;
+                              if (!isSetDone) {
+                                if (propCard.isWild) isDangerous = true;
                                 else {
-                                  const pColors = propCard.isDual ? propCard.colors : [propCard.color];
-                                  isProfitable = pColors.some(clr => me.properties?.[clr]?.length > 0);
+                                  const cColors = propCard.isDual ? propCard.colors : [propCard.color];
+                                  isDangerous = cColors.some(clr => p.properties?.[clr]?.length > 0);
                                 }
                               }
                               return (
                                 <div
                                   key={propCard.id}
-                                  className={isSetDone ? '' : (isProfitable && !isSelected ? 'profitable-glow' : '')}
+                                  className={isSetDone ? '' : (isDangerous ? 'danger-glow' : '')}
                                   onClick={() => {
                                     if (isSetDone) {
-                                      showToast(lang === 'en' ? "You cannot take cards from a completed set!" : "Tamamlanmış bir setten kart alamazsınız!", "warning");
+                                      showToast(lang === 'en' ? "You cannot trade a card from a completed set!" : "Tamamlanmış bir setten kart veremezsiniz!", "warning");
                                       return;
                                     }
-                                    setModal({ ...modal, targetId: p.id, targetColor: color, targetCardId: propCard.id, step: 2 });
+                                    handlePlayCard(card, {
+                                      targetId: modal.targetId,
+                                      targetColor: modal.targetColor,
+                                      targetCardId: modal.targetCardId,
+                                      myColor: color,
+                                      myCardId: propCard.id,
+                                    });
                                   }}
                                   style={{
                                     cursor: isSetDone ? 'not-allowed' : 'pointer',
                                     transition: 'all 0.2s ease',
-                                    transform: isSelected ? 'scale(1.08)' : 'none',
-                                    outline: isSelected ? '2.5px solid #e11d48' : 'none',
                                     borderRadius: 8,
                                     overflow: 'hidden',
-                                    boxShadow: isSelected ? '0 0 15px rgba(225,29,72,0.5)' : 'none',
+                                    border: '2px solid transparent',
                                     opacity: isSetDone ? 0.45 : 1,
                                     filter: isSetDone ? 'grayscale(80%)' : 'none',
                                     position: 'relative'
+                                  }}
+                                  onMouseOver={(e) => {
+                                    if (!isSetDone) {
+                                      e.currentTarget.style.transform = 'translateY(-4px) scale(1.05)';
+                                      e.currentTarget.style.borderColor = '#10b981';
+                                    }
+                                  }}
+                                  onMouseOut={(e) => {
+                                    if (!isSetDone) {
+                                      e.currentTarget.style.transform = 'none';
+                                      e.currentTarget.style.borderColor = 'transparent';
+                                    }
                                   }}
                                 >
                                   <CardVisual card={propCard} small lang={lang} />
@@ -3864,1694 +4302,319 @@ export default function App() {
                               );
                             });
                           })}
-                          {Object.entries(p.properties || {}).every(([c, cards]) => cards.length === 0) && (
-                            <div style={{ color: '#64748b', fontSize: 11, fontStyle: 'italic' }}>{lang === 'en' ? 'No property available to take.' : 'Alınabilecek arsa bulunmuyor.'}</div>
+                          {Object.entries(me?.properties || {}).every(([c, cards]) => cards.length === 0) && (
+                            <div style={{ color: '#64748b', fontSize: 11, fontStyle: 'italic' }}>{lang === 'en' ? 'No property available to give.' : 'Verilebilecek arsanız bulunmuyor.'}</div>
                           )}
                         </div>
-                      </div>
-
-                      {/* Step 2 */}
-                      <div className={`step-card ${modal.step === 2 ? 'active' : 'inactive'}`}>
-                        <div className="step-header" style={{ color: '#10b981', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                          <span><span>②</span> {lang === 'en' ? 'Select Card to Give from Yours' : 'Kendi Kartlarınızdan Vereceğinizi Seçin'}</span>
-                          {modal.step === 2 && (
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                setModal({ ...modal, step: 1, targetId: null, targetColor: null, targetCardId: null });
-                              }}
-                              style={{
-                                background: 'rgba(255,255,255,0.1)',
-                                border: '1px solid rgba(255,255,255,0.2)',
-                                color: '#fff',
-                                borderRadius: 4,
-                                padding: '2px 8px',
-                                fontSize: 10,
-                                cursor: 'pointer',
-                                margin: 0
-                              }}
-                            >
-                              {lang === 'en' ? '◀ Back' : '◀ Geri Dön'}
-                            </button>
-                          )}
+                      )}
+                      {modal.step !== 2 && (
+                        <div style={{ color: '#64748b', fontSize: 12, fontStyle: 'italic' }}>
+                          {lang === 'en' ? 'Please select the card to take from above first.' : 'Lütfen önce yukarıdan alacağınız kartı seçin.'}
                         </div>
-                        {modal.step === 2 && (
-                          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, animation: 'toast-in 0.25s ease' }}>
-                            {Object.entries(me?.properties || {}).flatMap(([color, cards]) => {
-                              const isSetDone = isSetComplete(cards, color);
-                              return cards.map(propCard => {
-                                let isDangerous = false;
-                                if (!isSetDone) {
-                                  if (propCard.isWild) isDangerous = true;
-                                  else {
-                                    const cColors = propCard.isDual ? propCard.colors : [propCard.color];
-                                    isDangerous = cColors.some(clr => p.properties?.[clr]?.length > 0);
-                                  }
-                                }
-                                return (
-                                  <div
-                                    key={propCard.id}
-                                    className={isSetDone ? '' : (isDangerous ? 'danger-glow' : '')}
-                                    onClick={() => {
-                                      if (isSetDone) {
-                                        showToast(lang === 'en' ? "You cannot trade a card from a completed set!" : "Tamamlanmış bir setten kart veremezsiniz!", "warning");
-                                        return;
-                                      }
-                                      handlePlayCard(card, {
-                                        targetId: modal.targetId,
-                                        targetColor: modal.targetColor,
-                                        targetCardId: modal.targetCardId,
-                                        myColor: color,
-                                        myCardId: propCard.id,
-                                      });
-                                    }}
-                                    style={{
-                                      cursor: isSetDone ? 'not-allowed' : 'pointer',
-                                      transition: 'all 0.2s ease',
-                                      borderRadius: 8,
-                                      overflow: 'hidden',
-                                      border: '2px solid transparent',
-                                      opacity: isSetDone ? 0.45 : 1,
-                                      filter: isSetDone ? 'grayscale(80%)' : 'none',
-                                      position: 'relative'
-                                    }}
-                                    onMouseOver={(e) => {
-                                      if (!isSetDone) {
-                                        e.currentTarget.style.transform = 'translateY(-4px) scale(1.05)';
-                                        e.currentTarget.style.borderColor = '#10b981';
-                                      }
-                                    }}
-                                    onMouseOut={(e) => {
-                                      if (!isSetDone) {
-                                        e.currentTarget.style.transform = 'none';
-                                        e.currentTarget.style.borderColor = 'transparent';
-                                      }
-                                    }}
-                                  >
-                                    <CardVisual card={propCard} small lang={lang} />
-                                    {isSetDone && (
-                                      <div style={{
-                                        position: 'absolute', inset: 0,
-                                        background: 'rgba(0,0,0,0.6)',
-                                        display: 'flex', alignItems: 'center', justifyContent: 'center',
-                                        fontSize: 8, fontWeight: 900, color: '#fff', textAlign: 'center',
-                                        padding: 2,
-                                        zIndex: 2
-                                      }}>
-                                        🔒 SET
-                                      </div>
-                                    )}
-                                  </div>
-                                );
-                              });
-                            })}
-                            {Object.entries(me?.properties || {}).every(([c, cards]) => cards.length === 0) && (
-                              <div style={{ color: '#64748b', fontSize: 11, fontStyle: 'italic' }}>{lang === 'en' ? 'No property available to give.' : 'Verilebilecek arsanız bulunmuyor.'}</div>
-                            )}
-                          </div>
-                        )}
-                        {modal.step !== 2 && (
-                          <div style={{ color: '#64748b', fontSize: 12, fontStyle: 'italic' }}>
-                            {lang === 'en' ? 'Please select the card to take from above first.' : 'Lütfen önce yukarıdan alacağınız kartı seçin.'}
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  )}
-                </div>
-              );
-            })}
-          </div>
-        </Modal>
-      );
-    }
-
-    if (modal.type === 'viewBankCards') {
-      const bankCards = me?.bank || [];
-      return (
-        <Modal title={lang === 'en' ? `💰 Bank Vault (${me?.bankTotal || 0}M)` : `💰 Banka Kasası (${me?.bankTotal || 0}M)`} onClose={() => setModal(null)}>
-          <div style={{ marginBottom: 12, fontSize: 12, color: '#94a3b8' }}>
-            {lang === 'en' ? 'All cards in your bank are listed below. Money cards and action cards you deposited to the bank appear here.' : 'Bankandaki tüm kartlar aşağıda listeleniyor. Para kartları ve bankaya yatırdığın aksiyon kartları burada görünür.'}
-          </div>
-          {bankCards.length === 0 ? (
-            <div style={{ textAlign: 'center', color: '#555', padding: 24, fontStyle: 'italic', fontSize: 13 }}>{lang === 'en' ? 'Bank vault is empty.' : 'Banka kasası boş.'}</div>
-          ) : (
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10, justifyContent: 'center', maxHeight: 360, overflowY: 'auto' }}>
-              {bankCards.map(c => (
-                <div key={c.id} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4 }}>
-                  <CardVisual card={c} small lang={lang} />
-                  <div style={{ fontSize: 11, fontWeight: 900, color: '#2ECC71', background: 'rgba(46,204,113,0.12)', border: '1px solid rgba(46,204,113,0.3)', borderRadius: 6, padding: '2px 8px' }}>
-                    {c.value}M
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-          <div style={{ marginTop: 16, padding: '10px 14px', background: 'rgba(255,215,0,0.05)', border: '1px solid rgba(255,215,0,0.2)', borderRadius: 10, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <span style={{ color: '#aaa', fontSize: 12 }}>{lang === 'en' ? 'Total Bank Value:' : 'Toplam Banka Değeri:'}</span>
-            <span style={{ color: '#FFD700', fontWeight: 900, fontSize: 16 }}>{me?.bankTotal || 0}M</span>
-          </div>
-        </Modal>
-      );
-    }
-
-    if (modal.type === 'selectRentColor') {
-      const validColors = card.colors === 'all'
-        ? Object.keys(me?.properties || {}).filter(c => (me.properties[c]?.length || 0) > 0)
-        : (card.colors || []).filter(c => me?.properties?.[c]?.length > 0);
-
-      const doubleRentCards = (me?.hand || []).filter(c => c.action === 'doublerent');
-
-      return (
-        <Modal title="Kira Rengi Seç" onClose={() => setModal(null)}>
-          <div style={{ color: '#94a3b8', fontSize: 13, marginBottom: 20 }}>
-            Hangi renk setiniz üzerinden kira toplamak istiyorsunuz? Varsa "Çifte Kira" kartını da kullanabilirsiniz.
-          </div>
-          {validColors.length === 0 && (
-            <div style={{ textAlign: 'center', color: '#64748b', fontSize: 14, padding: '20px 0' }}>
-              ⚠️ Bu kira kartı için masada uygun mülkünüz bulunmuyor.
-            </div>
-          )}
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-            {validColors.map(color => {
-              const info = COLOR_INFO[color] || { hex: '#444', name: color, light: '#fff' };
-              const rentAmount = calculateRentClient(me, color);
-              const doubleRentAmount = rentAmount * 2;
-
-              return (
-                <div key={color} style={{
-                  background: 'rgba(255,255,255,0.02)',
-                  border: '1px solid rgba(255,255,255,0.05)',
-                  borderRadius: 12,
-                  padding: 16,
-                  display: 'flex',
-                  flexDirection: 'column',
-                  gap: 12
-                }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <span style={{ fontWeight: 800, fontSize: 14, color: info.light || '#fff', display: 'flex', alignItems: 'center', gap: 8 }}>
-                      <span style={{ display: 'inline-block', width: 12, height: 12, borderRadius: '50%', background: info.hex, border: '1.5px solid rgba(255,255,255,0.4)' }}></span>
-                      {info.name} Grubu
-                    </span>
-                    <span style={{ fontSize: 12, color: '#94a3b8' }}>
-                      {me.properties[color]?.length || 0} Kart Sahipsin
-                    </span>
-                  </div>
-
-                  <div style={{ display: 'grid', gridTemplateColumns: doubleRentCards.length > 0 ? '1fr 1fr' : '1fr', gap: 10 }}>
-                    <button onClick={() => {
-                      if (card.colors === 'all') {
-                        setModal({ type: 'selectRentTarget', card, color, double: false });
-                      } else {
-                        handlePlayCard(card, { color });
-                      }
-                    }} style={{ ...btnStyle(info.hex), width: '100%', margin: 0, padding: '10px' }}>
-                      💰 {rentAmount}M Kira İste
-                    </button>
-
-                    {doubleRentCards.length > 0 && (
-                      <button onClick={() => {
-                        if (card.colors === 'all') {
-                          setModal({ type: 'selectRentTarget', card, color, double: true, doubleRentCardId: doubleRentCards[0].id });
-                        } else {
-                          handlePlayCard(card, { color, doubleRentCardId: doubleRentCards[0].id });
-                        }
-                      }} style={{ ...btnStyle('linear-gradient(135deg, #d35400, #e67e22)'), width: '100%', margin: 0, padding: '10px', boxShadow: '0 4px 15px rgba(211,84,0,0.4)' }}>
-                        ⚡ Çifte Kira ({doubleRentAmount}M)
-                      </button>
-                    )}
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </Modal>
-      );
-    }
-
-    if (modal.type === 'selectRentTarget') {
-      const others = gameState.players.filter(p => p.id !== playerId);
-      return (
-        <Modal title={`Hedef Seç (Herhangi Kira${modal.double ? ' — İKİ KAT' : ''})`} onClose={() => setModal(null)}>
-          <div style={{ color: '#94a3b8', fontSize: 13, marginBottom: 20 }}>
-            Herhangi Kira kartıyla hangi oyuncudan kira tahsil etmek istiyorsunuz?
-          </div>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-            {others.map(p => {
-              const propEntries = Object.entries(p.properties || {}).filter(([, cards]) => cards.length > 0);
-              return (
-                <div key={p.id} className="modal-profile-card">
-                  <div className="modal-profile-header">
-                    <div className="modal-profile-name">
-                      <img
-                        src={`https://api.dicebear.com/7.x/${p.avatar || 'avataaars'}/svg?seed=${p.name}`}
-                        alt=""
-                        style={{ width: 36, height: 36, borderRadius: '50%', background: 'rgba(255,255,255,0.05)' }}
-                      />
-                      <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                        <span>{p.name}</span>
-                        {/* Mini arazi renk badge'ları */}
-                        {propEntries.length > 0 && (
-                          <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
-                            {propEntries.map(([color, cards]) => {
-                              const info = COLOR_INFO[color] || { hex: '#aaa' };
-                              const complete = isSetComplete(cards, color);
-                              const sz = SET_SIZES[color] || 2;
-                              return (
-                                <div key={color} title={`${info.name || color}: ${cards.length}/${sz}${complete ? ' ✓ TAM SET' : ''}`}
-                                  style={{
-                                    display: 'flex', alignItems: 'center', gap: 2,
-                                    background: complete ? `${info.hex}30` : 'rgba(255,255,255,0.06)',
-                                    border: complete ? `1px solid ${info.hex}` : `1px solid ${info.hex}55`,
-                                    borderRadius: 5, padding: '2px 5px',
-                                    boxShadow: complete ? `0 0 6px ${info.hex}66` : 'none'
-                                  }}>
-                                  <div style={{ width: 8, height: 8, borderRadius: '50%', background: info.hex, flexShrink: 0 }} />
-                                  <span style={{ fontSize: 9, fontWeight: 900, color: complete ? '#FFD700' : '#ccc' }}>
-                                    {cards.length}/{sz}{complete ? '★' : ''}
-                                  </span>
-                                </div>
-                              );
-                            })}
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                    <span style={{ fontSize: 11, color: '#94a3b8', background: 'rgba(255,255,255,0.05)', padding: '2px 8px', borderRadius: 12, alignSelf: 'flex-start' }}>
-                      Banka: {p.bankTotal}M
-                    </span>
-                  </div>
-
-                  <button
-                    onClick={() => handlePlayCard(card, {
-                      color: modal.color,
-                      targetId: p.id,
-                      ...(modal.double ? { doubleRentCardId: modal.doubleRentCardId } : {}),
-                    })}
-                    style={{ ...btnStyle('#16A085'), width: '100%', padding: '12px 16px', borderRadius: 8, margin: 0 }}
-                  >
-                    🎯 Seç ve Kira İste
-                  </button>
-                </div>
-              );
-            })}
-          </div>
-        </Modal>
-      );
-    }
-
-    if (modal.type === 'selectMyColor') {
-      const isHotel = card.action === 'hotel';
-      const completeSets = Object.entries(me?.properties || {})
-        .filter(([color, cards]) => {
-          if (color === 'railroad' || color === 'utility') return false;
-          if (!isSetComplete(cards, color)) return false;
-          const b = me?.buildings?.[color] || {};
-          if (isHotel) return b.houses > 0 && !b.hotel;
-          return !b.houses && !b.hotel;
-        })
-        .map(([color]) => color);
-
-      return (
-        <Modal title={`${isHotel ? 'Otel' : 'Ev'} İçin Renk Seç`} onClose={() => setModal(null)}>
-          <div style={{ color: '#94a3b8', fontSize: 13, marginBottom: 20 }}>
-            Hangi tamamlanmış renk grubunuza bina inşa etmek istiyorsunuz?
-          </div>
-          {completeSets.length === 0 && (
-            <div style={{ textAlign: 'center', color: '#64748b', fontSize: 12, padding: '10px 0', lineHeight: 1.4 }}>
-              {isHotel
-                ? '⚠️ Otel inşa edebilmek için önce üzerinde "Ev" olan tamamlanmış bir setiniz olmalıdır (Demiryolu/Kamu hariç).'
-                : '⚠️ Ev inşa edebilmek için tamamlanmış (üzerinde henüz bina olmayan) bir arsa setiniz olmalıdır (Demiryolu/Kamu hariç).'}
-            </div>
-          )}
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-            {completeSets.map(color => {
-              const info = COLOR_INFO[color] || { hex: '#444', name: color, light: '#fff' };
-              const b = me?.buildings?.[color] || {};
-              return (
-                <button
-                  key={color}
-                  onClick={() => handlePlayCard(card, { color })}
-                  style={{
-                    ...btnStyle(info.hex),
-                    width: '100%',
-                    margin: 0,
-                    padding: '12px',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    gap: 8
-                  }}
-                >
-                  <span style={{ display: 'inline-block', width: 10, height: 10, borderRadius: '50%', background: '#fff' }} />
-                  {info.name} Seti {b.houses > 0 ? '🏠' : ''}{b.hotel ? '🏨' : ''}
-                </button>
-              );
-            })}
-          </div>
-        </Modal>
-      );
-    }
-
-    if (modal.type === 'flipColor') {
-      const card = modal.card;
-      const allColors = card.colors || Object.keys(COLOR_INFO);
-      return (
-        <Modal title={lang === 'en' ? 'Flip Property Color' : 'Mülk Rengini Değiştir'} onClose={() => setModal(null)}>
-          <div style={{ display: 'flex', flexDirection: isMobile ? 'column' : 'row', gap: 20, alignItems: 'center', justifyContent: 'center' }}>
-            {/* Left Column: 3D Visual Preview */}
-            <div style={{
-              perspective: '1000px',
-              width: 132 * 1.22,
-              height: 192 * 1.25,
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              marginBottom: isMobile ? 10 : 0
-            }}>
-              <div style={{
-                transform: 'rotateY(-12deg) rotateX(8deg)',
-                transformStyle: 'preserve-3d',
-                boxShadow: '0 15px 35px rgba(0,0,0,0.5), 0 0 15px rgba(255,215,0,0.2)',
-                borderRadius: '8px',
-                transition: 'transform 0.4s ease',
-              }}
-                onMouseEnter={(e) => e.currentTarget.style.transform = 'rotateY(0deg) rotateX(0deg) scale(1.03)'}
-                onMouseLeave={(e) => e.currentTarget.style.transform = 'rotateY(-12deg) rotateX(8deg)'}
-              >
-                <CardVisual card={card} small={false} lang={lang} />
-              </div>
-            </div>
-
-            {/* Right Column: Color Options with Rents */}
-            <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 12, width: '100%' }}>
-              <p style={{ color: '#E0E0E0', fontSize: 13, margin: 0, opacity: 0.9, lineHeight: 1.4 }}>
-                {lang === 'en' ? 'This card is currently in the' : 'Bu kart şu anda'} <span style={{ color: COLOR_INFO[card.activeColor]?.light || '#fff', fontWeight: 900, textDecoration: 'underline' }}>{getColorName(card.activeColor, lang)}</span> {lang === 'en' ? 'group. Select the new color to flip to:' : 'grubunda. Çevirmek istediğiniz yeni rengi seçin:'}
-              </p>
-
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 10, maxHeight: '280px', overflowY: 'auto', paddingRight: 4 }}>
-                {allColors.map(color => {
-                  const info = COLOR_INFO[color];
-                  if (!info) return null;
-                  const isActive = card.activeColor === color;
-
-                  return (
-                    <div
-                      key={color}
-                      onClick={() => {
-                        if (!isActive) {
-                          doFlip(card, color);
-                        }
-                      }}
-                      style={{
-                        background: isActive
-                          ? `linear-gradient(135deg, ${info.hex}88, rgba(0,0,0,0.5))`
-                          : `linear-gradient(135deg, ${info.hex}22, rgba(255,255,255,0.03))`,
-                        border: isActive
-                          ? `2px solid #FFD700`
-                          : `1px solid rgba(255, 255, 255, 0.1)`,
-                        borderRadius: '10px',
-                        padding: '10px 14px',
-                        cursor: isActive ? 'default' : 'pointer',
-                        display: 'flex',
-                        flexDirection: 'column',
-                        gap: 6,
-                        transition: 'all 0.2s ease',
-                        boxShadow: isActive ? `0 0 12px ${info.hex}55` : 'none',
-                      }}
-                      onMouseEnter={(e) => {
-                        if (!isActive) {
-                          e.currentTarget.style.background = `linear-gradient(135deg, ${info.hex}44, rgba(255,255,255,0.06))`;
-                          e.currentTarget.style.borderColor = info.hex;
-                          e.currentTarget.style.transform = 'translateX(4px)';
-                        }
-                      }}
-                      onMouseLeave={(e) => {
-                        if (!isActive) {
-                          e.currentTarget.style.background = `linear-gradient(135deg, ${info.hex}22, rgba(255,255,255,0.03))`;
-                          e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.1)';
-                          e.currentTarget.style.transform = 'none';
-                        }
-                      }}
-                    >
-                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                        <span style={{ fontWeight: 800, fontSize: 13, color: info.light || '#fff', display: 'flex', alignItems: 'center', gap: 6 }}>
-                          <span style={{ display: 'inline-block', width: 10, height: 10, borderRadius: '50%', background: info.hex, border: '1px solid rgba(255,255,255,0.3)' }}></span>
-                          {getColorName(color, lang)}
-                        </span>
-                        {isActive && (
-                          <span style={{ background: '#FFD700', color: '#000', fontSize: 9, fontWeight: 900, padding: '1px 5px', borderRadius: '6px', letterSpacing: 0.5 }}>
-                            {lang === 'en' ? 'ACTIVE GROUP' : 'AKTİF GRUP'}
-                          </span>
-                        )}
-                      </div>
-
-                      {/* Kira değerleri tablosu */}
-                      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', background: 'rgba(0,0,0,0.25)', borderRadius: '6px', padding: '4px 8px' }}>
-                        {info.rents.map((rentVal, i) => (
-                          <div key={i} style={{ fontSize: 10.5, color: '#ccc' }}>
-                            <span style={{ fontWeight: 'bold', color: '#fff' }}>{i + 1} {lang === 'en' ? (i === 0 ? 'Card' : 'Cards') : 'Kart'}:</span> {rentVal}M
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          </div>
-        </Modal>
-      );
-    }
-
-    if (modal.type === 'viewCardDetails') {
-      const card = modal.card;
-      const isProp = card.type === 'property';
-      const isAction = card.type === 'action';
-      const isMoney = card.type === 'money';
-      const baseColor = isProp && card.color ? COLOR_INFO[card.color] : null;
-      const activeColor = isProp && card.activeColor ? COLOR_INFO[card.activeColor] : null;
-
-      const ACTION_COLORS = {
-        passgo: '#3498DB',
-        dealbreaker: '#8E44AD',
-        justsayno: '#E74C3C',
-        birthday: '#E91E8C',
-        rent: '#16A085',
-        doublerent: '#D35400',
-        slydeal: '#F39C12',
-        forceddeal: '#F39C12',
-        debtcollector: '#F39C12',
-        house: '#27AE60',
-        hotel: '#1E8449'
-      };
-
-      const cardThemeColor = activeColor?.hex || baseColor?.hex || (isAction ? ACTION_COLORS[card.action] : '#95A5A6');
-      const displayName = translateCard(card, lang).name;
-
-      return (
-        <Modal title={lang === 'en' ? '🔍 CARD DETAILS' : '🔍 KART DETAYLARI'} onClose={() => setModal(null)}>
-          <div style={{ display: 'flex', flexDirection: isMobile ? 'column' : 'row', gap: 20, alignItems: 'center', justifyContent: 'center' }}>
-            {/* Left Column: Card Visual */}
-            <div style={{
-              perspective: '1000px',
-              width: 132 * 1.25,
-              height: 192 * 1.25,
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-            }}>
-              <div style={{
-                boxShadow: '0 15px 35px rgba(0,0,0,0.5)',
-                borderRadius: '12px',
-                overflow: 'hidden'
-              }}>
-                <CardVisual card={card} small={false} lang={lang} />
-              </div>
-            </div>
-
-            {/* Right Column: Card Rents or Description */}
-            <div style={{ flex: 1, color: '#fff', fontSize: 13, display: 'flex', flexDirection: 'column', gap: 10, width: '100%' }}>
-              <h3 style={{ color: cardThemeColor, margin: 0, fontSize: 18, fontWeight: 900, textTransform: 'uppercase', textShadow: '0 1px 3px rgba(0,0,0,0.4)' }}>
-                {displayName}
-              </h3>
-
-              <div style={{ fontSize: 12, background: 'rgba(255,255,255,0.05)', padding: '6px 10px', borderRadius: 6, color: '#aaa', display: 'inline-flex', alignSelf: 'flex-start' }}>
-                {lang === 'en' ? 'Value:' : 'Değer:'} <b style={{ color: '#FFD700', marginLeft: 4 }}>{card.value}M {lang === 'en' ? 'Cash' : 'Nakit'}</b>
-              </div>
-
-              {isProp && baseColor?.rents && (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 6, background: 'rgba(0,0,0,0.3)', borderRadius: 10, padding: 12, border: '1px solid rgba(255,255,255,0.08)' }}>
-                  <div style={{ fontWeight: 'black', color: '#FFD700', fontSize: 11, letterSpacing: 0.5, borderBottom: '1px solid rgba(255,255,255,0.15)', paddingBottom: 6, marginBottom: 4 }}>{lang === 'en' ? 'RENT TABLE' : 'KİRA TABLOSU'}</div>
-                  {baseColor.rents.map((r, i) => (
-                    <div key={i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 12.5, fontWeight: 'bold' }}>
-                      <span style={{ color: '#ccc' }}>{i + 1} {lang === 'en' ? 'Cards Owned:' : 'Kart Sahipliği:'}</span>
-                      <span style={{ color: '#2ECC71' }}>{r}M</span>
-                    </div>
-                  ))}
-                </div>
-              )}
-
-              {(isAction || card.description) && (
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 6, background: 'rgba(255,255,255,0.03)', borderRadius: 10, padding: 12, border: '1px solid rgba(255,255,255,0.05)' }}>
-                  <div style={{ fontWeight: 'bold', color: '#FFD700', fontSize: 11, borderBottom: '1px solid rgba(255,255,255,0.1)', paddingBottom: 6, marginBottom: 4 }}>{lang === 'en' ? 'CARD DESCRIPTION' : 'KART AÇIKLAMASI'}</div>
-                  <p style={{ lineHeight: 1.5, margin: 0, fontSize: 12, color: '#eee' }}>
-                    {getDetailedCardTip(card, lang)}
-                  </p>
-                </div>
-              )}
-            </div>
-          </div>
-        </Modal>
-      );
-    }
-    if (modal.type === 'auth') {
-      return (
-        <Modal title={authMode === 'login' ? (lang === 'en' ? '🔑 Member Login' : '🔑 Üye Girişi') : (lang === 'en' ? '📝 Register' : '📝 Kayıt Ol')} onClose={() => setModal(null)}>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 14, minWidth: 280 }}>
-            <div>
-              <label style={{ fontSize: 11, color: '#94a3b8', display: 'block', marginBottom: 4, fontWeight: 'bold' }}>{lang === 'en' ? 'USERNAME' : 'KULLANICI ADI'}</label>
-              <input
-                value={authUsername}
-                onChange={e => setAuthUsername(e.target.value)}
-                placeholder={lang === 'en' ? "username" : "kullanici_adi"}
-                style={{ ...inputStyle, background: 'rgba(0,0,0,0.3)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 8 }}
-              />
-            </div>
-            <div>
-              <label style={{ fontSize: 11, color: '#94a3b8', display: 'block', marginBottom: 4, fontWeight: 'bold' }}>{lang === 'en' ? 'PASSWORD' : 'ŞİFRE'}</label>
-              <input
-                type="password"
-                value={authPassword}
-                onChange={e => setAuthPassword(e.target.value)}
-                placeholder="••••••"
-                style={{ ...inputStyle, background: 'rgba(0,0,0,0.3)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 8 }}
-              />
-            </div>
-
-            <button
-              onClick={() => {
-                if (authMode === 'login') {
-                  handleDbLogin(authUsername, authPassword);
-                } else {
-                  handleDbRegister(authUsername, authPassword);
-                }
-              }}
-              style={{ ...btnStyle('linear-gradient(135deg, #9b59b6, #8e44ad)'), margin: '10px 0 0 0', padding: 12, borderRadius: 8 }}
-            >
-              {authMode === 'login' ? (lang === 'en' ? 'Log In' : 'Giriş Yap') : (lang === 'en' ? 'Register' : 'Kayıt Ol')}
-            </button>
-
-            <div style={{ textAlign: 'center', fontSize: 12, marginTop: 10 }}>
-              {authMode === 'login' ? (
-                <span style={{ color: '#94a3b8' }}>
-                  {lang === 'en' ? "Don't have an account? " : "Hesabınız yok mu? "}
-                  <a href="#" onClick={(e) => { e.preventDefault(); setAuthMode('register'); }} style={{ color: '#9b59b6', fontWeight: 'bold', textDecoration: 'none' }}>{lang === 'en' ? "Register here" : "Kayıt Olun"}</a>
-                </span>
-              ) : (
-                <span style={{ color: '#94a3b8' }}>
-                  {lang === 'en' ? "Already a member? " : "Zaten üye misiniz? "}
-                  <a href="#" onClick={(e) => { e.preventDefault(); setAuthMode('login'); }} style={{ color: '#9b59b6', fontWeight: 'bold', textDecoration: 'none' }}>{lang === 'en' ? "Log In here" : "Giriş Yapın"}</a>
-                </span>
-              )}
-            </div>
-          </div>
-        </Modal>
-      );
-    }
-
-    if (modal.type === 'leaderboard') {
-      return (
-        <Modal title={lang === 'en' ? "🏆 LEADERBOARD (GLOBAL)" : "🏆 LİDERLİK TABLOSU (GLOBAL)"} onClose={() => setModal(null)}>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 10, minWidth: 320, maxHeight: 400, overflowY: 'auto', paddingRight: 6 }}>
-            {/* Period Tabs */}
-            <div style={{ display: 'flex', gap: 4, marginBottom: 8, background: 'rgba(0,0,0,0.3)', padding: 3, borderRadius: 8 }}>
-              {[
-                { id: 'daily', tr: 'Günlük', en: 'Daily' },
-                { id: 'weekly', tr: 'Haftalık', en: 'Weekly' },
-                { id: 'monthly', tr: 'Aylık', en: 'Monthly' },
-                { id: 'allTime', tr: 'Genel', en: 'All-Time' }
-              ].map(t => (
-                <button
-                  key={t.id}
-                  onClick={() => { fetchLeaderboard(t.id); sfxClick(); }}
-                  style={{
-                    flex: 1,
-                    padding: '6px 4px',
-                    fontSize: 10,
-                    fontWeight: 'bold',
-                    background: leaderboardPeriod === t.id ? 'linear-gradient(135deg, #f1c40f, #f39c12)' : 'transparent',
-                    color: leaderboardPeriod === t.id ? '#000' : '#aaa',
-                    border: 'none',
-                    borderRadius: 6,
-                    cursor: 'pointer',
-                    transition: 'all 0.2s ease',
-                    textTransform: 'uppercase',
-                    letterSpacing: 0.5
-                  }}
-                >
-                  {lang === 'en' ? t.en : t.tr}
-                </button>
-              ))}
-            </div>
-
-            <div style={{ display: 'grid', gridTemplateColumns: '40px 1fr 60px 60px', borderBottom: '1px solid rgba(255,255,255,0.1)', paddingBottom: 6, fontSize: 11, fontWeight: 'bold', color: '#94a3b8' }}>
-              <span>{lang === 'en' ? 'Rank' : 'Sıra'}</span>
-              <span>{lang === 'en' ? 'Player' : 'Oyuncu'}</span>
-              <span style={{ textAlign: 'center' }}>{lang === 'en' ? 'Wins' : 'Zafer'}</span>
-              <span style={{ textAlign: 'center' }}>{lang === 'en' ? 'Points' : 'Puan'}</span>
-            </div>
-            {leaderboard.map((item) => (
-              <div
-                key={item.username}
-                style={{
-                  display: 'grid',
-                  gridTemplateColumns: '40px 1fr 60px 60px',
-                  alignItems: 'center',
-                  padding: '8px 0',
-                  borderBottom: '1px solid rgba(255,255,255,0.03)',
-                  fontSize: 12,
-                  background: item.username === dbUser?.username ? 'rgba(255,215,0,0.05)' : 'transparent',
-                  borderRadius: 6
-                }}
-              >
-                <span style={{ fontWeight: 'bold', color: item.rank === 1 ? '#FFD700' : item.rank === 2 ? '#C0C0C0' : item.rank === 3 ? '#CD7F32' : '#718096' }}>
-                  #{item.rank}
-                </span>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                  <div
-                    className={`avatar-container border-style-${item.selectedBorder || 'default'}`}
-                    style={{
-                      width: 24,
-                      height: 24,
-                      boxShadow: item.selectedBorder && item.selectedBorder !== 'default' ? 'none' : '0 1px 4px rgba(0,0,0,0.3)',
-                    }}
-                  >
-                    <img
-                      src={`https://api.dicebear.com/7.x/${item.avatar || 'avataaars'}/svg?seed=${item.username}`}
-                      alt=""
-                    />
-                  </div>
-                  <span style={{ fontWeight: item.username === dbUser?.username ? 'bold' : 'normal', color: item.username === dbUser?.username ? '#FFD700' : '#fff' }}>
-                    {item.displayName || item.username}
-                  </span>
-                </div>
-                <span style={{ textAlign: 'center', fontWeight: 'bold', color: '#2ECC71' }}>{item.wins}</span>
-                <span style={{ textAlign: 'center', fontWeight: 'bold', color: '#F1C40F' }}>{item.points}</span>
-              </div>
-            ))}
-            {leaderboard.length === 0 && (
-              <div style={{ textAlign: 'center', color: '#64748b', fontStyle: 'italic', padding: 20 }}>{lang === 'en' ? 'No players found for this period.' : 'Bu periyot için kayıtlı üye bulunmuyor.'}</div>
-            )}
-          </div>
-        </Modal>
-      );
-    }
-
-    if (modal.type === 'shop') {
-      const unlockedBorders = dbUser?.unlockedBorders || ['default'];
-      const unlockedCardBacks = dbUser?.unlockedCardBacks || ['default'];
-      const unlockedTitles = dbUser?.unlockedTitles || ['default'];
-      const unlockedPlayEffects = dbUser?.unlockedPlayEffects || ['default'];
-
-      const currentBorder = dbUser?.selectedBorder || 'default';
-      const currentCardBack = dbUser?.selectedCardBack || 'default';
-      const currentTitle = dbUser?.selectedTitle || 'default';
-      const currentPlayEffect = dbUser?.selectedPlayEffect || 'default';
-
-      const points = dbUser?.points || 0;
-
-      const previewBorder = (hoveredShopItem?.type === 'border' ? hoveredShopItem.id : currentBorder);
-      const previewCardBack = (hoveredShopItem?.type === 'cardBack' ? hoveredShopItem.id : currentCardBack);
-      const previewTitle = (hoveredShopItem?.type === 'title' ? hoveredShopItem.id : currentTitle);
-      const previewPlayEffect = (hoveredShopItem?.type === 'playEffect' ? hoveredShopItem.id : currentPlayEffect);
-
-      const borderItems = [
-        { id: 'gold', name: { tr: 'Altın Çerçeve', en: 'Gold Border' }, cost: 150, color: '#FFD700', desc: { tr: 'Göz alıcı altın ışıltısı', en: 'Premium golden glow' } },
-        { id: 'neon', name: { tr: 'Neon Çerçeve', en: 'Neon Border' }, cost: 250, color: '#ff00ff', desc: { tr: 'Fütüristik mor neon parlaması', en: 'Vibrant neon purple glow' } },
-        { id: 'cyber', name: { tr: 'Siber Çerçeve', en: 'Cyber Border' }, cost: 350, color: '#39ff14', desc: { tr: 'Hacker yeşili matrix efekti', en: 'Cyberpunk green glow' } },
-        { id: 'flame', name: { tr: 'Alevli Çerçeve', en: 'Flame Border' }, cost: 500, color: '#ff4500', desc: { tr: 'Efsanevi yanan alev halkası', en: 'Legendary burning flame border' } },
-        { id: 'cosmic', name: { tr: 'Kozmik Çerçeve', en: 'Cosmic Border' }, cost: 600, color: '#8e44ad', desc: { tr: 'Uzay yıldızlı gizemli çerçeve', en: 'Mysterious space nebula border' } }
-      ];
-
-      const cardBackItems = [
-        { id: 'naruto', name: { tr: 'Naruto Teması', en: 'Naruto Back' }, cost: 150, symbol: '🍥', bg: 'linear-gradient(135deg, #ff5722, #e64a19)', border: '#ffeb3b', desc: { tr: 'Girdap logolu turuncu arkalık', en: 'Orange vortex card design' } },
-        { id: 'onepiece', name: { tr: 'One Piece Teması', en: 'One Piece Back' }, cost: 250, symbol: '☠️', bg: 'linear-gradient(135deg, #2a2a2a, #0d0d0d)', border: '#f1c40f', desc: { tr: 'Korsan logolu karanlık arkalık', en: 'Dark Strawhat Jolly Roger design' } },
-        { id: 'cyberpunk', name: { tr: 'Cyberpunk Teması', en: 'Cyberpunk Back' }, cost: 350, symbol: '⚡', bg: 'linear-gradient(135deg, #0f0f1b, #f7df1e)', border: '#39ff14', desc: { tr: 'Matris yeşili neon siber desen', en: 'Neon hacker matrix layout' } }
-      ];
-
-      const titleItems = [
-        { id: 'gold', name: { tr: '💰 Para Babası', en: '💰 Money Bag' }, cost: 100, color: '#FFD700', desc: { tr: 'Altın renkli parıldayan unvan', en: 'Gold shimmering profile title' } },
-        { id: 'flame', name: { tr: '🔥 Sinsi Hırsız', en: '🔥 Sly Thief' }, cost: 200, color: '#ff4500', desc: { tr: 'Yanan alevli sinsi unvan', en: 'Flaming red thief profile title' } },
-        { id: 'cyber', name: { tr: '⚡ Siber Kartal', en: '⚡ Cyber Falcon' }, cost: 300, color: '#39ff14', desc: { tr: 'Matris yeşili neon siber unvan', en: 'Cyberpunk glowing profile title' } },
-        { id: 'kral', name: { tr: '👑 Oyunun Kralı', en: '👑 Game King' }, cost: 450, color: '#f1c40f', desc: { tr: 'Altın renkli hareketli unvan', en: 'Golden bouncing king profile title' } },
-        { id: 'cosmic', name: { tr: '🌌 Kozmik Efendi', en: '🌌 Cosmic Lord' }, cost: 500, color: '#8e44ad', desc: { tr: 'Nebula moru dönen kozmik unvan', en: 'Space rotating celestial title' } }
-      ];
-
-      const playEffectItems = [
-        { id: 'gold', name: { tr: '✨ Yıldız Patlaması', en: '✨ Star Explosion' }, cost: 150, symbol: '✨', bg: 'linear-gradient(135deg, #FFD700, #F39C12)', border: '#ffe57f', desc: { tr: 'Kart atınca altın yıldızlar saçar', en: 'Gold stars fly out on play' } },
-        { id: 'heart', name: { tr: '💖 Neon Kalpler', en: '💖 Neon Hearts' }, cost: 250, symbol: '💖', bg: 'linear-gradient(135deg, #e91e63, #ad1457)', border: '#ff80ab', desc: { tr: 'Pembe renkli parlayan kalpler atar', en: 'Glow hearts fly out on play' } },
-        { id: 'flame', name: { tr: '🔥 Alev Topları', en: '🔥 Fireballs' }, cost: 350, symbol: '🔥', bg: 'linear-gradient(135deg, #d35400, #e67e22)', border: '#ffab40', desc: { tr: 'Yanan kırmızı alev kıvılcımları saçar', en: 'Fire ember sparks fly out on play' } },
-        { id: 'cosmic', name: { tr: '☄️ Kozmik Meteor', en: '☄️ Cosmic Meteor' }, cost: 400, symbol: '☄️', bg: 'linear-gradient(135deg, #8e44ad, #2980b9)', border: '#b388ff', desc: { tr: 'Mor renkli kayan yıldızlar saçar', en: 'Celestial stardust flies out on play' } }
-      ];
-
-      return (
-        <Modal title={lang === 'en' ? "🛍️ CUSTOMIZATION SHOP" : "🛍️ ÖZELLEŞTİRME MAĞAZASI"} onClose={() => { setModal(null); setHoveredShopItem(null); }}>
-          {/* Shop purchase coin splash overlay */}
-          {shopCoins.map(coin => (
-            <div
-              key={coin.id}
-              className="coin-spray-particle"
-              style={{
-                left: coin.x,
-                top: coin.y,
-                '--dx': coin.dx,
-                '--dy': coin.dy,
-                '--dr': coin.dr
-              }}
-            >
-              🪙
-            </div>
-          ))}
-
-          <div className="shop-layout">
-            {/* LEFT SIDE: Preview */}
-            <div className="shop-preview-side">
-              <span style={{ fontSize: 11, fontWeight: 900, color: '#94a3b8', letterSpacing: 1, textTransform: 'uppercase' }}>
-                {lang === 'en' ? 'LIVE PREVIEW' : 'CANLI ÖNİZLEME'}
-              </span>
-
-              <div className="preview-card-floating">
-                {/* 3D Preview Border Card */}
-                <div className="preview-card-3d">
-                  <div
-                    className={`avatar-container border-style-${previewBorder}`}
-                    style={{ width: 64, height: 64, marginBottom: 12 }}
-                  >
-                    <img
-                      src={`https://api.dicebear.com/7.x/${myAvatarStyle}/svg?seed=${myName || 'user'}`}
-                      alt="avatar"
-                    />
-                  </div>
-                  <span style={{ fontSize: 12, fontWeight: 900, color: '#fff', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '100%', display: 'block', marginBottom: 2 }}>
-                    {myName || 'Oyuncu'}
-                  </span>
-                  
-                  {/* PREVIEW TITLE */}
-                  <div className={`title-style-${previewTitle}`} style={{ fontSize: 9.5, fontWeight: 'bold', display: 'block', marginBottom: 6 }}>
-                    {
-                      previewTitle === 'default'
-                        ? (lang === 'en' ? 'Classic Player' : 'Klasik Oyuncu')
-                        : titleItems.find(t => t.id === previewTitle)?.name[lang] || previewTitle
-                    }
-                  </div>
-
-                  <span style={{ fontSize: 8, color: '#64748b', fontWeight: 'bold' }}>
-                    {lang === 'en' ? 'SHOP ITEM PREVIEWS' : 'MAĞAZA ÖNİZLEMELERİ'}
-                  </span>
-                </div>
-
-                <div style={{ marginTop: 15, display: 'flex', flexDirection: 'row', alignItems: 'center', gap: 15 }}>
-                  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4 }}>
-                    <span style={{ fontSize: 8, fontWeight: 900, color: '#64748b', letterSpacing: 0.5 }}>
-                      {lang === 'en' ? 'CARD BACK' : 'KART ARKALIĞI'}
-                    </span>
-                    <div style={{ width: 30, height: 42, borderRadius: 6, overflow: 'hidden', boxShadow: '0 4px 10px rgba(0,0,0,0.3)' }}>
-                      <CardBack theme={previewCardBack} small />
-                    </div>
-                  </div>
-                  
-                  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4 }}>
-                    <span style={{ fontSize: 8, fontWeight: 900, color: '#64748b', letterSpacing: 0.5 }}>
-                      {lang === 'en' ? 'EFFECT' : 'HAMLE EFEKTİ'}
-                    </span>
-                    <div style={{
-                      width: 30, height: 42, borderRadius: 6,
-                      background: previewPlayEffect === 'default' ? 'linear-gradient(135deg, #1e293b, #0f172a)' : (playEffectItems.find(e => e.id === previewPlayEffect)?.bg || 'linear-gradient(135deg, #1e293b, #0f172a)'),
-                      border: `1px solid ${previewPlayEffect === 'default' ? 'rgba(255,255,255,0.1)' : (playEffectItems.find(e => e.id === previewPlayEffect)?.border || 'rgba(255,255,255,0.1)')}`,
-                      display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 16,
-                      boxShadow: '0 4px 10px rgba(0,0,0,0.3)'
-                    }}>
-                      {previewPlayEffect === 'default' ? '💸' : (playEffectItems.find(e => e.id === previewPlayEffect)?.symbol || '💸')}
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            {/* RIGHT SIDE: List & Items */}
-            <div className="shop-items-area">
-              {/* Points balance */}
-              <div style={{
-                display: 'flex',
-                justifyContent: 'space-between',
-                alignItems: 'center',
-                background: 'rgba(255, 215, 0, 0.08)',
-                border: '1px solid rgba(255, 215, 0, 0.2)',
-                borderRadius: 12,
-                padding: '10px 16px',
-                fontSize: 13,
-                fontWeight: 'bold',
-                color: '#FFD700',
-                boxSizing: 'border-box'
-              }}>
-                <span>{lang === 'en' ? 'YOUR BALANCE:' : 'MEVCUT PUANINIZ:'}</span>
-                <span style={{ fontSize: 16, letterSpacing: 0.5 }}>🪙 {points} PTS</span>
-              </div>
-
-              {/* Borders Section */}
-              <div>
-                <h3 style={{ fontSize: 11, color: '#94a3b8', borderBottom: '1px solid rgba(255,255,255,0.08)', paddingBottom: 4, marginBottom: 10, textTransform: 'uppercase', letterSpacing: 0.5 }}>
-                  {lang === 'en' ? 'Profile Borders' : 'Profil Çerçeveleri'}
-                </h3>
-                <div className="shop-items-grid">
-                  {/* Default Border Card */}
-                  <div
-                    className={`shop-item-card ${currentBorder === 'default' ? 'is-active' : ''}`}
-                    style={{
-                      '--card-accent': '#aaa',
-                      '--card-glow': 'rgba(255,255,255,0.05)'
-                    }}
-                    onMouseEnter={() => setHoveredShopItem({ type: 'border', id: 'default' })}
-                    onMouseLeave={() => setHoveredShopItem(null)}
-                    onClick={() => currentBorder !== 'default' && handleSelectCustomization('border', 'default')}
-                  >
-                    <div className="avatar-container border-style-default" style={{ width: 44, height: 44, marginBottom: 8 }}>
-                      <img src={`https://api.dicebear.com/7.x/${myAvatarStyle}/svg?seed=${myName || 'user'}`} alt="" />
-                    </div>
-                    <div style={{ fontSize: 11, fontWeight: 'bold', color: '#fff', marginBottom: 2 }}>
-                      {lang === 'en' ? 'Classic' : 'Klasik'}
-                    </div>
-                    <div style={{ fontSize: 8, color: '#64748b', height: 20, overflow: 'hidden', lineHeight: 1.1 }}>
-                      {lang === 'en' ? 'Standard look' : 'Standart çerçeve'}
-                    </div>
-                    <div style={{ marginTop: 8, width: '100%' }}>
-                      {currentBorder === 'default' ? (
-                        <span style={{ fontSize: 9, fontWeight: 900, color: '#39ff14', background: 'rgba(57,255,20,0.1)', padding: '3px 8px', borderRadius: 6, display: 'block' }}>{lang === 'en' ? 'ACTIVE' : 'AKTİF'}</span>
-                      ) : (
-                        <span style={{ fontSize: 9, fontWeight: 900, color: '#94a3b8', background: 'rgba(255,255,255,0.05)', padding: '3px 8px', borderRadius: 6, display: 'block' }}>{lang === 'en' ? 'EQUIP' : 'KUŞAN'}</span>
                       )}
                     </div>
                   </div>
-
-                  {/* Custom Borders Cards */}
-                  {borderItems.map(item => {
-                    const unlocked = unlockedBorders.includes(item.id);
-                    const active = currentBorder === item.id;
-
-                    return (
-                      <div
-                        key={item.id}
-                        className={`shop-item-card ${active ? 'is-active' : ''}`}
-                        style={{
-                          '--card-accent': item.color,
-                          '--card-glow': `${item.color}33`
-                        }}
-                        onMouseEnter={() => setHoveredShopItem({ type: 'border', id: item.id })}
-                        onMouseLeave={() => setHoveredShopItem(null)}
-                      >
-                        <div className={`avatar-container border-style-${item.id}`} style={{ width: 44, height: 44, marginBottom: 8 }}>
-                          <img src={`https://api.dicebear.com/7.x/${myAvatarStyle}/svg?seed=${myName || 'user'}`} alt="" />
-                        </div>
-                        <div style={{ fontSize: 11, fontWeight: 'bold', color: item.color, marginBottom: 2 }}>
-                          {lang === 'en' ? item.name.en : item.name.tr}
-                        </div>
-                        <div style={{ fontSize: 8, color: '#64748b', height: 20, overflow: 'hidden', lineHeight: 1.1 }}>
-                          {lang === 'en' ? item.desc.en : item.desc.tr}
-                        </div>
-                        <div style={{ marginTop: 8, width: '100%' }}>
-                          {active ? (
-                            <span style={{ fontSize: 9, fontWeight: 900, color: '#39ff14', background: 'rgba(57,255,20,0.1)', padding: '3px 8px', borderRadius: 6, display: 'block' }}>{lang === 'en' ? 'ACTIVE' : 'AKTİF'}</span>
-                          ) : unlocked ? (
-                            <button
-                              onClick={() => handleSelectCustomization('border', item.id)}
-                              style={{ width: '100%', background: 'rgba(255,255,255,0.08)', border: 'none', color: '#fff', fontSize: 9, fontWeight: 'bold', padding: '4px 8px', borderRadius: 6, cursor: 'pointer' }}
-                            >
-                              {lang === 'en' ? 'EQUIP' : 'KUŞAN'}
-                            </button>
-                          ) : (
-                            <button
-                              onClick={(e) => handleBuyCustomization('border', item.id, item.cost, e)}
-                              disabled={points < item.cost}
-                              style={{
-                                width: '100%',
-                                background: points >= item.cost ? `linear-gradient(135deg, ${item.color}, #000)` : 'rgba(255,255,255,0.03)',
-                                color: points >= item.cost ? '#fff' : '#555',
-                                border: 'none',
-                                fontSize: 9,
-                                fontWeight: 'bold',
-                                padding: '4px 8px',
-                                borderRadius: 6,
-                                cursor: points >= item.cost ? 'pointer' : 'default',
-                                boxShadow: points >= item.cost ? `0 2px 8px ${item.color}33` : 'none'
-                              }}
-                            >
-                              🪙 {item.cost}
-                            </button>
-                          )}
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
+                )}
               </div>
-
-              {/* Card Backs Section */}
-              <div>
-                <h3 style={{ fontSize: 11, color: '#94a3b8', borderBottom: '1px solid rgba(255,255,255,0.08)', paddingBottom: 4, marginBottom: 10, textTransform: 'uppercase', letterSpacing: 0.5 }}>
-                  {lang === 'en' ? 'Card Backs' : 'Kart Arkalıkları'}
-                </h3>
-                <div className="shop-items-grid">
-                  {/* Default Card Back Card */}
-                  <div
-                    className={`shop-item-card ${currentCardBack === 'default' ? 'is-active' : ''}`}
-                    style={{
-                      '--card-accent': '#c0392b',
-                      '--card-glow': 'rgba(192, 57, 43, 0.15)'
-                    }}
-                    onMouseEnter={() => setHoveredShopItem({ type: 'cardBack', id: 'default' })}
-                    onMouseLeave={() => setHoveredShopItem(null)}
-                    onClick={() => currentCardBack !== 'default' && handleSelectCustomization('cardBack', 'default')}
-                  >
-                    <div style={{ width: 30, height: 40, borderRadius: 4, background: 'linear-gradient(135deg, #c0392b, #78281f)', border: '1px solid #f1c40f', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 14, marginBottom: 8 }}>🎲</div>
-                    <div style={{ fontSize: 11, fontWeight: 'bold', color: '#fff', marginBottom: 2 }}>
-                      {lang === 'en' ? 'Classic Red' : 'Klasik Kırmızı'}
-                    </div>
-                    <div style={{ fontSize: 8, color: '#64748b', height: 20, overflow: 'hidden', lineHeight: 1.1 }}>
-                      {lang === 'en' ? 'Standard Red' : 'Standart kırmızı deste'}
-                    </div>
-                    <div style={{ marginTop: 8, width: '100%' }}>
-                      {currentCardBack === 'default' ? (
-                        <span style={{ fontSize: 9, fontWeight: 900, color: '#39ff14', background: 'rgba(57,255,20,0.1)', padding: '3px 8px', borderRadius: 6, display: 'block' }}>{lang === 'en' ? 'ACTIVE' : 'AKTİF'}</span>
-                      ) : (
-                        <span style={{ fontSize: 9, fontWeight: 900, color: '#94a3b8', background: 'rgba(255,255,255,0.05)', padding: '3px 8px', borderRadius: 6, display: 'block' }}>{lang === 'en' ? 'EQUIP' : 'KUŞAN'}</span>
-                      )}
-                    </div>
-                  </div>
-
-                  {/* Custom Card Backs Cards */}
-                  {cardBackItems.map(item => {
-                    const unlocked = unlockedCardBacks.includes(item.id);
-                    const active = currentCardBack === item.id;
-
-                    return (
-                      <div
-                        key={item.id}
-                        className={`shop-item-card ${active ? 'is-active' : ''}`}
-                        style={{
-                          '--card-accent': item.border,
-                          '--card-glow': `${item.border}33`
-                        }}
-                        onMouseEnter={() => setHoveredShopItem({ type: 'cardBack', id: item.id })}
-                        onMouseLeave={() => setHoveredShopItem(null)}
-                      >
-                        <div style={{ width: 30, height: 40, borderRadius: 4, background: item.bg, border: `1.5px solid ${item.border}`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 14, color: '#fff', marginBottom: 8 }}>{item.symbol}</div>
-                        <div style={{ fontSize: 11, fontWeight: 'bold', color: item.border, marginBottom: 2 }}>
-                          {lang === 'en' ? item.name.en : item.name.tr}
-                        </div>
-                        <div style={{ fontSize: 8, color: '#64748b', height: 20, overflow: 'hidden', lineHeight: 1.1 }}>
-                          {lang === 'en' ? item.desc.en : item.desc.tr}
-                        </div>
-                        <div style={{ marginTop: 8, width: '100%' }}>
-                          {active ? (
-                            <span style={{ fontSize: 9, fontWeight: 900, color: '#39ff14', background: 'rgba(57,255,20,0.1)', padding: '3px 8px', borderRadius: 6, display: 'block' }}>{lang === 'en' ? 'ACTIVE' : 'AKTİF'}</span>
-                          ) : unlocked ? (
-                            <button
-                              onClick={() => handleSelectCustomization('cardBack', item.id)}
-                              style={{ width: '100%', background: 'rgba(255,255,255,0.08)', border: 'none', color: '#fff', fontSize: 9, fontWeight: 'bold', padding: '4px 8px', borderRadius: 6, cursor: 'pointer' }}
-                            >
-                              {lang === 'en' ? 'EQUIP' : 'KUŞAN'}
-                            </button>
-                          ) : (
-                            <button
-                              onClick={(e) => handleBuyCustomization('cardBack', item.id, item.cost, e)}
-                              disabled={points < item.cost}
-                              style={{
-                                width: '100%',
-                                background: points >= item.cost ? `linear-gradient(135deg, ${item.border}, #000)` : 'rgba(255,255,255,0.03)',
-                                color: points >= item.cost ? '#fff' : '#555',
-                                border: 'none',
-                                fontSize: 9,
-                                fontWeight: 'bold',
-                                padding: '4px 8px',
-                                borderRadius: 6,
-                                cursor: points >= item.cost ? 'pointer' : 'default',
-                                boxShadow: points >= item.cost ? `0 2px 8px ${item.border}33` : 'none'
-                              }}
-                            >
-                              🪙 {item.cost}
-                            </button>
-                          )}
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-
-              {/* Titles Section */}
-              <div style={{ marginTop: 15 }}>
-                <h3 style={{ fontSize: 11, color: '#94a3b8', borderBottom: '1px solid rgba(255,255,255,0.08)', paddingBottom: 4, marginBottom: 10, textTransform: 'uppercase', letterSpacing: 0.5 }}>
-                  {lang === 'en' ? 'Profile Titles' : 'Profil Unvanları'}
-                </h3>
-                <div className="shop-items-grid">
-                  {/* Default Title */}
-                  <div
-                    className={`shop-item-card ${currentTitle === 'default' ? 'is-active' : ''}`}
-                    style={{
-                      '--card-accent': '#64748b',
-                      '--card-glow': 'rgba(100, 116, 139, 0.15)'
-                    }}
-                    onMouseEnter={() => setHoveredShopItem({ type: 'title', id: 'default' })}
-                    onMouseLeave={() => setHoveredShopItem(null)}
-                    onClick={() => currentTitle !== 'default' && handleSelectCustomization('title', 'default')}
-                  >
-                    <div style={{ fontSize: 18, marginBottom: 6 }}>👤</div>
-                    <div style={{ fontSize: 11, fontWeight: 'bold', color: '#fff', marginBottom: 2 }}>
-                      {lang === 'en' ? 'Classic Player' : 'Klasik Oyuncu'}
-                    </div>
-                    <div style={{ fontSize: 8, color: '#64748b', height: 20, overflow: 'hidden', lineHeight: 1.1 }}>
-                      {lang === 'en' ? 'Standard profile title' : 'Standart oyuncu unvanı'}
-                    </div>
-                    <div style={{ marginTop: 8, width: '100%' }}>
-                      {currentTitle === 'default' ? (
-                        <span style={{ fontSize: 9, fontWeight: 900, color: '#39ff14', background: 'rgba(57,255,20,0.1)', padding: '3px 8px', borderRadius: 6, display: 'block' }}>{lang === 'en' ? 'ACTIVE' : 'AKTİF'}</span>
-                      ) : (
-                        <span style={{ fontSize: 9, fontWeight: 900, color: '#94a3b8', background: 'rgba(255,255,255,0.05)', padding: '3px 8px', borderRadius: 6, display: 'block' }}>{lang === 'en' ? 'EQUIP' : 'KUŞAN'}</span>
-                      )}
-                    </div>
-                  </div>
-
-                  {/* Custom Titles */}
-                  {titleItems.map(item => {
-                    const unlocked = unlockedTitles.includes(item.id);
-                    const active = currentTitle === item.id;
-
-                    return (
-                      <div
-                        key={item.id}
-                        className={`shop-item-card ${active ? 'is-active' : ''}`}
-                        style={{
-                          '--card-accent': item.color,
-                          '--card-glow': `${item.color}33`
-                        }}
-                        onMouseEnter={() => setHoveredShopItem({ type: 'title', id: item.id })}
-                        onMouseLeave={() => setHoveredShopItem(null)}
-                      >
-                        <div className={`title-style-${item.id}`} style={{ fontSize: 12, fontWeight: 'bold', height: 16, marginBottom: 12, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                          {item.name[lang]}
-                        </div>
-                        <div style={{ fontSize: 11, fontWeight: 'bold', color: item.color, marginBottom: 2 }}>
-                          {lang === 'en' ? 'Animated Title' : 'Hareketli Unvan'}
-                        </div>
-                        <div style={{ fontSize: 8, color: '#64748b', height: 20, overflow: 'hidden', lineHeight: 1.1 }}>
-                          {lang === 'en' ? item.desc.en : item.desc.tr}
-                        </div>
-                        <div style={{ marginTop: 8, width: '100%' }}>
-                          {active ? (
-                            <span style={{ fontSize: 9, fontWeight: 900, color: '#39ff14', background: 'rgba(57,255,20,0.1)', padding: '3px 8px', borderRadius: 6, display: 'block' }}>{lang === 'en' ? 'ACTIVE' : 'AKTİF'}</span>
-                          ) : unlocked ? (
-                            <button
-                              onClick={() => handleSelectCustomization('title', item.id)}
-                              style={{ width: '100%', background: 'rgba(255,255,255,0.08)', border: 'none', color: '#fff', fontSize: 9, fontWeight: 'bold', padding: '4px 8px', borderRadius: 6, cursor: 'pointer' }}
-                            >
-                              {lang === 'en' ? 'EQUIP' : 'KUŞAN'}
-                            </button>
-                          ) : (
-                            <button
-                              onClick={(e) => handleBuyCustomization('title', item.id, item.cost, e)}
-                              disabled={points < item.cost}
-                              style={{
-                                width: '100%',
-                                background: points >= item.cost ? `linear-gradient(135deg, ${item.color}, #000)` : 'rgba(255,255,255,0.03)',
-                                color: points >= item.cost ? '#fff' : '#555',
-                                border: 'none',
-                                fontSize: 9,
-                                fontWeight: 'bold',
-                                padding: '4px 8px',
-                                borderRadius: 6,
-                                cursor: points >= item.cost ? 'pointer' : 'default',
-                                boxShadow: points >= item.cost ? `0 2px 8px ${item.color}33` : 'none'
-                              }}
-                            >
-                              🪙 {item.cost}
-                            </button>
-                          )}
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-
-              {/* Play Effects Section */}
-              <div style={{ marginTop: 15 }}>
-                <h3 style={{ fontSize: 11, color: '#94a3b8', borderBottom: '1px solid rgba(255,255,255,0.08)', paddingBottom: 4, marginBottom: 10, textTransform: 'uppercase', letterSpacing: 0.5 }}>
-                  {lang === 'en' ? 'Play Card Effects' : 'Kart Fırlatma Efektleri'}
-                </h3>
-                <div className="shop-items-grid">
-                  {/* Default Play Effect */}
-                  <div
-                    className={`shop-item-card ${currentPlayEffect === 'default' ? 'is-active' : ''}`}
-                    style={{
-                      '--card-accent': '#3498db',
-                      '--card-glow': 'rgba(52, 152, 219, 0.15)'
-                    }}
-                    onMouseEnter={() => setHoveredShopItem({ type: 'playEffect', id: 'default' })}
-                    onMouseLeave={() => setHoveredShopItem(null)}
-                    onClick={() => currentPlayEffect !== 'default' && handleSelectCustomization('playEffect', 'default')}
-                  >
-                    <div style={{ width: 30, height: 40, borderRadius: 4, background: 'linear-gradient(135deg, #1e293b, #0f172a)', border: '1px solid rgba(255,255,255,0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 14, marginBottom: 8 }}>💸</div>
-                    <div style={{ fontSize: 11, fontWeight: 'bold', color: '#fff', marginBottom: 2 }}>
-                      {lang === 'en' ? 'Classic Money' : 'Para Fırlatma'}
-                    </div>
-                    <div style={{ fontSize: 8, color: '#64748b', height: 20, overflow: 'hidden', lineHeight: 1.1 }}>
-                      {lang === 'en' ? 'Standard money spray' : 'Klasik para fırlatma efekti'}
-                    </div>
-                    <div style={{ marginTop: 8, width: '100%' }}>
-                      {currentPlayEffect === 'default' ? (
-                        <span style={{ fontSize: 9, fontWeight: 900, color: '#39ff14', background: 'rgba(57,255,20,0.1)', padding: '3px 8px', borderRadius: 6, display: 'block' }}>{lang === 'en' ? 'ACTIVE' : 'AKTİF'}</span>
-                      ) : (
-                        <span style={{ fontSize: 9, fontWeight: 900, color: '#94a3b8', background: 'rgba(255,255,255,0.05)', padding: '3px 8px', borderRadius: 6, display: 'block' }}>{lang === 'en' ? 'EQUIP' : 'KUŞAN'}</span>
-                      )}
-                    </div>
-                  </div>
-
-                  {/* Custom Play Effects */}
-                  {playEffectItems.map(item => {
-                    const unlocked = unlockedPlayEffects.includes(item.id);
-                    const active = currentPlayEffect === item.id;
-
-                    return (
-                      <div
-                        key={item.id}
-                        className={`shop-item-card ${active ? 'is-active' : ''}`}
-                        style={{
-                          '--card-accent': item.border,
-                          '--card-glow': `${item.border}33`
-                        }}
-                        onMouseEnter={() => setHoveredShopItem({ type: 'playEffect', id: item.id })}
-                        onMouseLeave={() => setHoveredShopItem(null)}
-                      >
-                        <div style={{ width: 30, height: 40, borderRadius: 4, background: item.bg, border: `1.5px solid ${item.border}`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 14, color: '#fff', marginBottom: 8 }}>{item.symbol}</div>
-                        <div style={{ fontSize: 11, fontWeight: 'bold', color: item.border, marginBottom: 2 }}>
-                          {lang === 'en' ? item.name.en : item.name.tr}
-                        </div>
-                        <div style={{ fontSize: 8, color: '#64748b', height: 20, overflow: 'hidden', lineHeight: 1.1 }}>
-                          {lang === 'en' ? item.desc.en : item.desc.tr}
-                        </div>
-                        <div style={{ marginTop: 8, width: '100%' }}>
-                          {active ? (
-                            <span style={{ fontSize: 9, fontWeight: 900, color: '#39ff14', background: 'rgba(57,255,20,0.1)', padding: '3px 8px', borderRadius: 6, display: 'block' }}>{lang === 'en' ? 'ACTIVE' : 'AKTİF'}</span>
-                          ) : unlocked ? (
-                            <button
-                              onClick={() => handleSelectCustomization('playEffect', item.id)}
-                              style={{ width: '100%', background: 'rgba(255,255,255,0.08)', border: 'none', color: '#fff', fontSize: 9, fontWeight: 'bold', padding: '4px 8px', borderRadius: 6, cursor: 'pointer' }}
-                            >
-                              {lang === 'en' ? 'EQUIP' : 'KUŞAN'}
-                            </button>
-                          ) : (
-                            <button
-                              onClick={(e) => handleBuyCustomization('playEffect', item.id, item.cost, e)}
-                              disabled={points < item.cost}
-                              style={{
-                                width: '100%',
-                                background: points >= item.cost ? `linear-gradient(135deg, ${item.border}, #000)` : 'rgba(255,255,255,0.03)',
-                                color: points >= item.cost ? '#fff' : '#555',
-                                border: 'none',
-                                fontSize: 9,
-                                fontWeight: 'bold',
-                                padding: '4px 8px',
-                                borderRadius: 6,
-                                cursor: points >= item.cost ? 'pointer' : 'default',
-                                boxShadow: points >= item.cost ? `0 2px 8px ${item.border}33` : 'none'
-                              }}
-                            >
-                              🪙 {item.cost}
-                            </button>
-                          )}
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-
-            </div>
-          </div>
-        </Modal>
-      );
-    }
-
-    return null;
-  };
-
-  // ---- LOBİ AYARLARI PANELİ OLUŞTURUCU ----
-  const renderRoomSettings = (disabled = false) => {
-    const selStyle = { background: 'rgba(0,0,0,0.6)', color: '#fff', border: '1px solid rgba(255,255,255,0.15)', borderRadius: 8, padding: '8px 12px', outline: 'none', cursor: 'pointer', fontSize: 13, width: '100%', boxSizing: 'border-box' };
-    const descStyle = { fontSize: 10, color: '#94a3b8', marginTop: 3, display: 'block', fontStyle: 'italic', lineHeight: 1.3, letterSpacing: 0.2 };
-    return (
-      <details className="settings-details" style={{ pointerEvents: disabled ? 'none' : 'auto', opacity: disabled ? 0.8 : 1, marginTop: 12, width: '100%' }}>
-        <summary style={{ fontWeight: 800, color: '#FFD700', letterSpacing: 0.5, cursor: 'pointer', padding: '8px 4px', borderBottom: '1px solid rgba(255,255,255,0.08)' }}>{lang === 'en' ? '⚙️ ADVANCED ROOM SETTINGS' : '⚙️ GELİŞMİŞ OYUN AYARLARI'}</summary>
-        <div className="settings-content" style={{ display: 'flex', flexDirection: 'column', gap: 16, marginTop: 12 }}>
-
-          {/* Hazır Şablonlar */}
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 12px', background: 'rgba(255,215,0,0.05)', borderRadius: 10, border: '1px solid rgba(255,215,0,0.15)' }}>
-            <span style={{ fontSize: 12, color: '#FFD700', fontWeight: 'bold' }}>{lang === 'en' ? '🎮 Presets:' : '🎮 Hazır Şablonlar:'}</span>
-            <select onChange={e => e.target.value && applyPreset(e.target.value)} style={{ background: 'rgba(0,0,0,0.5)', color: '#fff', border: '1px solid #FFD700', borderRadius: 8, padding: '6px 12px', outline: 'none', cursor: 'pointer', fontSize: 11 }}>
-              <option value="">{lang === 'en' ? 'Select Preset...' : 'Şablon Seç...'}</option>
-              <option value="classic">{lang === 'en' ? '🎲 Classic Mode' : '🎲 Klasik Mod'}</option>
-              <option value="speed">{lang === 'en' ? '⚡ Speed Mode' : '⚡ Hızlı Başlangıç'}</option>
-              <option value="chaos">{lang === 'en' ? '🔥 Chaos Mode' : '🔥 Kaos Modu'}</option>
-            </select>
-          </div>
-
-          {/* Bölüm 1: Genel Akış ve Hedefler */}
-          <div style={{ background: 'rgba(0,0,0,0.2)', padding: 12, borderRadius: 10, border: '1px solid rgba(255,255,255,0.04)' }}>
-            <h4 style={{ color: '#3498DB', fontSize: 11, fontWeight: 900, margin: '0 0 10px 0', letterSpacing: 1, textTransform: 'uppercase' }}>{lang === 'en' ? '⚡ GAME FLOW' : '⚡ OYUN AKIŞI'}</h4>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-              <div style={{ marginBottom: 4 }}>
-                <span style={{ fontSize: 11, color: '#a0aec0', display: 'block', marginBottom: 4 }}>{lang === 'en' ? '🎮 Game Mode:' : '🎮 Oyun Modu:'}</span>
-                <select value={roomSettings.gameMode || 'normal'} onChange={e => {
-                  const mode = e.target.value;
-                  setRoomSettings(prev => {
-                    const updated = { ...prev, gameMode: mode };
-                    if (mode === 'blitz') {
-                      updated.turnTimer = 15;
-                      updated.startCards = 7;
-                      updated.winSets = 2;
-                    } else if (mode === 'scavenge') {
-                      updated.streetThugs = true;
-                    }
-                    return updated;
-                  });
-                }} style={selStyle}>
-                  <option value="normal">{lang === 'en' ? '🎲 Normal Mode' : '🎲 Normal Mod'}</option>
-                  <option value="blitz">{lang === 'en' ? '⚡ Blitz Mode (15s, 7 Cards, 2 Sets)' : '⚡ Blitz Modu (15sn, 7 Kart, 2 Set)'}</option>
-                  <option value="scavenge">{lang === 'en' ? '🕵️ Scavenge Madness (Free Karaborsa)' : '🕵️ Karaborsa Çılgınlığı (Bedava Karaborsa)'}</option>
-                </select>
-                <span style={descStyle}>
-                  {lang === 'en' ? '🎮 Alters turn time, starting cards, and Black Market costs.' : '🎮 Sıra süresi, başlangıç kartları ve Karaborsa bedelini otomatik belirler.'}
-                </span>
-              </div>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
-                <div>
-                  <span style={{ fontSize: 11, color: '#a0aec0', display: 'block', marginBottom: 4 }}>{lang === 'en' ? 'Win Condition:' : 'Kazanma Hedefi:'}</span>
-                  <select value={roomSettings.winSets} onChange={e => setRoomSettings(prev => ({ ...prev, winSets: Number(e.target.value) }))} style={selStyle}>
-                    <option value={2}>{lang === 'en' ? '2 Sets (Fast)' : '2 Set (Hızlı)'}</option>
-                    <option value={3}>{lang === 'en' ? '3 Sets (Classic)' : '3 Set (Klasik)'}</option>
-                    <option value={4}>{lang === 'en' ? '4 Sets (Long)' : '4 Set (Uzun)'}</option>
-                    <option value={5}>{lang === 'en' ? '5 Sets (Epic)' : '5 Set (Destansı)'}</option>
-                  </select>
-                </div>
-                <div>
-                  <span style={{ fontSize: 11, color: '#a0aec0', display: 'block', marginBottom: 4 }}>{lang === 'en' ? 'Starting Hand:' : 'Başlangıç El Kartı:'}</span>
-                  <select value={roomSettings.startCards} onChange={e => setRoomSettings(prev => ({ ...prev, startCards: Number(e.target.value) }))} style={selStyle}>
-                    <option value={5}>{lang === 'en' ? '5 Cards (Standard)' : '5 Kart (Standart)'}</option>
-                    <option value={7}>{lang === 'en' ? '7 Cards (Fast)' : '7 Kart (Hızlı)'}</option>
-                    <option value={10}>{lang === 'en' ? '10 Cards (Chaos)' : '10 Kart (Kaos)'}</option>
-                  </select>
-                </div>
-              </div>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginTop: 4 }}>
-                <div>
-                  <span style={{ fontSize: 11, color: '#a0aec0', display: 'block', marginBottom: 4 }}>{lang === 'en' ? 'Turn Time:' : 'Hamle Süresi:'}</span>
-                  <select value={roomSettings.turnTimer} onChange={e => setRoomSettings(prev => ({ ...prev, turnTimer: Number(e.target.value) }))} style={selStyle}>
-                    <option value={0}>{lang === 'en' ? 'Unlimited' : 'Sınırsız (Klasik)'}</option>
-                    <option value={30}>{lang === 'en' ? '30 Seconds' : '30 Saniye'}</option>
-                    <option value={60}>{lang === 'en' ? '60 Seconds' : '60 Saniye'}</option>
-                    <option value={120}>{lang === 'en' ? '2 Minutes' : '2 Dakika'}</option>
-                  </select>
-                </div>
-                <div>
-                  <span style={{ fontSize: 11, color: '#a0aec0', display: 'block', marginBottom: 4 }}>{lang === 'en' ? 'Bot Difficulty:' : 'Bot Zorluğu:'}</span>
-                  <select value={roomSettings.botDifficulty || 'medium'} onChange={e => setRoomSettings(prev => ({ ...prev, botDifficulty: e.target.value }))} style={selStyle}>
-                    <option value="easy">{lang === 'en' ? 'Easy' : 'Kolay'}</option>
-                    <option value="medium">{lang === 'en' ? 'Medium' : 'Orta'}</option>
-                    <option value="hard">{lang === 'en' ? 'Hard (Aggressive)' : 'Zor (Agresif)'}</option>
-                  </select>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* Bölüm 2: Özel Kurallar */}
-          <div style={{ background: 'rgba(0,0,0,0.2)', padding: 12, borderRadius: 10, border: '1px solid rgba(255,255,255,0.04)' }}>
-            <h4 style={{ color: '#E67E22', fontSize: 11, fontWeight: 900, margin: '0 0 10px 0', letterSpacing: 1, textTransform: 'uppercase' }}>{lang === 'en' ? '🛡️ SPECIAL RULES' : '🛡️ ÖZEL KURALLAR'}</h4>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-
-              <div style={{ marginBottom: 6 }}>
-                <label className="switch-container">
-                  <span className="switch-label">{lang === 'en' ? '⏱️ Auto End Turn (after 3 moves)' : '⏱️ Eli Otomatik Bitir (3 Hamle)'}</span>
-                  <input type="checkbox" className="switch-checkbox" checked={roomSettings.autoEndTurn} onChange={e => setRoomSettings(prev => ({ ...prev, autoEndTurn: e.target.checked }))} />
-                  <div className="switch-toggle" />
-                </label>
-                <span style={descStyle}>
-                  {lang === 'en' ? '⏱️ Turn ends automatically after playing 3 cards.' : '⏱️ 3 kart oynama limitine ulaştığınızda sıranızı otomatik olarak sonlandırır.'}
-                </span>
-              </div>
-
-              <div style={{ marginBottom: 6 }}>
-                <label className="switch-container">
-                  <span className="switch-label">{lang === 'en' ? '🛡️ Allow Counter Just Say No' : '🛡️ Çifte Reddet (Savunmaya İtiraz)'}</span>
-                  <input type="checkbox" className="switch-checkbox" checked={roomSettings.allowCounterJustSayNo} onChange={e => setRoomSettings(prev => ({ ...prev, allowCounterJustSayNo: e.target.checked }))} />
-                  <div className="switch-toggle" />
-                </label>
-                <span style={descStyle}>
-                  {lang === 'en' ? '🛡️ Players can counter a "Just Say No" card with another "Just Say No" card.' : '🛡️ "Reddet!" (Just Say No) kartına karşı başka bir "Reddet!" kartı ile çifte itiraz/savunma yapılabilmesini sağlar.'}
-                </span>
-              </div>
-
-              <div style={{ marginBottom: 6 }}>
-                <label className="switch-container">
-                  <span className="switch-label">{lang === 'en' ? '🔒 Lock Wildcards after placing' : '🔒 Joker Kilidi (Renk Sabitlenir)'}</span>
-                  <input type="checkbox" className="switch-checkbox" checked={roomSettings.lockWildcards} onChange={e => setRoomSettings(prev => ({ ...prev, lockWildcards: e.target.checked }))} />
-                  <div className="switch-toggle" />
-                </label>
-                <span style={descStyle}>
-                  {lang === 'en' ? '🔒 Wildcards cannot change color once placed on the table.' : '🔒 Masaya konulan çift renkli jokerlerin rengi sonradan değiştirilemez.'}
-                </span>
-              </div>
-
-              <label className="switch-container">
-                <span className="switch-label">{lang === 'en' ? '🔁 Allow Property Trades' : '🔁 Barışçıl Takas İzni'}</span>
-                <input type="checkbox" className="switch-checkbox" checked={roomSettings.allowTrades} onChange={e => setRoomSettings(prev => ({ ...prev, allowTrades: e.target.checked }))} />
-                <div className="switch-toggle" />
-              </label>
-
-              <div style={{ marginTop: 4 }}>
-                <span style={{ fontSize: 11, color: '#a0aec0', display: 'block', marginBottom: 4 }}>{lang === 'en' ? 'Extra Deal Breakers:' : 'İlave Deal Breaker (Set Çalma):'}</span>
-                <select value={roomSettings.extraDealBreakers} onChange={e => setRoomSettings(prev => ({ ...prev, extraDealBreakers: Number(e.target.value) }))} style={selStyle}>
-                  <option value={0}>{lang === 'en' ? 'None (Original 2 Cards)' : 'Yok (Orijinal 2 Kart)'}</option>
-                  <option value={1}>{lang === 'en' ? '+1 Card (Total 3)' : '+1 Kart (Toplam 3)'}</option>
-                  <option value={3}>{lang === 'en' ? '+3 Cards (Chaos!)' : '+3 Kart (Kaos!)'}</option>
-                </select>
-              </div>
-
-            </div>
-          </div>
-
-          {/* Bölüm 3: Modlar ve Eğlence */}
-          <div style={{ background: 'rgba(0,0,0,0.2)', padding: 12, borderRadius: 10, border: '1px solid rgba(255,255,255,0.04)' }}>
-            <h4 style={{ color: '#2ECC71', fontSize: 11, fontWeight: 900, margin: '0 0 10px 0', letterSpacing: 1, textTransform: 'uppercase' }}>{lang === 'en' ? '🔥 FUN MODES' : '🔥 EĞLENCE MODLARI'}</h4>
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-
-              <div style={{ marginBottom: 6 }}>
-                <label className="switch-container">
-                  <span className="switch-label">{lang === 'en' ? '👁️‍🗨️ Open Hands (Training)' : '👁️‍🗨️ Açık El Modu (Antrenman)'}</span>
-                  <input type="checkbox" className="switch-checkbox" checked={roomSettings.openHands} onChange={e => setRoomSettings(prev => ({ ...prev, openHands: e.target.checked }))} />
-                  <div className="switch-toggle" />
-                </label>
-                <span style={descStyle}>
-                  {lang === 'en' ? '👁️‍🗨️ Opponents can see each other\'s cards in real time.' : '👁️‍🗨️ Tüm oyuncuların elindeki kartlar rakipler tarafından açık şekilde görülebilir.'}
-                </span>
-              </div>
-
-              <div style={{ marginBottom: 6 }}>
-                <label className="switch-container">
-                  <span className="switch-label">{lang === 'en' ? '⚡ Fast Challenge (15s JSN limit)' : '⚡ Hızlı Reddet (15sn Savunma limit)'}</span>
-                  <input type="checkbox" className="switch-checkbox" checked={roomSettings.fastChallenge} onChange={e => setRoomSettings(prev => ({ ...prev, fastChallenge: e.target.checked }))} />
-                  <div className="switch-toggle" />
-                </label>
-                <span style={descStyle}>
-                  {lang === 'en' ? '⚡ Reduces the "Just Say No" defense response window to 15 seconds.' : '⚡ "Reddet!" (Just Say No) savunma kartı oynamak için tanınan süreyi 15 saniyeye indirerek oyunu hızlandırır.'}
-                </span>
-              </div>
-
-              <div style={{ marginBottom: 6 }}>
-                <label className="switch-container">
-                  <span className="switch-label">{lang === 'en' ? '🕵️ Street Thugs (Black Market)' : '🕵️ Sokak Haydutları (Karaborsa)'}</span>
-                  <input type="checkbox" className="switch-checkbox" checked={roomSettings.streetThugs} onChange={e => setRoomSettings(prev => ({ ...prev, streetThugs: e.target.checked }))} />
-                  <div className="switch-toggle" />
-                </label>
-                <span style={descStyle}>
-                  {lang === 'en' ? '🕵️ Pay to draw the top card from the discard pile (Black Market).' : '🕵️ Çöp (Iskarta) destesinin en üstündeki kartı para karşılığında satın almanızı sağlar.'}
-                </span>
-              </div>
-
-              <div style={{ marginBottom: 6 }}>
-                <label className="switch-container">
-                  <span className="switch-label">{lang === 'en' ? '🎲 Gambler\'s Die (Gamble roll)' : '🎲 Kumarbazın Zarı (Şans zarı)'}</span>
-                  <input type="checkbox" className="switch-checkbox" checked={roomSettings.gambleZari} onChange={e => setRoomSettings(prev => ({ ...prev, gambleZari: e.target.checked }))} />
-                  <div className="switch-toggle" />
-                </label>
-                <span style={descStyle}>
-                  {lang === 'en' ? '🎲 Roll a die on your turn to gamble for winning or losing extra cash.' : '🎲 Turunuzda şans zarı atarak para kazanma veya kaybetme üzerine kumar oynamanızı sağlar.'}
-                </span>
-              </div>
-
-              <div style={{ marginBottom: 6 }}>
-                <label className="switch-container">
-                  <span className="switch-label">{lang === 'en' ? '🐿️ Thief Squirrel Cards' : '🐿️ Hırsız Sincap Kartları'}</span>
-                  <input type="checkbox" className="switch-checkbox" checked={roomSettings.thiefSquirrelEnabled} onChange={e => setRoomSettings(prev => ({ ...prev, thiefSquirrelEnabled: e.target.checked }))} />
-                  <div className="switch-toggle" />
-                </label>
-                <span style={descStyle}>
-                  {lang === 'en' ? '🐿️ Adds squirrel cards to steal bank money or property sets.' : '🐿️ Desteye, rakiplerin bankasını veya arazilerini soymaya yarayan sincap kartları ekler.'}
-                </span>
-              </div>
-
-            </div>
-          </div>
-
-        </div>
-      </details>
-    );
-  };
-
-
-
-  // ---- DESTE İSTATİSTİKLERİ MODALI ----
-  const renderDeckStatsModal = () => {
-    if (!showDeckStats) return null;
-
-    const unknownCardsCount = gameState.deckCount + gameState.players.filter(p => p.id !== playerId).reduce((s, p) => s + p.handCount, 0);
-
-    const stats = Object.keys(CARD_TOTAL_COUNTS).map(key => {
-      const total = CARD_TOTAL_COUNTS[key];
-      let visible = 0;
-      const countFn = (c) => { if (c?.key === key) visible++; };
-      gameState.discard?.forEach(countFn);
-      me?.hand?.forEach(countFn);
-      gameState.players?.forEach(p => {
-        (p.bank || []).forEach(countFn);
-        Object.values(p.properties || {}).flat().forEach(countFn);
-      });
-      const remaining = Math.max(0, total - visible);
-      const probability = unknownCardsCount > 0 ? ((remaining / unknownCardsCount) * 100).toFixed(1) : 0;
-      return { key, total, visible, remaining, probability };
-    });
-
-    const categories = {
-      '⚡ Aksiyon Kartları': stats.filter(s => s.key.startsWith('action_')),
-      '🧾 Kira Kartları': stats.filter(s => s.key.startsWith('rent_')),
-      '💰 Para Kartları': stats.filter(s => s.key.startsWith('money_')),
-    };
-
-    const getName = (key) => {
-      if (key.startsWith('money_')) return `${key.split('_')[1]}M Nakit Para`;
-      if (key.startsWith('rent_')) {
-        const parts = key.split('_').slice(1);
-        if (parts[0] === 'all') return 'Herhangi Renk Kira';
-        return `${COLOR_INFO[parts[0]]?.name || parts[0]} / ${COLOR_INFO[parts[1]]?.name || parts[1]} Kira`;
-      }
-      if (key.startsWith('action_')) {
-        const action = key.split('_')[1];
-        const icon = ACTION_STYLE[action]?.icon || '⚡';
-        const names = { passgo: 'Başlangıç', dealbreaker: 'Anlaşma Bozucu', justsayno: 'Reddet!', slydeal: 'Sinsi Anlaşma', forceddeal: 'Zorunlu Anlaşma', debtcollector: 'Borç Tahsildarı', birthday: 'Doğum Günüm', house: 'Ev', hotel: 'Otel', doublerent: 'İki Kat Kira' };
-        return `${icon} ${names[action] || action}`;
-      }
-      return key;
-    };
-
-    return (
-      <Modal title="📊 Deste Kalan Kart İstatistikleri" onClose={() => setShowDeckStats(false)}>
-        <div style={{
-          background: 'rgba(255, 255, 255, 0.02)',
-          border: '1px solid rgba(255, 255, 255, 0.05)',
-          borderRadius: 12,
-          padding: 12,
-          marginBottom: 16
-        }}>
-          <p style={{ color: '#a0aec0', fontSize: 11, margin: 0, lineHeight: 1.5 }}>
-            Bu panel; elinizdeki, ortadaki ve ıskartadaki kartları hesaplayarak desteden çekilme ihtimallerini gösterir.
-            <span style={{ display: 'block', color: '#ffb020', marginTop: 4, fontWeight: 'bold' }}>
-              Bilinmeyen Kart Havuzu: {unknownCardsCount} kart (Deste + Rakiplerin Elleri)
-            </span>
-          </p>
-        </div>
-
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-          {Object.entries(categories).map(([cat, items]) => (
-            <div key={cat}>
-              <div style={{
-                color: '#FFD700',
-                fontSize: 13,
-                fontWeight: '800',
-                marginBottom: 10,
-                borderBottom: '1px solid rgba(255,215,0,0.2)',
-                paddingBottom: 6,
-                letterSpacing: '0.4px'
-              }}>
-                {cat}
-              </div>
-              <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap: 8 }}>
-                {items.map(item => {
-                  const prob = parseFloat(item.probability);
-                  let probColor = '#E74C3C'; // Low probability
-                  let probBg = 'rgba(231, 76, 60, 0.1)';
-                  if (prob >= 15) {
-                    probColor = '#2ECC71';
-                    probBg = 'rgba(46, 204, 113, 0.1)';
-                  } else if (prob >= 5) {
-                    probColor = '#F39C12';
-                    probBg = 'rgba(243, 156, 18, 0.1)';
-                  }
-
-                  return (
-                    <div
-                      key={item.key}
-                      style={{
-                        display: 'flex',
-                        justifyContent: 'space-between',
-                        alignItems: 'center',
-                        fontSize: 12,
-                        background: 'rgba(255,255,255,0.01)',
-                        border: '1px solid rgba(255,255,255,0.04)',
-                        padding: '10px 12px',
-                        borderRadius: 8,
-                        transition: 'all 0.2s ease'
-                      }}
-                      onMouseOver={e => e.currentTarget.style.background = 'rgba(255,255,255,0.03)'}
-                      onMouseOut={e => e.currentTarget.style.background = 'rgba(255,255,255,0.01)'}
-                    >
-                      <span style={{ color: '#CBD5E0', fontWeight: '500', marginRight: 8 }}>{getName(item.key)}</span>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                        <span style={{
-                          color: probColor,
-                          background: probBg,
-                          padding: '2px 6px',
-                          borderRadius: 6,
-                          fontWeight: '800',
-                          fontSize: 10
-                        }}>
-                          %{item.probability}
-                        </span>
-                        <b style={{
-                          color: item.remaining > 0 ? '#fff' : '#a0aec0',
-                          background: 'rgba(0,0,0,0.3)',
-                          padding: '2px 8px',
-                          borderRadius: 6,
-                          fontSize: 11
-                        }}>
-                          {item.remaining} / {item.total}
-                        </b>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       </Modal>
     );
-  };
+  }
 
-  // ── REDDET! (Just Say No) YANIT MODALI ──
-  const renderChallengeModal = () => {
-    if (!gameState?.myPendingChallenge) return null;
-    const ch = gameState.myPendingChallenge;
-    const iAmDefender = ch.responderId === playerId;
-    if (!iAmDefender) return null; // sadece sırası gelen oyuncu görür
+  if (modal.type === 'viewBankCards') {
+    const bankCards = me?.bank || [];
+    return (
+      <Modal title={lang === 'en' ? `💰 Bank Vault (${me?.bankTotal || 0}M)` : `💰 Banka Kasası (${me?.bankTotal || 0}M)`} onClose={() => setModal(null)}>
+        <div style={{ marginBottom: 12, fontSize: 12, color: '#94a3b8' }}>
+          {lang === 'en' ? 'All cards in your bank are listed below. Money cards and action cards you deposited to the bank appear here.' : 'Bankandaki tüm kartlar aşağıda listeleniyor. Para kartları ve bankaya yatırdığın aksiyon kartları burada görünür.'}
+        </div>
+        {bankCards.length === 0 ? (
+          <div style={{ textAlign: 'center', color: '#555', padding: 24, fontStyle: 'italic', fontSize: 13 }}>{lang === 'en' ? 'Bank vault is empty.' : 'Banka kasası boş.'}</div>
+        ) : (
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10, justifyContent: 'center', maxHeight: 360, overflowY: 'auto' }}>
+            {bankCards.map(c => (
+              <div key={c.id} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4 }}>
+                <CardVisual card={c} small lang={lang} />
+                <div style={{ fontSize: 11, fontWeight: 900, color: '#2ECC71', background: 'rgba(46,204,113,0.12)', border: '1px solid rgba(46,204,113,0.3)', borderRadius: 6, padding: '2px 8px' }}>
+                  {c.value}M
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+        <div style={{ marginTop: 16, padding: '10px 14px', background: 'rgba(255,215,0,0.05)', border: '1px solid rgba(255,215,0,0.2)', borderRadius: 10, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <span style={{ color: '#aaa', fontSize: 12 }}>{lang === 'en' ? 'Total Bank Value:' : 'Toplam Banka Değeri:'}</span>
+          <span style={{ color: '#FFD700', fontWeight: 900, fontSize: 16 }}>{me?.bankTotal || 0}M</span>
+        </div>
+      </Modal>
+    );
+  }
 
-    const haveJustSayNo = me?.hasJustSayNo;
-    const isCounter = ch.responderId === ch.sourceId; // sıra orijinal oyuncuya geri döndü (karşı-Reddet)
+  if (modal.type === 'selectRentColor') {
+    const validColors = card.colors === 'all'
+      ? Object.keys(me?.properties || {}).filter(c => (me.properties[c]?.length || 0) > 0)
+      : (card.colors || []).filter(c => me?.properties?.[c]?.length > 0);
 
-    let description = '';
-    let alertTitle = lang === 'en' ? 'ACTION RESPONSE PENDING' : 'AKSİYON YANITI BEKLENİYOR';
-    let alertColor = '#e11d48';
-    let alertIcon = '⚡';
-
-    switch (ch.action) {
-      case 'rent':
-        description = lang === 'en'
-          ? `${ch.sourceName} wants rent from you: ${ch.data.amount}M (${translateReason(ch.data.reason, lang)})`
-          : `${ch.sourceName} sizden kira istiyor: ${ch.data.amount}M (${ch.data.reason})`;
-        alertTitle = lang === 'en' ? 'RENT PAYMENT' : 'KİRA ÖDEMESİ';
-        alertColor = '#e67e22';
-        alertIcon = '🧾';
-        break;
-      case 'birthday':
-        description = lang === 'en'
-          ? `${ch.sourceName} played "It's My Birthday!" and wants a 2M gift from you`
-          : `${ch.sourceName} "Doğum Günüm!" oynadı, sizden 2M hediye istiyor`;
-        alertTitle = lang === 'en' ? 'BIRTHDAY GIFT' : 'DOĞUM GÜNÜ HEDİYESİ';
-        alertColor = '#ec4899';
-        alertIcon = '🎂';
-        break;
-      case 'debtcollector':
-        description = lang === 'en'
-          ? `${ch.sourceName} played "Debt Collector" and demands 5M from you`
-          : `${ch.sourceName} "Borç Tahsildarı" oynadı, sizden 5M istiyor`;
-        alertTitle = lang === 'en' ? 'DEBT COLLECTION' : 'BORÇ TAHSİLATI';
-        alertColor = '#3b82f6';
-        alertIcon = '💸';
-        break;
-      case 'slydeal':
-        {
-          const cardNameEn = translateCard({ type: 'property', name: ch.data.cardName }, lang).name;
-          description = lang === 'en'
-            ? `${ch.sourceName} wants to steal your property "${cardNameEn}" (Sly Deal)`
-            : `${ch.sourceName} sizin "${ch.data.cardName}" arazinizi çalmak istiyor (Sinsi Anlaşma)`;
-        }
-        alertTitle = lang === 'en' ? 'SLY DEAL (STEAL)' : 'SİNSİ ANLAŞMA (HIRSIZLIK)';
-        alertColor = '#a855f7';
-        alertIcon = '🥷';
-        break;
-      case 'forceddeal':
-        {
-          const myCardNameEn = translateCard({ type: 'property', name: ch.data.myCardName }, lang).name;
-          const theirCardNameEn = translateCard({ type: 'property', name: ch.data.theirCardName }, lang).name;
-          description = lang === 'en'
-            ? `${ch.sourceName} wants to swap your property "${myCardNameEn}" with their "${theirCardNameEn}" (Forced Deal)`
-            : `${ch.sourceName} sizin "${ch.data.myCardName}" araziniz ile kendi "${ch.data.theirCardName}" arazisini takas etmek istiyor (Zorunlu Anlaşma)`;
-        }
-        alertTitle = lang === 'en' ? 'FORCED DEAL' : 'ZORUNLU ANLAŞMA';
-        alertColor = '#eab308';
-        alertIcon = '🔁';
-        break;
-      case 'dealbreaker':
-        {
-          const colorNameEn = {
-            brown: 'Brown', lightblue: 'Light Blue', pink: 'Pink', orange: 'Orange',
-            red: 'Red', yellow: 'Yellow', green: 'Green', blue: 'Dark Blue',
-            railroad: 'Railroad', utility: 'Utility'
-          }[ch.data.targetColor] || ch.data.targetColor;
-          const colorName = COLOR_INFO[ch.data.targetColor]?.name || ch.data.targetColor;
-          description = lang === 'en'
-            ? `${ch.sourceName} wants to steal your completed ${colorNameEn} set (Deal Breaker)!`
-            : `${ch.sourceName} sizin tamamlanmış ${colorName} setinizi çalmak istiyor (Anlaşma Bozucu)!`;
-        }
-        alertTitle = lang === 'en' ? 'DEAL BREAKER!' : 'ANLAŞMA BOZUCU!';
-        alertColor = '#dc2626';
-        alertIcon = '💣';
-        break;
-      default:
-        description = lang === 'en'
-          ? `${ch.sourceName} initiated an action against you`
-          : `${ch.sourceName} size karşı bir aksiyon başlattı`;
-    }
-
-    if (isCounter) {
-      alertTitle = lang === 'en' ? 'COUNTER JUST SAY NO!' : 'KARŞI REDDET!';
-      alertColor = '#eab308';
-      alertIcon = '🛡️';
-    }
-
-    let opponentCard = null;
-    if (isCounter) {
-      opponentCard = { type: 'action', action: 'justsayno', name: lang === 'en' ? 'Just Say No!' : 'Reddet!', value: 4, key: 'action_justsayno' };
-    } else {
-      switch (ch.action) {
-        case 'rent': opponentCard = { type: 'action', action: 'rent', name: lang === 'en' ? 'Rent Card' : 'Kira Kartı', value: 1, key: 'rent_all' }; break;
-        case 'birthday': opponentCard = { type: 'action', action: 'birthday', name: lang === 'en' ? 'Its My Birthday' : 'Doğum Günü', value: 2, key: 'action_birthday' }; break;
-        case 'debtcollector': opponentCard = { type: 'action', action: 'debtcollector', name: lang === 'en' ? 'Debt Collector' : 'Borç Tahsildarı', value: 3, key: 'action_debtcollector' }; break;
-        case 'slydeal': opponentCard = { type: 'action', action: 'slydeal', name: lang === 'en' ? 'Sly Deal' : 'Sinsi Anlaşma', value: 3, key: 'action_slydeal' }; break;
-        case 'forceddeal': opponentCard = { type: 'action', action: 'forceddeal', name: lang === 'en' ? 'Forced Deal' : 'Zorunlu Anlaşma', value: 3, key: 'action_forceddeal' }; break;
-        case 'dealbreaker': opponentCard = { type: 'action', action: 'dealbreaker', name: lang === 'en' ? 'Deal Breaker' : 'Anlaşma Bozucu', value: 5, key: 'action_dealbreaker' }; break;
-        default: opponentCard = { type: 'action', action: 'passgo', name: lang === 'en' ? 'Pass Go' : 'Pas Geç', value: 1, key: 'action_passgo' };
-      }
-    }
+    const doubleRentCards = (me?.hand || []).filter(c => c.action === 'doublerent');
 
     return (
-      <Modal title={isCounter ? (lang === 'en' ? '🛡️ Counter with Just Say No!' : '🛡️ Karşı Reddet! Şansın!') : `⚠️ ${alertTitle}`} onClose={() => { }}>
-        <div className="modal-split-layout">
-          {/* Left Column: 3D Card Preview */}
+      <Modal title="Kira Rengi Seç" onClose={() => setModal(null)}>
+        <div style={{ color: '#94a3b8', fontSize: 13, marginBottom: 20 }}>
+          Hangi renk setiniz üzerinden kira toplamak istiyorsunuz? Varsa "Çifte Kira" kartını da kullanabilirsiniz.
+        </div>
+        {validColors.length === 0 && (
+          <div style={{ textAlign: 'center', color: '#64748b', fontSize: 14, padding: '20px 0' }}>
+            ⚠️ Bu kira kartı için masada uygun mülkünüz bulunmuyor.
+          </div>
+        )}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+          {validColors.map(color => {
+            const info = COLOR_INFO[color] || { hex: '#444', name: color, light: '#fff' };
+            const rentAmount = calculateRentClient(me, color);
+            const doubleRentAmount = rentAmount * 2;
+
+            return (
+              <div key={color} style={{
+                background: 'rgba(255,255,255,0.02)',
+                border: '1px solid rgba(255,255,255,0.05)',
+                borderRadius: 12,
+                padding: 16,
+                display: 'flex',
+                flexDirection: 'column',
+                gap: 12
+              }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <span style={{ fontWeight: 800, fontSize: 14, color: info.light || '#fff', display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <span style={{ display: 'inline-block', width: 12, height: 12, borderRadius: '50%', background: info.hex, border: '1.5px solid rgba(255,255,255,0.4)' }}></span>
+                    {info.name} Grubu
+                  </span>
+                  <span style={{ fontSize: 12, color: '#94a3b8' }}>
+                    {me.properties[color]?.length || 0} Kart Sahipsin
+                  </span>
+                </div>
+
+                <div style={{ display: 'grid', gridTemplateColumns: doubleRentCards.length > 0 ? '1fr 1fr' : '1fr', gap: 10 }}>
+                  <button onClick={() => {
+                    if (card.colors === 'all') {
+                      setModal({ type: 'selectRentTarget', card, color, double: false });
+                    } else {
+                      handlePlayCard(card, { color });
+                    }
+                  }} style={{ ...btnStyle(info.hex), width: '100%', margin: 0, padding: '10px' }}>
+                    💰 {rentAmount}M Kira İste
+                  </button>
+
+                  {doubleRentCards.length > 0 && (
+                    <button onClick={() => {
+                      if (card.colors === 'all') {
+                        setModal({ type: 'selectRentTarget', card, color, double: true, doubleRentCardId: doubleRentCards[0].id });
+                      } else {
+                        handlePlayCard(card, { color, doubleRentCardId: doubleRentCards[0].id });
+                      }
+                    }} style={{ ...btnStyle('linear-gradient(135deg, #d35400, #e67e22)'), width: '100%', margin: 0, padding: '10px', boxShadow: '0 4px 15px rgba(211,84,0,0.4)' }}>
+                      ⚡ Çifte Kira ({doubleRentAmount}M)
+                    </button>
+                  )}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </Modal>
+    );
+  }
+
+  if (modal.type === 'selectRentTarget') {
+    const others = gameState.players.filter(p => p.id !== playerId);
+    return (
+      <Modal title={`Hedef Seç (Herhangi Kira${modal.double ? ' — İKİ KAT' : ''})`} onClose={() => setModal(null)}>
+        <div style={{ color: '#94a3b8', fontSize: 13, marginBottom: 20 }}>
+          Herhangi Kira kartıyla hangi oyuncudan kira tahsil etmek istiyorsunuz?
+        </div>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+          {others.map(p => {
+            const propEntries = Object.entries(p.properties || {}).filter(([, cards]) => cards.length > 0);
+            return (
+              <div key={p.id} className="modal-profile-card">
+                <div className="modal-profile-header">
+                  <div className="modal-profile-name">
+                    <img
+                      src={`https://api.dicebear.com/7.x/${p.avatar || 'avataaars'}/svg?seed=${p.name}`}
+                      alt=""
+                      style={{ width: 36, height: 36, borderRadius: '50%', background: 'rgba(255,255,255,0.05)' }}
+                    />
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                      <span>{p.name}</span>
+                      {/* Mini arazi renk badge'ları */}
+                      {propEntries.length > 0 && (
+                        <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
+                          {propEntries.map(([color, cards]) => {
+                            const info = COLOR_INFO[color] || { hex: '#aaa' };
+                            const complete = isSetComplete(cards, color);
+                            const sz = SET_SIZES[color] || 2;
+                            return (
+                              <div key={color} title={`${info.name || color}: ${cards.length}/${sz}${complete ? ' ✓ TAM SET' : ''}`}
+                                style={{
+                                  display: 'flex', alignItems: 'center', gap: 2,
+                                  background: complete ? `${info.hex}30` : 'rgba(255,255,255,0.06)',
+                                  border: complete ? `1px solid ${info.hex}` : `1px solid ${info.hex}55`,
+                                  borderRadius: 5, padding: '2px 5px',
+                                  boxShadow: complete ? `0 0 6px ${info.hex}66` : 'none'
+                                }}>
+                                <div style={{ width: 8, height: 8, borderRadius: '50%', background: info.hex, flexShrink: 0 }} />
+                                <span style={{ fontSize: 9, fontWeight: 900, color: complete ? '#FFD700' : '#ccc' }}>
+                                  {cards.length}/{sz}{complete ? '★' : ''}
+                                </span>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                  <span style={{ fontSize: 11, color: '#94a3b8', background: 'rgba(255,255,255,0.05)', padding: '2px 8px', borderRadius: 12, alignSelf: 'flex-start' }}>
+                    Banka: {p.bankTotal}M
+                  </span>
+                </div>
+
+                <button
+                  onClick={() => handlePlayCard(card, {
+                    color: modal.color,
+                    targetId: p.id,
+                    ...(modal.double ? { doubleRentCardId: modal.doubleRentCardId } : {}),
+                  })}
+                  style={{ ...btnStyle('#16A085'), width: '100%', padding: '12px 16px', borderRadius: 8, margin: 0 }}
+                >
+                  🎯 Seç ve Kira İste
+                </button>
+              </div>
+            );
+          })}
+        </div>
+      </Modal>
+    );
+  }
+
+  if (modal.type === 'selectMyColor') {
+    const isHotel = card.action === 'hotel';
+    const completeSets = Object.entries(me?.properties || {})
+      .filter(([color, cards]) => {
+        if (color === 'railroad' || color === 'utility') return false;
+        if (!isSetComplete(cards, color)) return false;
+        const b = me?.buildings?.[color] || {};
+        if (isHotel) return b.houses > 0 && !b.hotel;
+        return !b.houses && !b.hotel;
+      })
+      .map(([color]) => color);
+
+    return (
+      <Modal title={`${isHotel ? 'Otel' : 'Ev'} İçin Renk Seç`} onClose={() => setModal(null)}>
+        <div style={{ color: '#94a3b8', fontSize: 13, marginBottom: 20 }}>
+          Hangi tamamlanmış renk grubunuza bina inşa etmek istiyorsunuz?
+        </div>
+        {completeSets.length === 0 && (
+          <div style={{ textAlign: 'center', color: '#64748b', fontSize: 12, padding: '10px 0', lineHeight: 1.4 }}>
+            {isHotel
+              ? '⚠️ Otel inşa edebilmek için önce üzerinde "Ev" olan tamamlanmış bir setiniz olmalıdır (Demiryolu/Kamu hariç).'
+              : '⚠️ Ev inşa edebilmek için tamamlanmış (üzerinde henüz bina olmayan) bir arsa setiniz olmalıdır (Demiryolu/Kamu hariç).'}
+          </div>
+        )}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+          {completeSets.map(color => {
+            const info = COLOR_INFO[color] || { hex: '#444', name: color, light: '#fff' };
+            const b = me?.buildings?.[color] || {};
+            return (
+              <button
+                key={color}
+                onClick={() => handlePlayCard(card, { color })}
+                style={{
+                  ...btnStyle(info.hex),
+                  width: '100%',
+                  margin: 0,
+                  padding: '12px',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: 8
+                }}
+              >
+                <span style={{ display: 'inline-block', width: 10, height: 10, borderRadius: '50%', background: '#fff' }} />
+                {info.name} Seti {b.houses > 0 ? '🏠' : ''}{b.hotel ? '🏨' : ''}
+              </button>
+            );
+          })}
+        </div>
+      </Modal>
+    );
+  }
+
+  if (modal.type === 'manageSet') {
+    const { color, cards } = modal;
+    const info = COLOR_INFO[color] || { hex: '#aaa', name: color };
+    return (
+      <Modal title={lang === 'en' ? `Set Management - ${getColorName(color, lang)}` : `Set Yönetimi - ${getColorName(color, lang)}`} onClose={() => setModal(null)}>
+        <p style={{ color: '#94a3b8', fontSize: 12, marginBottom: 16 }}>
+          {lang === 'en' ? 'Click on a card to change its color or view details.' : 'Detayları görmek veya renk değiştirmek için kartların altındaki butonları kullanabilirsiniz.'}
+        </p>
+        <div style={{ display: 'flex', gap: 16, overflowX: 'auto', padding: '10px 0', justifyContent: 'center', flexWrap: 'wrap' }}>
+          {cards.map(c => {
+            const canFlip = isMyTurn && (c.isWild || c.isDual);
+            return (
+              <div key={c.id} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10, background: 'rgba(255,255,255,0.02)', padding: '12px', borderRadius: '12px', border: '1px solid rgba(255,255,255,0.06)' }}>
+                <div style={{ cursor: 'pointer' }} onClick={() => { setPreviewCard(c); setPreviewLocked(true); }}>
+                  <CardVisual card={c} small lang={lang} />
+                </div>
+                {canFlip ? (
+                  <button
+                    onClick={() => handleFlip(c)}
+                    style={{
+                      ...btnStyle('linear-gradient(135deg, #f59e0b, #d97706)'),
+                      fontSize: 11,
+                      padding: '6px 12px',
+                      borderRadius: 8,
+                      margin: 0,
+                      boxShadow: '0 2px 8px rgba(245,158,11,0.3)',
+                      fontWeight: 800
+                    }}
+                  >
+                    🎨 {lang === 'en' ? 'Change Color' : 'Renk Değiştir'}
+                  </button>
+                ) : (
+                  <button
+                    onClick={() => { setPreviewCard(c); setPreviewLocked(true); }}
+                    style={{
+                      ...btnStyle('rgba(255,255,255,0.08)'),
+                      fontSize: 11,
+                      padding: '6px 12px',
+                      borderRadius: 8,
+                      margin: 0,
+                      border: '1px solid rgba(255,255,255,0.1)'
+                    }}
+                  >
+                    🔍 {lang === 'en' ? 'Inspect' : 'İncele'}
+                  </button>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      </Modal>
+    );
+  }
+
+  if (modal.type === 'flipColor') {
+    const card = modal.card;
+    const allColors = card.colors || Object.keys(COLOR_INFO);
+    return (
+      <Modal title={lang === 'en' ? 'Flip Property Color' : 'Mülk Rengini Değiştir'} onClose={() => setModal(null)}>
+        <div style={{ display: 'flex', flexDirection: isMobile ? 'column' : 'row', gap: 20, alignItems: 'center', justifyContent: 'center' }}>
+          {/* Left Column: 3D Visual Preview */}
           <div style={{
             perspective: '1000px',
-            width: 132 * 1.15,
-            height: 192 * 1.15,
+            width: 132 * 1.22,
+            height: 192 * 1.25,
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
@@ -5567,1351 +4630,2673 @@ export default function App() {
               onMouseEnter={(e) => e.currentTarget.style.transform = 'rotateY(0deg) rotateX(0deg) scale(1.03)'}
               onMouseLeave={(e) => e.currentTarget.style.transform = 'rotateY(-12deg) rotateX(8deg)'}
             >
-              <CardVisual card={opponentCard} small={false} lang={lang} />
+              <CardVisual card={card} small={false} lang={lang} />
             </div>
           </div>
 
-          {/* Right Column: Actions / Options */}
-          <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 14, width: '100%' }}>
-            <div style={{
-              background: `${alertColor}15`,
-              border: `1px solid ${alertColor}40`,
-              borderRadius: 10,
-              padding: '10px 14px',
-              display: 'flex',
-              alignItems: 'center',
-              gap: 10
-            }}>
-              <span style={{ fontSize: 20 }}>{alertIcon}</span>
-              <span style={{ fontSize: 13, fontWeight: 900, color: alertColor, letterSpacing: 0.5 }}>{alertTitle}</span>
-            </div>
-
-            <p style={{ color: '#E2E8F0', fontSize: 14, margin: 0, fontWeight: 500, lineHeight: 1.5 }}>
-              {description}
+          {/* Right Column: Color Options with Rents */}
+          <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 12, width: '100%' }}>
+            <p style={{ color: '#E0E0E0', fontSize: 13, margin: 0, opacity: 0.9, lineHeight: 1.4 }}>
+              {lang === 'en' ? 'This card is currently in the' : 'Bu kart şu anda'} <span style={{ color: COLOR_INFO[card.activeColor]?.light || '#fff', fontWeight: 900, textDecoration: 'underline' }}>{getColorName(card.activeColor, lang)}</span> {lang === 'en' ? 'group. Select the new color to flip to:' : 'grubunda. Çevirmek istediğiniz yeni rengi seçin:'}
             </p>
 
-            {isCounter && (
-              <p style={{ color: '#94a3b8', fontSize: 12, margin: 0, lineHeight: 1.4 }}>
-                {lang === 'en'
-                  ? 'Your opponent just played a "Just Say No!" card to block your action. If you have another "Just Say No!" card, you can play it to counter their block!'
-                  : 'Rakibiniz az önce "Reddet!" kartınızı savunmak için kendi "Reddet!" kartını oynadı. Eğer elinizde başka bir "Reddet!" varsa, onu kullanarak hamleyi yeniden geçerli kılabilirsiniz!'}
-              </p>
-            )}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 10, maxHeight: '280px', overflowY: 'auto', paddingRight: 4 }}>
+              {allColors.map(color => {
+                const info = COLOR_INFO[color];
+                if (!info) return null;
+                const isActive = card.activeColor === color;
 
-            {gameState.fastChallenge && (
-              <div style={{
-                background: 'rgba(231, 76, 60, 0.08)',
-                border: '1px solid rgba(231, 76, 60, 0.2)',
-                borderRadius: 8,
-                padding: '6px 12px',
-                color: '#ef4444',
-                fontWeight: 700,
-                fontSize: 12,
-                display: 'flex',
-                alignItems: 'center',
-                gap: 6
-              }}>
-                ⏱️ {lang === 'en' ? 'Time remaining to accept:' : 'Kabul edilmesine kalan süre:'} <span style={{ color: '#fff', background: '#ef4444', padding: '1px 6px', borderRadius: 4 }}>{challengeTime}s</span>
-              </div>
-            )}
+                return (
+                  <div
+                    key={color}
+                    onClick={() => {
+                      if (!isActive) {
+                        doFlip(card, color);
+                      }
+                    }}
+                    style={{
+                      background: isActive
+                        ? `linear-gradient(135deg, ${info.hex}88, rgba(0,0,0,0.5))`
+                        : `linear-gradient(135deg, ${info.hex}22, rgba(255,255,255,0.03))`,
+                      border: isActive
+                        ? `2px solid #FFD700`
+                        : `1px solid rgba(255, 255, 255, 0.1)`,
+                      borderRadius: '10px',
+                      padding: '10px 14px',
+                      cursor: isActive ? 'default' : 'pointer',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      gap: 6,
+                      transition: 'all 0.2s ease',
+                      boxShadow: isActive ? `0 0 12px ${info.hex}55` : 'none',
+                    }}
+                    onMouseEnter={(e) => {
+                      if (!isActive) {
+                        e.currentTarget.style.background = `linear-gradient(135deg, ${info.hex}44, rgba(255,255,255,0.06))`;
+                        e.currentTarget.style.borderColor = info.hex;
+                        e.currentTarget.style.transform = 'translateX(4px)';
+                      }
+                    }}
+                    onMouseLeave={(e) => {
+                      if (!isActive) {
+                        e.currentTarget.style.background = `linear-gradient(135deg, ${info.hex}22, rgba(255,255,255,0.03))`;
+                        e.currentTarget.style.borderColor = 'rgba(255, 255, 255, 0.1)';
+                        e.currentTarget.style.transform = 'none';
+                      }
+                    }}
+                  >
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <span style={{ fontWeight: 800, fontSize: 13, color: info.light || '#fff', display: 'flex', alignItems: 'center', gap: 6 }}>
+                        <span style={{ display: 'inline-block', width: 10, height: 10, borderRadius: '50%', background: info.hex, border: '1px solid rgba(255,255,255,0.3)' }}></span>
+                        {getColorName(color, lang)}
+                      </span>
+                      {isActive && (
+                        <span style={{ background: '#FFD700', color: '#000', fontSize: 9, fontWeight: 900, padding: '1px 5px', borderRadius: '6px', letterSpacing: 0.5 }}>
+                          {lang === 'en' ? 'ACTIVE GROUP' : 'AKTİF GRUP'}
+                        </span>
+                      )}
+                    </div>
 
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginTop: 4 }}>
-              {haveJustSayNo ? (
-                <div style={{
-                  background: 'rgba(255,215,0,0.03)',
-                  border: '1px solid rgba(255,215,0,0.2)',
-                  borderRadius: 12,
-                  padding: 12,
-                  boxShadow: '0 4px 15px rgba(255,215,0,0.02)'
-                }}>
-                  <div style={{ fontSize: 10, color: '#FFD700', fontWeight: 800, textAlign: 'center', marginBottom: 10, letterSpacing: 0.5 }}>
-                    {lang === 'en' ? '🛡️ YOU HAVE A DEFENSE CARD! (Click to use)' : '🛡️ ELİNİZDE SAVUNMA KARTI VAR! (Kullanmak için tıkla)'}
+                    {/* Kira değerleri tablosu */}
+                    <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', background: 'rgba(0,0,0,0.25)', borderRadius: '6px', padding: '4px 8px' }}>
+                      {info.rents.map((rentVal, i) => (
+                        <div key={i} style={{ fontSize: 10.5, color: '#ccc' }}>
+                          <span style={{ fontWeight: 'bold', color: '#fff' }}>{i + 1} {lang === 'en' ? (i === 0 ? 'Card' : 'Cards') : 'Kart'}:</span> {rentVal}M
+                        </div>
+                      ))}
+                    </div>
                   </div>
-                  <div style={{ display: 'flex', gap: 8, justifyContext: 'center', justifyContent: 'center' }}>
-                    {(me?.hand || []).filter(c => c.action === 'justsayno').map(c => (
-                      <div key={c.id}
-                        onClick={() => handleRespondChallenge(ch.id, true)}
-                        onMouseEnter={() => handleCardHover(c)}
-                        onMouseLeave={() => handleCardHover(null)}
-                        style={{ cursor: 'pointer', transition: 'transform 0.2s' }}
-                        onMouseOver={(e) => e.currentTarget.style.transform = 'scale(1.08) translateY(-4px)'}
-                        onMouseOut={(e) => e.currentTarget.style.transform = 'scale(1)'}
-                      >
-                        <CardVisual card={c} small lang={lang} />
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              ) : (
-                <div style={{ background: 'rgba(231,76,60,0.06)', border: '1px dashed rgba(231,76,60,0.2)', borderRadius: 10, padding: 12, color: '#ef4444', fontSize: 11, fontWeight: 700, textAlign: 'center' }}>
-                  {lang === 'en'
-                    ? '🛡️ You do not have a "Just Say No!" defense card in your hand.'
-                    : '🛡️ Elinizde "Reddet!" (Just Say No) savunma kartı bulunmuyor.'}
-                </div>
-              )}
-
-              <button
-                onClick={() => handleRespondChallenge(ch.id, false)}
-                style={{
-                  ...btnStyle(isCounter ? 'linear-gradient(135deg, #475569, #334155)' : 'linear-gradient(135deg, #10b981, #059669)'),
-                  width: '100%',
-                  padding: '12px',
-                  fontSize: 13,
-                  height: 44,
-                  borderRadius: 8,
-                  margin: 0,
-                  boxShadow: isCounter ? 'none' : '0 4px 15px rgba(16,185,129,0.3)'
-                }}
-              >
-                {isCounter
-                  ? (lang === 'en' ? 'Do Not Counter, Let Action Be Blocked' : 'İtiraz Etme, Hamle İptal Kalsın')
-                  : (lang === 'en' ? 'Accept and Pay / Give Property' : 'Kabul Et ve Öde / Kartı Devret')}
-              </button>
+                );
+              })}
             </div>
           </div>
         </div>
       </Modal>
     );
-  };
+  }
 
-  // ── ÖDEME MODALI ──
-  const renderPaymentModal = () => {
-    if (!gameState?.myPendingPayment) return null;
-    const payment = gameState.myPendingPayment;
-    const hasBank = (me?.bank || []).length > 0;
-    const hasProps = Object.values(me?.properties || {}).flat().length > 0;
-    if (!hasBank && !hasProps) return null;
+  if (modal.type === 'viewCardDetails') {
+    const card = modal.card;
+    const isProp = card.type === 'property';
+    const isAction = card.type === 'action';
+    const isMoney = card.type === 'money';
+    const baseColor = isProp && card.color ? COLOR_INFO[card.color] : null;
+    const activeColor = isProp && card.activeColor ? COLOR_INFO[card.activeColor] : null;
 
-    const selectedTotal =
-      (me?.bank || []).filter(c => paymentSelection.bankCardIds.includes(c.id)).reduce((s, c) => s + c.value, 0) +
-      Object.values(me?.properties || {}).flat().filter(c => paymentSelection.propertyCardIds.includes(c.id)).reduce((s, c) => s + c.value, 0);
+    const ACTION_COLORS = {
+      passgo: '#3498DB',
+      dealbreaker: '#8E44AD',
+      justsayno: '#E74C3C',
+      birthday: '#E91E8C',
+      rent: '#16A085',
+      doublerent: '#D35400',
+      slydeal: '#F39C12',
+      forceddeal: '#F39C12',
+      debtcollector: '#F39C12',
+      house: '#27AE60',
+      hotel: '#1E8449'
+    };
 
-    const totalAssets =
-      (me?.bank || []).reduce((s, c) => s + c.value, 0) +
-      Object.values(me?.properties || {}).flat().reduce((s, c) => s + c.value, 0);
-
-    const enoughOrAll = selectedTotal >= payment.amount || selectedTotal === totalAssets;
-    const canSubmit = selectedTotal > 0 && enoughOrAll;
-
-    let paymentCard = null;
-    if (payment.reason.toLowerCase().includes('doğum günü') || payment.reason.toLowerCase().includes('birthday')) {
-      paymentCard = { type: 'action', action: 'birthday', name: 'Doğum Günü', value: 2, key: 'action_birthday' };
-    } else if (payment.reason.toLowerCase().includes('borç') || payment.reason.toLowerCase().includes('debt')) {
-      paymentCard = { type: 'action', action: 'debtcollector', name: 'Borç Tahsildarı', value: 3, key: 'action_debtcollector' };
-    } else {
-      paymentCard = { type: 'action', action: 'rent', name: 'Kira Ödemesi', value: payment.amount, key: 'rent_all' };
-    }
+    const cardThemeColor = activeColor?.hex || baseColor?.hex || (isAction ? ACTION_COLORS[card.action] : '#95A5A6');
+    const displayName = translateCard(card, lang).name;
 
     return (
-      <Modal title={lang === 'en' ? "💸 Pay Debt" : "💸 Ödeme Yap"} onClose={() => { }}>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 14, width: '100%' }}>
-
-          {/* Üst Bilgi Kartı */}
+      <Modal title={lang === 'en' ? '🔍 CARD DETAILS' : '🔍 KART DETAYLARI'} onClose={() => setModal(null)}>
+        <div style={{ display: 'flex', flexDirection: isMobile ? 'column' : 'row', gap: 20, alignItems: 'center', justifyContent: 'center' }}>
+          {/* Left Column: Card Visual */}
           <div style={{
-            background: 'rgba(231, 76, 60, 0.08)',
-            border: '1px solid rgba(231, 76, 60, 0.2)',
-            borderRadius: 12,
-            padding: '12px 16px',
+            perspective: '1000px',
+            width: 132 * 1.25,
+            height: 192 * 1.25,
             display: 'flex',
             alignItems: 'center',
-            justifyContent: 'space-between',
-            gap: 12,
-            flexWrap: 'wrap'
+            justifyContent: 'center',
           }}>
-            <div style={{ flex: 1, minWidth: 200 }}>
-              <div style={{ color: '#E2E8F0', fontSize: 14, fontWeight: 600 }}>
-                {lang === 'en' ? <>You need to pay a total of <b style={{ color: '#ef4444', fontSize: 16 }}>{payment.amount}M</b> to <b style={{ color: '#FFD700' }}>{payment.collectorName}</b>.</> : <><b style={{ color: '#FFD700' }}>{payment.collectorName}</b>'e toplam <b style={{ color: '#ef4444', fontSize: 16 }}>{payment.amount}M</b> ödemeniz gerekiyor.</>}
-              </div>
-              <div style={{ color: '#94a3b8', fontSize: 11, marginTop: 4, fontStyle: 'italic' }}>{lang === 'en' ? 'Reason' : 'Gerekçe'}: {translateReason(payment.reason, lang)}</div>
-            </div>
-            {/* Küçük Görsel Önizleme */}
-            <div style={{ width: 44, height: 60, borderRadius: 4, overflow: 'hidden', boxShadow: '0 4px 10px rgba(0,0,0,0.3)', flexShrink: 0 }}>
-              <CardVisual card={paymentCard} small lang={lang} />
+            <div style={{
+              boxShadow: '0 15px 35px rgba(0,0,0,0.5)',
+              borderRadius: '12px',
+              overflow: 'hidden'
+            }}>
+              <CardVisual card={card} small={false} lang={lang} />
             </div>
           </div>
 
-          {/* Hızlı Seçim Yardımcı Araçları (Daha uzakta, güvenli butonlar) */}
-          <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-start', flexWrap: 'wrap' }}>
-            <button
-              onClick={() => { sfxClick(); handleAutoSelectPayment(); }}
-              style={{ ...btnStyle('rgba(46, 204, 113, 0.12)'), border: '1px solid rgba(46, 204, 113, 0.3)', color: '#2ECC71', padding: '6px 12px', fontSize: 11, minHeight: 'auto', borderRadius: 8, margin: 0 }}
-            >
-              {lang === 'en' ? '🤖 Auto Select (Money First)' : '🤖 Otomatik Seç (Öncelikli Para)'}
-            </button>
-            <button
-              onClick={() => { sfxClick(); handleSelectAllPayment(); }}
-              style={{ ...btnStyle('rgba(255,255,255,0.05)'), border: '1px solid rgba(255,255,255,0.1)', color: '#aaa', padding: '6px 12px', fontSize: 11, minHeight: 'auto', borderRadius: 8, margin: 0 }}
-            >
-              {lang === 'en' ? 'Select All' : 'Tümünü Seç'}
-            </button>
-            <button
-              onClick={() => { sfxClick(); handleClearPaymentSelection(); }}
-              style={{ ...btnStyle('rgba(231, 76, 60, 0.05)'), border: '1px solid rgba(231, 76, 60, 0.15)', color: '#e74c3c', padding: '6px 12px', fontSize: 11, minHeight: 'auto', borderRadius: 8, margin: 0 }}
-            >
-              {lang === 'en' ? 'Clear' : 'Temizle'}
-            </button>
-          </div>
+          {/* Right Column: Card Rents or Description */}
+          <div style={{ flex: 1, color: '#fff', fontSize: 13, display: 'flex', flexDirection: 'column', gap: 10, width: '100%' }}>
+            <h3 style={{ color: cardThemeColor, margin: 0, fontSize: 18, fontWeight: 900, textTransform: 'uppercase', textShadow: '0 1px 3px rgba(0,0,0,0.4)' }}>
+              {displayName}
+            </h3>
 
-          {/* Kart Grupları (Yatay Kaydırılabilir Şeritler - Mobil Dostu) */}
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+            <div style={{ fontSize: 12, background: 'rgba(255,255,255,0.05)', padding: '6px 10px', borderRadius: 6, color: '#aaa', display: 'inline-flex', alignSelf: 'flex-start' }}>
+              {lang === 'en' ? 'Value:' : 'Değer:'} <b style={{ color: '#FFD700', marginLeft: 4 }}>{card.value}M {lang === 'en' ? 'Cash' : 'Nakit'}</b>
+            </div>
 
-            {hasBank && (
-              <div style={{ background: 'rgba(255,255,255,0.01)', border: '1px solid rgba(255,255,255,0.04)', borderRadius: 12, padding: 12 }}>
-                <div style={{ fontSize: 10, color: '#10b981', fontWeight: 900, marginBottom: 8, letterSpacing: 0.5, textTransform: 'uppercase' }}>{lang === 'en' ? '💵 Cash in Bank Vault' : '💵 Banka Kasasındaki Paralar'}</div>
-                <div style={{ display: 'flex', gap: 10, overflowX: 'auto', paddingBottom: 6, WebkitOverflowScrolling: 'touch' }}>
-                  {(me?.bank || []).map(c => {
-                    const isSelected = paymentSelection.bankCardIds.includes(c.id);
-                    return (
-                      <div key={c.id}
-                        onTouchStart={handleTouchStart}
-                        onClick={(e) => {
-                          if (isClickTouchScroll(e)) return;
-                          togglePaymentBankCard(c.id);
-                        }}
-                        style={{
-                          cursor: 'pointer',
-                          transition: 'all 0.2s ease',
-                          transform: isSelected ? 'scale(1.04) translateY(-2px)' : 'none',
-                          border: isSelected ? '3px solid #10b981' : '1px solid rgba(255,255,255,0.1)',
-                          borderRadius: 10,
-                          position: 'relative',
-                          flexShrink: 0,
-                          boxShadow: isSelected ? '0 6px 15px rgba(16,185,129,0.3)' : 'none'
-                        }}
-                      >
-                        <CardVisual card={c} small lang={lang} />
-                        {isSelected && (
-                          <div style={{
-                            position: 'absolute', top: 4, right: 4,
-                            width: 18, height: 18, borderRadius: '50%',
-                            background: '#10b981', color: '#fff',
-                            display: 'flex', alignItems: 'center', justifyContent: 'center',
-                            fontSize: 10, fontWeight: 'bold', zIndex: 10
-                          }}>✓</div>
-                        )}
-                      </div>
-                    );
-                  })}
-                </div>
+            {isProp && baseColor?.rents && (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 6, background: 'rgba(0,0,0,0.3)', borderRadius: 10, padding: 12, border: '1px solid rgba(255,255,255,0.08)' }}>
+                <div style={{ fontWeight: 'black', color: '#FFD700', fontSize: 11, letterSpacing: 0.5, borderBottom: '1px solid rgba(255,255,255,0.15)', paddingBottom: 6, marginBottom: 4 }}>{lang === 'en' ? 'RENT TABLE' : 'KİRA TABLOSU'}</div>
+                {baseColor.rents.map((r, i) => (
+                  <div key={i} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 12.5, fontWeight: 'bold' }}>
+                    <span style={{ color: '#ccc' }}>{i + 1} {lang === 'en' ? 'Cards Owned:' : 'Kart Sahipliği:'}</span>
+                    <span style={{ color: '#2ECC71' }}>{r}M</span>
+                  </div>
+                ))}
               </div>
             )}
 
-            {hasProps && (
-              <div style={{ background: 'rgba(255,255,255,0.01)', border: '1px solid rgba(255,255,255,0.04)', borderRadius: 12, padding: 12 }}>
-                <div style={{ fontSize: 10, color: '#f59e0b', fontWeight: 900, marginBottom: 8, letterSpacing: 0.5, textTransform: 'uppercase' }}>{lang === 'en' ? '🏠 Your Property Cards' : '🏠 Tapu Senetleriniz (Mülkleriniz)'}</div>
-                <div style={{ display: 'flex', gap: 10, overflowX: 'auto', paddingBottom: 6, WebkitOverflowScrolling: 'touch' }}>
-                  {Object.entries(me?.properties || {}).flatMap(([color, cards]) => cards.map(c => {
-                    const isSelected = paymentSelection.propertyCardIds.includes(c.id);
-
-                    // Akıllı Uyarı Mantığı (Danger Glow)
-                    const collector = gameState.players.find(p => p.id === payment.collectorId);
-                    let isDangerous = false;
-                    if (collector) {
-                      if (c.isWild) isDangerous = true;
-                      else {
-                        const cColors = c.isDual ? c.colors : [c.color];
-                        isDangerous = cColors.some(clr => collector.properties?.[clr]?.length > 0);
-                      }
-                    }
-
-                    return (
-                      <div key={c.id}
-                        className={isDangerous && !isSelected ? 'danger-glow' : ''}
-                        onTouchStart={handleTouchStart}
-                        onClick={(e) => {
-                          if (isClickTouchScroll(e)) return;
-                          togglePaymentPropertyCard(c.id);
-                        }}
-                        style={{
-                          cursor: 'pointer',
-                          transition: 'all 0.2s ease',
-                          transform: isSelected ? 'scale(1.04) translateY(-2px)' : 'none',
-                          border: isSelected ? '3px solid #f59e0b' : (isDangerous ? '1px dashed #ef4444' : '1px solid rgba(255,255,255,0.1)'),
-                          borderRadius: 10,
-                          position: 'relative',
-                          flexShrink: 0,
-                          boxShadow: isSelected ? '0 6px 15px rgba(245,158,11,0.3)' : 'none'
-                        }}
-                      >
-                        <CardVisual card={c} small lang={lang} />
-                        {isSelected && (
-                          <div style={{
-                            position: 'absolute', top: 4, right: 4,
-                            width: 18, height: 18, borderRadius: '50%',
-                            background: '#f59e0b', color: '#fff',
-                            display: 'flex', alignItems: 'center', justifyContent: 'center',
-                            fontSize: 10, fontWeight: 'bold', zIndex: 10
-                          }}>✓</div>
-                        )}
-                        {isDangerous && !isSelected && (
-                          <div style={{
-                            position: 'absolute', bottom: 4, right: 4,
-                            background: '#ef4444', color: '#fff',
-                            padding: '1px 5px', borderRadius: 4,
-                            fontSize: 8, fontWeight: 'bold', zIndex: 10
-                          }}>{lang === 'en' ? '🚨 DANGER' : '🚨 TEHLİKE'}</div>
-                        )}
-                      </div>
-                    );
-                  }))}
-                </div>
+            {(isAction || card.description) && (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 6, background: 'rgba(255,255,255,0.03)', borderRadius: 10, padding: 12, border: '1px solid rgba(255,255,255,0.05)' }}>
+                <div style={{ fontWeight: 'bold', color: '#FFD700', fontSize: 11, borderBottom: '1px solid rgba(255,255,255,0.1)', paddingBottom: 6, marginBottom: 4 }}>{lang === 'en' ? 'CARD DESCRIPTION' : 'KART AÇIKLAMASI'}</div>
+                <p style={{ lineHeight: 1.5, margin: 0, fontSize: 12, color: '#eee' }}>
+                  {getDetailedCardTip(card, lang)}
+                </p>
               </div>
             )}
-
           </div>
-
-          {/* Alt Ödeme Gönderme Bölümü */}
-          <div style={{ borderTop: '1px solid rgba(255,255,255,0.08)', paddingTop: 14 }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-              <div style={{ color: selectedTotal >= payment.amount ? '#10b981' : '#f59e0b', fontWeight: 900, fontSize: 13.5 }}>
-                {lang === 'en' ? 'Selected Total' : 'Seçilen Toplam'}: <span style={{ fontSize: 16, color: selectedTotal >= payment.amount ? '#10b981' : '#f59e0b' }}>{selectedTotal}M</span> / {payment.amount}M
-                {selectedTotal < payment.amount && selectedTotal === totalAssets && totalAssets > 0 && (
-                  <span style={{ color: '#ef4444', display: 'block', fontSize: 11, fontWeight: 'normal', marginTop: 2 }}>{lang === 'en' ? '⚠️ You are paying with all your assets' : '⚠️ Tüm varlığınızla ödeme yapıyorsunuz'}</span>
-                )}
-              </div>
-            </div>
-
-            <button onClick={handleSubmitPayment} disabled={!canSubmit}
-              style={{
-                ...btnStyle('#10b981'),
-                width: '100%',
-                padding: '12px',
-                opacity: canSubmit ? 1 : 0.4,
-                fontSize: 14,
-                fontWeight: 900,
-                height: 48,
-                borderRadius: 10,
-                margin: 0,
-                boxShadow: canSubmit ? '0 4px 15px rgba(16,185,129,0.3)' : 'none'
-              }}
-            >
-              {lang === 'en' ? `Send Payment (${selectedTotal}M)` : `Ödeme Gönder (${selectedTotal}M)`}
-            </button>
-          </div>
-
         </div>
       </Modal>
     );
-  };
-
-  const renderTradeModal = () => {
-    if (modal?.type === 'proposeTrade') {
-      const target = gameState.players.find(p => p.id === modal.targetId);
-      const toggle = (type, id) => setTradeSelection(p => ({ ...p, [type]: p[type].includes(id) ? p[type].filter(x => x !== id) : [...p[type], id] }));
-      const canSubmit = tradeSelection.offerBankIds.length + tradeSelection.offerPropIds.length + tradeSelection.requestBankIds.length + tradeSelection.requestPropIds.length > 0;
-      return (
-        <Modal title={lang === 'en' ? `🤝 Trade with ${target?.name}` : `🤝 ${target?.name} İle Takas Yap`} onClose={() => setModal(null)}>
-          <div style={{ color: '#94a3b8', fontSize: 13, marginBottom: 20 }}>
-            {lang === 'en' ? 'Trade cards based on mutual agreement. Details will be sent to the opponent for approval.' : 'Karşılıklı anlaşmaya dayalı olarak kart takas edin. Detaylar onay için karşı tarafa iletilir.'}
-          </div>
-          <div style={{ display: 'flex', gap: 14, flexDirection: isMobile ? 'column' : 'row' }}>
-            {/* Give Panel */}
-            <div style={{ flex: 1, background: 'rgba(239, 68, 68, 0.05)', border: '1px solid rgba(239, 68, 68, 0.15)', padding: 14, borderRadius: 12 }}>
-              <div style={{ color: '#f87171', fontWeight: 800, marginBottom: 12, fontSize: 13, letterSpacing: 0.5 }}>{lang === 'en' ? '📤 WHAT WILL YOU GIVE? (YOURS)' : '📤 NE VERECEKSİN? (SENİN)'}</div>
-              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, maxHeight: '200px', overflowY: 'auto' }}>
-                {(me?.bank || []).map(c => (
-                  <div key={c.id}
-                    onTouchStart={handleTouchStart}
-                    onClick={(e) => {
-                      if (isClickTouchScroll(e)) return;
-                      toggle('offerBankIds', c.id);
-                    }}
-                    style={{ cursor: 'pointer', transition: 'opacity 0.2s', opacity: tradeSelection.offerBankIds.includes(c.id) ? 1 : 0.35 }}
-                  >
-                    <CardVisual card={c} small lang={lang} />
-                  </div>
-                ))}
-                {Object.values(me?.properties || {}).flat().map(c => (
-                  <div key={c.id}
-                    onTouchStart={handleTouchStart}
-                    onClick={(e) => {
-                      if (isClickTouchScroll(e)) return;
-                      toggle('offerPropIds', c.id);
-                    }}
-                    style={{ cursor: 'pointer', transition: 'opacity 0.2s', opacity: tradeSelection.offerPropIds.includes(c.id) ? 1 : 0.35 }}
-                  >
-                    <CardVisual card={c} small lang={lang} />
-                  </div>
-                ))}
-                {(me?.bank || []).length === 0 && Object.values(me?.properties || {}).flat().length === 0 && (
-                  <span style={{ color: '#64748b', fontSize: 11, fontStyle: 'italic' }}>{lang === 'en' ? 'You have no assets to give' : 'Verebileceğiniz varlığınız yok'}</span>
-                )}
-              </div>
-            </div>
-
-            {/* Take Panel */}
-            <div style={{ flex: 1, background: 'rgba(16, 185, 129, 0.05)', border: '1px solid rgba(16, 185, 129, 0.15)', padding: 14, borderRadius: 12 }}>
-              <div style={{ color: '#34d399', fontWeight: 800, marginBottom: 12, fontSize: 13, letterSpacing: 0.5 }}>{lang === 'en' ? `📥 WHAT WILL YOU GET? (${target?.name.toUpperCase()})` : `📥 NE ALACAKSIN? (${target?.name.toUpperCase()})`}</div>
-              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, maxHeight: '200px', overflowY: 'auto' }}>
-                {target.bank.map(c => (
-                  <div key={c.id}
-                    onTouchStart={handleTouchStart}
-                    onClick={(e) => {
-                      if (isClickTouchScroll(e)) return;
-                      toggle('requestBankIds', c.id);
-                    }}
-                    style={{ cursor: 'pointer', transition: 'opacity 0.2s', opacity: tradeSelection.requestBankIds.includes(c.id) ? 1 : 0.35 }}
-                  >
-                    <CardVisual card={c} small lang={lang} />
-                  </div>
-                ))}
-                {Object.values(target.properties).flat().map(c => (
-                  <div key={c.id}
-                    onTouchStart={handleTouchStart}
-                    onClick={(e) => {
-                      if (isClickTouchScroll(e)) return;
-                      toggle('requestPropIds', c.id);
-                    }}
-                    style={{ cursor: 'pointer', transition: 'opacity 0.2s', opacity: tradeSelection.requestPropIds.includes(c.id) ? 1 : 0.35 }}
-                  >
-                    <CardVisual card={c} small lang={lang} />
-                  </div>
-                ))}
-                {target.bank.length === 0 && Object.values(target.properties).flat().length === 0 && (
-                  <span style={{ color: '#64748b', fontSize: 11, fontStyle: 'italic' }}>{lang === 'en' ? 'Player has no assets to trade' : 'Oyuncunun alınabilecek varlığı yok'}</span>
-                )}
-              </div>
-            </div>
-          </div>
-          <button
-            onClick={() => handleProposeTrade(target.id)}
-            disabled={!canSubmit}
-            style={{
-              ...btnStyle('linear-gradient(135deg, #10b981, #059669)'),
-              width: '100%',
-              marginTop: 16,
-              padding: 12,
-              borderRadius: 8,
-              opacity: canSubmit ? 1 : 0.4,
-              boxShadow: canSubmit ? '0 4px 15px rgba(16,185,129,0.3)' : 'none',
-              margin: '16px 0 0 0'
-            }}
-          >
-            {lang === 'en' ? '🤝 Send Trade Offer' : '🤝 Takas Teklifini Gönder'}
-          </button>
-        </Modal>
-      );
-    }
-
-    return null;
-  };
-
-  // ---- LOBBY ----
-  if (screen === 'lobby') {
+  }
+  if (modal.type === 'auth') {
     return (
-      <div className="lobby-imperial-bg" style={{ minHeight: '100vh', color: '#fff', display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '16px', position: 'relative', overflowX: 'hidden' }}>
-        {/* Floating Ambient Lights */}
-        <div className="ambient-aura ambient-aura-1" />
-        <div className="ambient-aura ambient-aura-2" />
-
-        {/* PREMIUM NAVIGATION / HEADER BAR */}
-        <header style={{
-          width: '100%',
-          maxWidth: 640,
-          display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'center',
-          gap: 12,
-          padding: '12px 16px',
-          background: 'rgba(22, 30, 49, 0.45)',
-          backdropFilter: 'blur(20px)',
-          border: '1px solid rgba(255,255,255,0.06)',
-          borderRadius: 16,
-          boxShadow: '0 8px 32px rgba(0,0,0,0.3)',
-          marginBottom: 16,
-          zIndex: 10,
-          boxSizing: 'border-box'
-        }}>
-          {/* Logo */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <img src="/logo.png" alt="Chaos Deal Cart" style={{ height: 26, filter: 'drop-shadow(0 2px 6px rgba(255, 215, 0, 0.3))' }} />
-            <span style={{ color: '#FFD700', fontSize: 14, fontWeight: 950, letterSpacing: '0.5px' }}>Chaos Deal</span>
+      <Modal title={authMode === 'login' ? (lang === 'en' ? '🔑 Member Login' : '🔑 Üye Girişi') : (lang === 'en' ? '📝 Register' : '📝 Kayıt Ol')} onClose={() => setModal(null)}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 14, minWidth: 280 }}>
+          <div>
+            <label style={{ fontSize: 11, color: '#94a3b8', display: 'block', marginBottom: 4, fontWeight: 'bold' }}>{lang === 'en' ? 'USERNAME' : 'KULLANICI ADI'}</label>
+            <input
+              value={authUsername}
+              onChange={e => setAuthUsername(e.target.value)}
+              placeholder={lang === 'en' ? "username" : "kullanici_adi"}
+              style={{ ...inputStyle, background: 'rgba(0,0,0,0.3)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 8 }}
+            />
+          </div>
+          <div>
+            <label style={{ fontSize: 11, color: '#94a3b8', display: 'block', marginBottom: 4, fontWeight: 'bold' }}>{lang === 'en' ? 'PASSWORD' : 'ŞİFRE'}</label>
+            <input
+              type="password"
+              value={authPassword}
+              onChange={e => setAuthPassword(e.target.value)}
+              placeholder="••••••"
+              style={{ ...inputStyle, background: 'rgba(0,0,0,0.3)', border: '1px solid rgba(255,255,255,0.1)', borderRadius: 8 }}
+            />
           </div>
 
-          {/* Actions: Lang, Leaderboard, Login/Logout */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-            <button
-              onClick={() => {
-                const nextLang = lang === 'tr' ? 'en' : 'tr';
-                setLang(nextLang);
-                localStorage.setItem('md_lang', nextLang);
-                sfxClick();
-              }}
+          <button
+            onClick={() => {
+              if (authMode === 'login') {
+                handleDbLogin(authUsername, authPassword);
+              } else {
+                handleDbRegister(authUsername, authPassword);
+              }
+            }}
+            style={{ ...btnStyle('linear-gradient(135deg, #9b59b6, #8e44ad)'), margin: '10px 0 0 0', padding: 12, borderRadius: 8 }}
+          >
+            {authMode === 'login' ? (lang === 'en' ? 'Log In' : 'Giriş Yap') : (lang === 'en' ? 'Register' : 'Kayıt Ol')}
+          </button>
+
+          <div style={{ textAlign: 'center', fontSize: 12, marginTop: 10 }}>
+            {authMode === 'login' ? (
+              <span style={{ color: '#94a3b8' }}>
+                {lang === 'en' ? "Don't have an account? " : "Hesabınız yok mu? "}
+                <a href="#" onClick={(e) => { e.preventDefault(); setAuthMode('register'); }} style={{ color: '#9b59b6', fontWeight: 'bold', textDecoration: 'none' }}>{lang === 'en' ? "Register here" : "Kayıt Olun"}</a>
+              </span>
+            ) : (
+              <span style={{ color: '#94a3b8' }}>
+                {lang === 'en' ? "Already a member? " : "Zaten üye misiniz? "}
+                <a href="#" onClick={(e) => { e.preventDefault(); setAuthMode('login'); }} style={{ color: '#9b59b6', fontWeight: 'bold', textDecoration: 'none' }}>{lang === 'en' ? "Log In here" : "Giriş Yapın"}</a>
+              </span>
+            )}
+          </div>
+        </div>
+      </Modal>
+    );
+  }
+
+  if (modal.type === 'leaderboard') {
+    return (
+      <Modal title={lang === 'en' ? "🏆 LEADERBOARD (GLOBAL)" : "🏆 LİDERLİK TABLOSU (GLOBAL)"} onClose={() => setModal(null)}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 10, minWidth: 320, maxHeight: 400, overflowY: 'auto', paddingRight: 6 }}>
+          {/* Period Tabs */}
+          <div style={{ display: 'flex', gap: 4, marginBottom: 8, background: 'rgba(0,0,0,0.3)', padding: 3, borderRadius: 8 }}>
+            {[
+              { id: 'daily', tr: 'Günlük', en: 'Daily' },
+              { id: 'weekly', tr: 'Haftalık', en: 'Weekly' },
+              { id: 'monthly', tr: 'Aylık', en: 'Monthly' },
+              { id: 'allTime', tr: 'Genel', en: 'All-Time' }
+            ].map(t => (
+              <button
+                key={t.id}
+                onClick={() => { fetchLeaderboard(t.id); sfxClick(); }}
+                style={{
+                  flex: 1,
+                  padding: '6px 4px',
+                  fontSize: 10,
+                  fontWeight: 'bold',
+                  background: leaderboardPeriod === t.id ? 'linear-gradient(135deg, #f1c40f, #f39c12)' : 'transparent',
+                  color: leaderboardPeriod === t.id ? '#000' : '#aaa',
+                  border: 'none',
+                  borderRadius: 6,
+                  cursor: 'pointer',
+                  transition: 'all 0.2s ease',
+                  textTransform: 'uppercase',
+                  letterSpacing: 0.5
+                }}
+              >
+                {lang === 'en' ? t.en : t.tr}
+              </button>
+            ))}
+          </div>
+
+          <div style={{ display: 'grid', gridTemplateColumns: '40px 1fr 60px 60px', borderBottom: '1px solid rgba(255,255,255,0.1)', paddingBottom: 6, fontSize: 11, fontWeight: 'bold', color: '#94a3b8' }}>
+            <span>{lang === 'en' ? 'Rank' : 'Sıra'}</span>
+            <span>{lang === 'en' ? 'Player' : 'Oyuncu'}</span>
+            <span style={{ textAlign: 'center' }}>{lang === 'en' ? 'Wins' : 'Zafer'}</span>
+            <span style={{ textAlign: 'center' }}>{lang === 'en' ? 'Points' : 'Puan'}</span>
+          </div>
+          {leaderboard.map((item) => (
+            <div
+              key={item.username}
               style={{
-                background: 'rgba(255, 255, 255, 0.08)',
-                border: '1px solid rgba(255, 255, 255, 0.15)',
-                color: '#fff',
-                padding: '5px 8px',
-                borderRadius: 20,
-                fontSize: 10,
-                fontWeight: 'bold',
-                cursor: 'pointer',
+                display: 'grid',
+                gridTemplateColumns: '40px 1fr 60px 60px',
+                alignItems: 'center',
+                padding: '8px 0',
+                borderBottom: '1px solid rgba(255,255,255,0.03)',
+                fontSize: 12,
+                background: item.username === dbUser?.username ? 'rgba(255,215,0,0.05)' : 'transparent',
+                borderRadius: 6
               }}
             >
-              {lang === 'tr' ? '🇹🇷 TR' : '🇬🇧 EN'}
-            </button>
+              <span style={{ fontWeight: 'bold', color: item.rank === 1 ? '#FFD700' : item.rank === 2 ? '#C0C0C0' : item.rank === 3 ? '#CD7F32' : '#718096' }}>
+                #{item.rank}
+              </span>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                <div
+                  className={`avatar-container border-style-${item.selectedBorder || 'default'}`}
+                  style={{
+                    width: 24,
+                    height: 24,
+                    boxShadow: item.selectedBorder && item.selectedBorder !== 'default' ? 'none' : '0 1px 4px rgba(0,0,0,0.3)',
+                  }}
+                >
+                  <img
+                    src={`https://api.dicebear.com/7.x/${item.avatar || 'avataaars'}/svg?seed=${item.username}`}
+                    alt=""
+                  />
+                </div>
+                <span style={{ fontWeight: item.username === dbUser?.username ? 'bold' : 'normal', color: item.username === dbUser?.username ? '#FFD700' : '#fff' }}>
+                  {item.displayName || item.username}
+                </span>
+              </div>
+              <span style={{ textAlign: 'center', fontWeight: 'bold', color: '#2ECC71' }}>{item.wins}</span>
+              <span style={{ textAlign: 'center', fontWeight: 'bold', color: '#F1C40F' }}>{item.points}</span>
+            </div>
+          ))}
+          {leaderboard.length === 0 && (
+            <div style={{ textAlign: 'center', color: '#64748b', fontStyle: 'italic', padding: 20 }}>{lang === 'en' ? 'No players found for this period.' : 'Bu periyot için kayıtlı üye bulunmuyor.'}</div>
+          )}
+        </div>
+      </Modal>
+    );
+  }
+
+  if (modal.type === 'shop') {
+    const unlockedBorders = dbUser?.unlockedBorders || ['default'];
+    const unlockedCardBacks = dbUser?.unlockedCardBacks || ['default'];
+    const unlockedTitles = dbUser?.unlockedTitles || ['default'];
+    const unlockedPlayEffects = dbUser?.unlockedPlayEffects || ['default'];
+    const unlockedTableThemes = dbUser?.unlockedTableThemes || ['default'];
+    const unlockedDiceSkins = dbUser?.unlockedDiceSkins || ['default'];
+
+    const currentBorder = dbUser?.selectedBorder || 'default';
+    const currentCardBack = dbUser?.selectedCardBack || 'default';
+    const currentTitle = dbUser?.selectedTitle || 'default';
+    const currentPlayEffect = dbUser?.selectedPlayEffect || 'default';
+    const currentTableTheme = dbUser?.selectedTableTheme || 'default';
+    const currentDiceSkin = dbUser?.selectedDiceSkin || 'default';
+
+    const points = dbUser?.points || 0;
+
+    const previewBorder = (hoveredShopItem?.type === 'border' ? hoveredShopItem.id : currentBorder);
+    const previewCardBack = (hoveredShopItem?.type === 'cardBack' ? hoveredShopItem.id : currentCardBack);
+    const previewTitle = (hoveredShopItem?.type === 'title' ? hoveredShopItem.id : currentTitle);
+    const previewPlayEffect = (hoveredShopItem?.type === 'playEffect' ? hoveredShopItem.id : currentPlayEffect);
+    const previewTableTheme = (hoveredShopItem?.type === 'tableTheme' ? hoveredShopItem.id : currentTableTheme);
+    const previewDiceSkin = (hoveredShopItem?.type === 'diceSkin' ? hoveredShopItem.id : currentDiceSkin);
+
+    const tableThemeItems = [
+      { id: 'volcano', name: { tr: '🌋 Lav Çukuru', en: '🌋 Volcanic Rift' }, cost: 300, color: '#ff4500', desc: { tr: 'Sıcak akan lavlar ve yanan közler', en: 'Flowing volcanic magma background' } },
+      { id: 'cosmic', name: { tr: '🌌 Kozmik Bulut', en: '🌌 Cosmic Nebulae' }, cost: 400, color: '#8e44ad', desc: { tr: 'Yıldızlar ve mor nebula bulutları', en: 'Deep space purple starry galaxy backdrop' } },
+      { id: 'matrix', name: { tr: '🟢 Neon Matris', en: '🟢 Neon Grid' }, cost: 300, color: '#39ff14', desc: { tr: 'Siber kod yağmuru ve yeşil gridler', en: 'Cyberpunk neon green hacker grid layout' } },
+      { id: 'gold', name: { tr: '👑 Altın Saray', en: '👑 Golden Palace' }, cost: 500, color: '#FFD700', desc: { tr: 'Lüks altın parçacıkları ve sarı ışıltılar', en: 'Luxury golden palace premium backdrop' } }
+    ];
+
+    const diceSkinItems = [
+      { id: 'gold', name: { tr: '👑 Altın Zar', en: '👑 Gold Dice' }, cost: 150, color: '#FFD700', symbol: '🪙', desc: { tr: 'Zar atarken altın maden saçılır', en: 'Rolls premium golden luxury dice' } },
+      { id: 'matrix', name: { tr: '🟢 Neon Zar', en: '🟢 Neon Dice' }, cost: 200, color: '#39ff14', symbol: '🔋', desc: { tr: 'Siber yeşil neon iz bırakan zar', en: 'Matrix green cyberpunk trail dice' } },
+      { id: 'lava', name: { tr: '🔥 Lav Zarı', en: '🔥 Lava Dice' }, cost: 250, color: '#ff4500', symbol: '☄️', desc: { tr: 'Yanan alev topları fırlatan zar', en: 'Rolls burning volcanic ember dice' } },
+      { id: 'cosmic', name: { tr: '🌌 Kozmik Zar', en: '🌌 Cosmic Dice' }, cost: 300, color: '#8e44ad', symbol: '🌌', desc: { tr: 'Kuyruklu yıldız izi bırakan mor zar', en: 'Nebula stardust space portal dice' } }
+    ];
+
+    const borderItems = [
+      { id: 'gold', name: { tr: 'Altın Çerçeve', en: 'Gold Border' }, cost: 150, color: '#FFD700', desc: { tr: 'Göz alıcı altın ışıltısı', en: 'Premium golden glow' } },
+      { id: 'neon', name: { tr: 'Neon Çerçeve', en: 'Neon Border' }, cost: 250, color: '#ff00ff', desc: { tr: 'Fütüristik mor neon parlaması', en: 'Vibrant neon purple glow' } },
+      { id: 'cyber', name: { tr: 'Siber Çerçeve', en: 'Cyber Border' }, cost: 350, color: '#39ff14', desc: { tr: 'Hacker yeşili matrix efekti', en: 'Cyberpunk green glow' } },
+      { id: 'flame', name: { tr: 'Alevli Çerçeve', en: 'Flame Border' }, cost: 500, color: '#ff4500', desc: { tr: 'Efsanevi yanan alev halkası', en: 'Legendary burning flame border' } },
+      { id: 'cosmic', name: { tr: 'Kozmik Çerçeve', en: 'Cosmic Border' }, cost: 600, color: '#8e44ad', desc: { tr: 'Uzay yıldızlı gizemli çerçeve', en: 'Mysterious space nebula border' } }
+    ];
+
+    const cardBackItems = [
+      { id: 'naruto', name: { tr: 'Naruto Teması', en: 'Naruto Back' }, cost: 150, symbol: '🍥', bg: 'linear-gradient(135deg, #ff5722, #e64a19)', border: '#ffeb3b', desc: { tr: 'Girdap logolu turuncu arkalık', en: 'Orange vortex card design' } },
+      { id: 'onepiece', name: { tr: 'One Piece Teması', en: 'One Piece Back' }, cost: 250, symbol: '☠️', bg: 'linear-gradient(135deg, #2a2a2a, #0d0d0d)', border: '#f1c40f', desc: { tr: 'Korsan logolu karanlık arkalık', en: 'Dark Strawhat Jolly Roger design' } },
+      { id: 'cyberpunk', name: { tr: 'Cyberpunk Teması', en: 'Cyberpunk Back' }, cost: 350, symbol: '⚡', bg: 'linear-gradient(135deg, #0f0f1b, #f7df1e)', border: '#39ff14', desc: { tr: 'Matris yeşili neon siber desen', en: 'Neon hacker matrix layout' } }
+    ];
+
+    const titleItems = [
+      { id: 'gold', name: { tr: '💰 Para Babası', en: '💰 Money Bag' }, cost: 100, color: '#FFD700', desc: { tr: 'Altın renkli parıldayan unvan', en: 'Gold shimmering profile title' } },
+      { id: 'flame', name: { tr: '🔥 Sinsi Hırsız', en: '🔥 Sly Thief' }, cost: 200, color: '#ff4500', desc: { tr: 'Yanan alevli sinsi unvan', en: 'Flaming red thief profile title' } },
+      { id: 'cyber', name: { tr: '⚡ Siber Kartal', en: '⚡ Cyber Falcon' }, cost: 300, color: '#39ff14', desc: { tr: 'Matris yeşili neon siber unvan', en: 'Cyberpunk glowing profile title' } },
+      { id: 'kral', name: { tr: '👑 Oyunun Kralı', en: '👑 Game King' }, cost: 450, color: '#f1c40f', desc: { tr: 'Altın renkli hareketli unvan', en: 'Golden bouncing king profile title' } },
+      { id: 'cosmic', name: { tr: '🌌 Kozmik Efendi', en: '🌌 Cosmic Lord' }, cost: 500, color: '#8e44ad', desc: { tr: 'Nebula moru dönen kozmik unvan', en: 'Space rotating celestial title' } }
+    ];
+
+    const playEffectItems = [
+      { id: 'gold', name: { tr: '✨ Yıldız Patlaması', en: '✨ Star Explosion' }, cost: 150, symbol: '✨', bg: 'linear-gradient(135deg, #FFD700, #F39C12)', border: '#ffe57f', desc: { tr: 'Kart atınca altın yıldızlar saçar', en: 'Gold stars fly out on play' } },
+      { id: 'heart', name: { tr: '💖 Neon Kalpler', en: '💖 Neon Hearts' }, cost: 250, symbol: '💖', bg: 'linear-gradient(135deg, #e91e63, #ad1457)', border: '#ff80ab', desc: { tr: 'Pembe renkli parlayan kalpler atar', en: 'Glow hearts fly out on play' } },
+      { id: 'flame', name: { tr: '🔥 Alev Topları', en: '🔥 Fireballs' }, cost: 350, symbol: '🔥', bg: 'linear-gradient(135deg, #d35400, #e67e22)', border: '#ffab40', desc: { tr: 'Yanan kırmızı alev kıvılcımları saçar', en: 'Fire ember sparks fly out on play' } },
+      { id: 'cosmic', name: { tr: '☄️ Kozmik Meteor', en: '☄️ Cosmic Meteor' }, cost: 400, symbol: '☄️', bg: 'linear-gradient(135deg, #8e44ad, #2980b9)', border: '#b388ff', desc: { tr: 'Mor renkli kayan yıldızlar saçar', en: 'Celestial stardust flies out on play' } }
+    ];
+
+    const unlockedBadges = dbUser?.unlockedBadges || ['default'];
+    const currentBadge = dbUser?.selectedBadge || 'default';
+
+    const badgeItems = [
+      { id: 'rookie', name: { tr: '🌱 Çaylak', en: '🌱 Rookie' }, cost: 50, color: '#4ade80', cssClass: 'badge-rookie', desc: { tr: 'Başlangıç düzeyi oyuncu rozeti', en: 'Entry level player badge' } },
+      { id: 'veteran', name: { tr: '⚔️ Veteran', en: '⚔️ Veteran' }, cost: 200, color: '#60a5fa', cssClass: 'badge-veteran', desc: { tr: 'Mavi parlayan veteran rozeti', en: 'Blue glowing veteran badge' } },
+      { id: 'ghost', name: { tr: '👻 Hayalet', en: '👻 Ghost' }, cost: 300, color: '#c084fc', cssClass: 'badge-ghost', desc: { tr: 'Mor süzülen hayalet rozeti', en: 'Floating purple ghost badge' } },
+      { id: 'legend', name: { tr: '🦁 Efsane', en: '🦁 Legend' }, cost: 500, color: '#fbbf24', cssClass: 'badge-legend', desc: { tr: 'Altın renkli parlayan efsane rozeti', en: 'Shining gold legend badge' } },
+      { id: 'king', name: { tr: '🫅 Hükümdar', en: '🫅 Ruler' }, cost: 750, color: '#FFD700', cssClass: 'badge-king', desc: { tr: 'Altın ışıltılı kral rozeti', en: 'Royal pulsing king badge' } }
+    ];
+
+    return (
+      <Modal title={lang === 'en' ? "🛍️ CUSTOMIZATION SHOP" : "🛍️ ÖZELLEŞTİRME MAĞAZASI"} onClose={() => { setModal(null); setHoveredShopItem(null); }}>
+        {/* Shop purchase coin splash overlay */}
+        {shopCoins.map(coin => (
+          <div
+            key={coin.id}
+            className="coin-spray-particle"
+            style={{
+              left: coin.x,
+              top: coin.y,
+              '--dx': coin.dx,
+              '--dy': coin.dy,
+              '--dr': coin.dr
+            }}
+          >
+            🪙
+          </div>
+        ))}
+
+        <div className="shop-layout">
+          {/* LEFT SIDE: Preview */}
+          <div className="shop-preview-side">
+            <span style={{ fontSize: 11, fontWeight: 900, color: '#94a3b8', letterSpacing: 1, textTransform: 'uppercase' }}>
+              {lang === 'en' ? 'LIVE PREVIEW' : 'CANLI ÖNİZLEME'}
+            </span>
+
+            <div className="preview-card-floating">
+              {/* 3D Preview Border Card */}
+              <div className="preview-card-3d">
+                <div
+                  className={`avatar-container border-style-${previewBorder}`}
+                  style={{ width: 64, height: 64, marginBottom: 12 }}
+                >
+                  <img
+                    src={`https://api.dicebear.com/7.x/${myAvatarStyle}/svg?seed=${myName || 'user'}`}
+                    alt="avatar"
+                  />
+                </div>
+                <span style={{ fontSize: 12, fontWeight: 900, color: '#fff', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: '100%', display: 'block', marginBottom: 2 }}>
+                  {myName || 'Oyuncu'}
+                </span>
+
+                {/* PREVIEW TITLE */}
+                <div className={`title-style-${previewTitle}`} style={{ fontSize: 9.5, fontWeight: 'bold', display: 'block', marginBottom: 6 }}>
+                  {
+                    previewTitle === 'default'
+                      ? (lang === 'en' ? 'Classic Player' : 'Klasik Oyuncu')
+                      : titleItems.find(t => t.id === previewTitle)?.name[lang] || previewTitle
+                  }
+                </div>
+
+                <span style={{ fontSize: 8, color: '#64748b', fontWeight: 'bold' }}>
+                  {lang === 'en' ? 'SHOP ITEM PREVIEWS' : 'MAĞAZA ÖNİZLEMELERİ'}
+                </span>
+              </div>
+
+              <div style={{ marginTop: 15, display: 'flex', flexDirection: 'row', alignItems: 'center', gap: 15 }}>
+                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4 }}>
+                  <span style={{ fontSize: 8, fontWeight: 900, color: '#64748b', letterSpacing: 0.5 }}>
+                    {lang === 'en' ? 'CARD BACK' : 'KART ARKALIĞI'}
+                  </span>
+                  <div style={{ width: 30, height: 42, borderRadius: 6, overflow: 'hidden', boxShadow: '0 4px 10px rgba(0,0,0,0.3)' }}>
+                    <CardBack theme={previewCardBack} small />
+                  </div>
+                </div>
+
+                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4 }}>
+                  <span style={{ fontSize: 8, fontWeight: 900, color: '#64748b', letterSpacing: 0.5 }}>
+                    {lang === 'en' ? 'EFFECT' : 'HAMLE EFEKTİ'}
+                  </span>
+                  <div style={{
+                    width: 30, height: 42, borderRadius: 6,
+                    background: previewPlayEffect === 'default' ? 'linear-gradient(135deg, #1e293b, #0f172a)' : (playEffectItems.find(e => e.id === previewPlayEffect)?.bg || 'linear-gradient(135deg, #1e293b, #0f172a)'),
+                    border: `1px solid ${previewPlayEffect === 'default' ? 'rgba(255,255,255,0.1)' : (playEffectItems.find(e => e.id === previewPlayEffect)?.border || 'rgba(255,255,255,0.1)')}`,
+                    display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 16,
+                    boxShadow: '0 4px 10px rgba(0,0,0,0.3)'
+                  }}>
+                    {previewPlayEffect === 'default' ? '💸' : (playEffectItems.find(e => e.id === previewPlayEffect)?.symbol || '💸')}
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* RIGHT SIDE: List & Items */}
+          <div className="shop-items-area">
+            {/* Points balance */}
+            <div style={{
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              background: 'rgba(255, 215, 0, 0.08)',
+              border: '1px solid rgba(255, 215, 0, 0.2)',
+              borderRadius: 12,
+              padding: '10px 16px',
+              fontSize: 13,
+              fontWeight: 'bold',
+              color: '#FFD700',
+              boxSizing: 'border-box'
+            }}>
+              <span>{lang === 'en' ? 'YOUR BALANCE:' : 'MEVCUT PUANINIZ:'}</span>
+              <span style={{ fontSize: 16, letterSpacing: 0.5 }}>🪙 {points} PTS</span>
+            </div>
+
+            {/* Borders Section */}
+            <div>
+              <h3 style={{ fontSize: 11, color: '#94a3b8', borderBottom: '1px solid rgba(255,255,255,0.08)', paddingBottom: 4, marginBottom: 10, textTransform: 'uppercase', letterSpacing: 0.5 }}>
+                {lang === 'en' ? 'Profile Borders' : 'Profil Çerçeveleri'}
+              </h3>
+              <div className="shop-items-grid">
+                {/* Default Border Card */}
+                <div
+                  className={`shop-item-card ${currentBorder === 'default' ? 'is-active' : ''}`}
+                  style={{
+                    '--card-accent': '#aaa',
+                    '--card-glow': 'rgba(255,255,255,0.05)'
+                  }}
+                  onMouseEnter={() => setHoveredShopItem({ type: 'border', id: 'default' })}
+                  onMouseLeave={() => setHoveredShopItem(null)}
+                  onClick={() => currentBorder !== 'default' && handleSelectCustomization('border', 'default')}
+                >
+                  <div className="avatar-container border-style-default" style={{ width: 44, height: 44, marginBottom: 8 }}>
+                    <img src={`https://api.dicebear.com/7.x/${myAvatarStyle}/svg?seed=${myName || 'user'}`} alt="" />
+                  </div>
+                  <div style={{ fontSize: 11, fontWeight: 'bold', color: '#fff', marginBottom: 2 }}>
+                    {lang === 'en' ? 'Classic' : 'Klasik'}
+                  </div>
+                  <div style={{ fontSize: 8, color: '#64748b', height: 20, overflow: 'hidden', lineHeight: 1.1 }}>
+                    {lang === 'en' ? 'Standard look' : 'Standart çerçeve'}
+                  </div>
+                  <div style={{ marginTop: 8, width: '100%' }}>
+                    {currentBorder === 'default' ? (
+                      <span style={{ fontSize: 9, fontWeight: 900, color: '#39ff14', background: 'rgba(57,255,20,0.1)', padding: '3px 8px', borderRadius: 6, display: 'block' }}>{lang === 'en' ? 'ACTIVE' : 'AKTİF'}</span>
+                    ) : (
+                      <span style={{ fontSize: 9, fontWeight: 900, color: '#94a3b8', background: 'rgba(255,255,255,0.05)', padding: '3px 8px', borderRadius: 6, display: 'block' }}>{lang === 'en' ? 'EQUIP' : 'KUŞAN'}</span>
+                    )}
+                  </div>
+                </div>
+
+                {/* Custom Borders Cards */}
+                {borderItems.map(item => {
+                  const unlocked = unlockedBorders.includes(item.id);
+                  const active = currentBorder === item.id;
+
+                  return (
+                    <div
+                      key={item.id}
+                      className={`shop-item-card ${active ? 'is-active' : ''}`}
+                      style={{
+                        '--card-accent': item.color,
+                        '--card-glow': `${item.color}33`
+                      }}
+                      onMouseEnter={() => setHoveredShopItem({ type: 'border', id: item.id })}
+                      onMouseLeave={() => setHoveredShopItem(null)}
+                    >
+                      <div className={`avatar-container border-style-${item.id}`} style={{ width: 44, height: 44, marginBottom: 8 }}>
+                        <img src={`https://api.dicebear.com/7.x/${myAvatarStyle}/svg?seed=${myName || 'user'}`} alt="" />
+                      </div>
+                      <div style={{ fontSize: 11, fontWeight: 'bold', color: item.color, marginBottom: 2 }}>
+                        {lang === 'en' ? item.name.en : item.name.tr}
+                      </div>
+                      <div style={{ fontSize: 8, color: '#64748b', height: 20, overflow: 'hidden', lineHeight: 1.1 }}>
+                        {lang === 'en' ? item.desc.en : item.desc.tr}
+                      </div>
+                      <div style={{ marginTop: 8, width: '100%' }}>
+                        {active ? (
+                          <span style={{ fontSize: 9, fontWeight: 900, color: '#39ff14', background: 'rgba(57,255,20,0.1)', padding: '3px 8px', borderRadius: 6, display: 'block' }}>{lang === 'en' ? 'ACTIVE' : 'AKTİF'}</span>
+                        ) : unlocked ? (
+                          <button
+                            onClick={() => handleSelectCustomization('border', item.id)}
+                            style={{ width: '100%', background: 'rgba(255,255,255,0.08)', border: 'none', color: '#fff', fontSize: 9, fontWeight: 'bold', padding: '4px 8px', borderRadius: 6, cursor: 'pointer' }}
+                          >
+                            {lang === 'en' ? 'EQUIP' : 'KUŞAN'}
+                          </button>
+                        ) : (
+                          <button
+                            onClick={(e) => handleBuyCustomization('border', item.id, item.cost, e)}
+                            disabled={points < item.cost}
+                            style={{
+                              width: '100%',
+                              background: points >= item.cost ? `linear-gradient(135deg, ${item.color}, #000)` : 'rgba(255,255,255,0.03)',
+                              color: points >= item.cost ? '#fff' : '#555',
+                              border: 'none',
+                              fontSize: 9,
+                              fontWeight: 'bold',
+                              padding: '4px 8px',
+                              borderRadius: 6,
+                              cursor: points >= item.cost ? 'pointer' : 'default',
+                              boxShadow: points >= item.cost ? `0 2px 8px ${item.color}33` : 'none'
+                            }}
+                          >
+                            🪙 {item.cost}
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Card Backs Section */}
+            <div>
+              <h3 style={{ fontSize: 11, color: '#94a3b8', borderBottom: '1px solid rgba(255,255,255,0.08)', paddingBottom: 4, marginBottom: 10, textTransform: 'uppercase', letterSpacing: 0.5 }}>
+                {lang === 'en' ? 'Card Backs' : 'Kart Arkalıkları'}
+              </h3>
+              <div className="shop-items-grid">
+                {/* Default Card Back Card */}
+                <div
+                  className={`shop-item-card ${currentCardBack === 'default' ? 'is-active' : ''}`}
+                  style={{
+                    '--card-accent': '#c0392b',
+                    '--card-glow': 'rgba(192, 57, 43, 0.15)'
+                  }}
+                  onMouseEnter={() => setHoveredShopItem({ type: 'cardBack', id: 'default' })}
+                  onMouseLeave={() => setHoveredShopItem(null)}
+                  onClick={() => currentCardBack !== 'default' && handleSelectCustomization('cardBack', 'default')}
+                >
+                  <div style={{ width: 30, height: 40, borderRadius: 4, background: 'linear-gradient(135deg, #c0392b, #78281f)', border: '1px solid #f1c40f', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 14, marginBottom: 8 }}>🎲</div>
+                  <div style={{ fontSize: 11, fontWeight: 'bold', color: '#fff', marginBottom: 2 }}>
+                    {lang === 'en' ? 'Classic Red' : 'Klasik Kırmızı'}
+                  </div>
+                  <div style={{ fontSize: 8, color: '#64748b', height: 20, overflow: 'hidden', lineHeight: 1.1 }}>
+                    {lang === 'en' ? 'Standard Red' : 'Standart kırmızı deste'}
+                  </div>
+                  <div style={{ marginTop: 8, width: '100%' }}>
+                    {currentCardBack === 'default' ? (
+                      <span style={{ fontSize: 9, fontWeight: 900, color: '#39ff14', background: 'rgba(57,255,20,0.1)', padding: '3px 8px', borderRadius: 6, display: 'block' }}>{lang === 'en' ? 'ACTIVE' : 'AKTİF'}</span>
+                    ) : (
+                      <span style={{ fontSize: 9, fontWeight: 900, color: '#94a3b8', background: 'rgba(255,255,255,0.05)', padding: '3px 8px', borderRadius: 6, display: 'block' }}>{lang === 'en' ? 'EQUIP' : 'KUŞAN'}</span>
+                    )}
+                  </div>
+                </div>
+
+                {/* Custom Card Backs Cards */}
+                {cardBackItems.map(item => {
+                  const unlocked = unlockedCardBacks.includes(item.id);
+                  const active = currentCardBack === item.id;
+
+                  return (
+                    <div
+                      key={item.id}
+                      className={`shop-item-card ${active ? 'is-active' : ''}`}
+                      style={{
+                        '--card-accent': item.border,
+                        '--card-glow': `${item.border}33`
+                      }}
+                      onMouseEnter={() => setHoveredShopItem({ type: 'cardBack', id: item.id })}
+                      onMouseLeave={() => setHoveredShopItem(null)}
+                    >
+                      <div style={{ width: 30, height: 40, borderRadius: 4, background: item.bg, border: `1.5px solid ${item.border}`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 14, color: '#fff', marginBottom: 8 }}>{item.symbol}</div>
+                      <div style={{ fontSize: 11, fontWeight: 'bold', color: item.border, marginBottom: 2 }}>
+                        {lang === 'en' ? item.name.en : item.name.tr}
+                      </div>
+                      <div style={{ fontSize: 8, color: '#64748b', height: 20, overflow: 'hidden', lineHeight: 1.1 }}>
+                        {lang === 'en' ? item.desc.en : item.desc.tr}
+                      </div>
+                      <div style={{ marginTop: 8, width: '100%' }}>
+                        {active ? (
+                          <span style={{ fontSize: 9, fontWeight: 900, color: '#39ff14', background: 'rgba(57,255,20,0.1)', padding: '3px 8px', borderRadius: 6, display: 'block' }}>{lang === 'en' ? 'ACTIVE' : 'AKTİF'}</span>
+                        ) : unlocked ? (
+                          <button
+                            onClick={() => handleSelectCustomization('cardBack', item.id)}
+                            style={{ width: '100%', background: 'rgba(255,255,255,0.08)', border: 'none', color: '#fff', fontSize: 9, fontWeight: 'bold', padding: '4px 8px', borderRadius: 6, cursor: 'pointer' }}
+                          >
+                            {lang === 'en' ? 'EQUIP' : 'KUŞAN'}
+                          </button>
+                        ) : (
+                          <button
+                            onClick={(e) => handleBuyCustomization('cardBack', item.id, item.cost, e)}
+                            disabled={points < item.cost}
+                            style={{
+                              width: '100%',
+                              background: points >= item.cost ? `linear-gradient(135deg, ${item.border}, #000)` : 'rgba(255,255,255,0.03)',
+                              color: points >= item.cost ? '#fff' : '#555',
+                              border: 'none',
+                              fontSize: 9,
+                              fontWeight: 'bold',
+                              padding: '4px 8px',
+                              borderRadius: 6,
+                              cursor: points >= item.cost ? 'pointer' : 'default',
+                              boxShadow: points >= item.cost ? `0 2px 8px ${item.border}33` : 'none'
+                            }}
+                          >
+                            🪙 {item.cost}
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Titles Section */}
+            <div style={{ marginTop: 15 }}>
+              <h3 style={{ fontSize: 11, color: '#94a3b8', borderBottom: '1px solid rgba(255,255,255,0.08)', paddingBottom: 4, marginBottom: 10, textTransform: 'uppercase', letterSpacing: 0.5 }}>
+                {lang === 'en' ? 'Profile Titles' : 'Profil Unvanları'}
+              </h3>
+              <div className="shop-items-grid">
+                {/* Default Title */}
+                <div
+                  className={`shop-item-card ${currentTitle === 'default' ? 'is-active' : ''}`}
+                  style={{
+                    '--card-accent': '#64748b',
+                    '--card-glow': 'rgba(100, 116, 139, 0.15)'
+                  }}
+                  onMouseEnter={() => setHoveredShopItem({ type: 'title', id: 'default' })}
+                  onMouseLeave={() => setHoveredShopItem(null)}
+                  onClick={() => currentTitle !== 'default' && handleSelectCustomization('title', 'default')}
+                >
+                  <div style={{ fontSize: 18, marginBottom: 6 }}>👤</div>
+                  <div style={{ fontSize: 11, fontWeight: 'bold', color: '#fff', marginBottom: 2 }}>
+                    {lang === 'en' ? 'Classic Player' : 'Klasik Oyuncu'}
+                  </div>
+                  <div style={{ fontSize: 8, color: '#64748b', height: 20, overflow: 'hidden', lineHeight: 1.1 }}>
+                    {lang === 'en' ? 'Standard profile title' : 'Standart oyuncu unvanı'}
+                  </div>
+                  <div style={{ marginTop: 8, width: '100%' }}>
+                    {currentTitle === 'default' ? (
+                      <span style={{ fontSize: 9, fontWeight: 900, color: '#39ff14', background: 'rgba(57,255,20,0.1)', padding: '3px 8px', borderRadius: 6, display: 'block' }}>{lang === 'en' ? 'ACTIVE' : 'AKTİF'}</span>
+                    ) : (
+                      <span style={{ fontSize: 9, fontWeight: 900, color: '#94a3b8', background: 'rgba(255,255,255,0.05)', padding: '3px 8px', borderRadius: 6, display: 'block' }}>{lang === 'en' ? 'EQUIP' : 'KUŞAN'}</span>
+                    )}
+                  </div>
+                </div>
+
+                {/* Custom Titles */}
+                {titleItems.map(item => {
+                  const unlocked = unlockedTitles.includes(item.id);
+                  const active = currentTitle === item.id;
+
+                  return (
+                    <div
+                      key={item.id}
+                      className={`shop-item-card ${active ? 'is-active' : ''}`}
+                      style={{
+                        '--card-accent': item.color,
+                        '--card-glow': `${item.color}33`
+                      }}
+                      onMouseEnter={() => setHoveredShopItem({ type: 'title', id: item.id })}
+                      onMouseLeave={() => setHoveredShopItem(null)}
+                    >
+                      <div className={`title-style-${item.id}`} style={{ fontSize: 12, fontWeight: 'bold', height: 16, marginBottom: 12, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                        {item.name[lang]}
+                      </div>
+                      <div style={{ fontSize: 11, fontWeight: 'bold', color: item.color, marginBottom: 2 }}>
+                        {lang === 'en' ? 'Animated Title' : 'Hareketli Unvan'}
+                      </div>
+                      <div style={{ fontSize: 8, color: '#64748b', height: 20, overflow: 'hidden', lineHeight: 1.1 }}>
+                        {lang === 'en' ? item.desc.en : item.desc.tr}
+                      </div>
+                      <div style={{ marginTop: 8, width: '100%' }}>
+                        {active ? (
+                          <span style={{ fontSize: 9, fontWeight: 900, color: '#39ff14', background: 'rgba(57,255,20,0.1)', padding: '3px 8px', borderRadius: 6, display: 'block' }}>{lang === 'en' ? 'ACTIVE' : 'AKTİF'}</span>
+                        ) : unlocked ? (
+                          <button
+                            onClick={() => handleSelectCustomization('title', item.id)}
+                            style={{ width: '100%', background: 'rgba(255,255,255,0.08)', border: 'none', color: '#fff', fontSize: 9, fontWeight: 'bold', padding: '4px 8px', borderRadius: 6, cursor: 'pointer' }}
+                          >
+                            {lang === 'en' ? 'EQUIP' : 'KUŞAN'}
+                          </button>
+                        ) : (
+                          <button
+                            onClick={(e) => handleBuyCustomization('title', item.id, item.cost, e)}
+                            disabled={points < item.cost}
+                            style={{
+                              width: '100%',
+                              background: points >= item.cost ? `linear-gradient(135deg, ${item.color}, #000)` : 'rgba(255,255,255,0.03)',
+                              color: points >= item.cost ? '#fff' : '#555',
+                              border: 'none',
+                              fontSize: 9,
+                              fontWeight: 'bold',
+                              padding: '4px 8px',
+                              borderRadius: 6,
+                              cursor: points >= item.cost ? 'pointer' : 'default',
+                              boxShadow: points >= item.cost ? `0 2px 8px ${item.color}33` : 'none'
+                            }}
+                          >
+                            🪙 {item.cost}
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Play Effects Section */}
+            <div style={{ marginTop: 15 }}>
+              <h3 style={{ fontSize: 11, color: '#94a3b8', borderBottom: '1px solid rgba(255,255,255,0.08)', paddingBottom: 4, marginBottom: 10, textTransform: 'uppercase', letterSpacing: 0.5 }}>
+                {lang === 'en' ? 'Play Card Effects' : 'Kart Fırlatma Efektleri'}
+              </h3>
+              <div className="shop-items-grid">
+                {/* Default Play Effect */}
+                <div
+                  className={`shop-item-card ${currentPlayEffect === 'default' ? 'is-active' : ''}`}
+                  style={{
+                    '--card-accent': '#3498db',
+                    '--card-glow': 'rgba(52, 152, 219, 0.15)'
+                  }}
+                  onMouseEnter={() => setHoveredShopItem({ type: 'playEffect', id: 'default' })}
+                  onMouseLeave={() => setHoveredShopItem(null)}
+                  onClick={() => currentPlayEffect !== 'default' && handleSelectCustomization('playEffect', 'default')}
+                >
+                  <div style={{ width: 30, height: 40, borderRadius: 4, background: 'linear-gradient(135deg, #1e293b, #0f172a)', border: '1px solid rgba(255,255,255,0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 14, marginBottom: 8 }}>💸</div>
+                  <div style={{ fontSize: 11, fontWeight: 'bold', color: '#fff', marginBottom: 2 }}>
+                    {lang === 'en' ? 'Classic Money' : 'Para Fırlatma'}
+                  </div>
+                  <div style={{ fontSize: 8, color: '#64748b', height: 20, overflow: 'hidden', lineHeight: 1.1 }}>
+                    {lang === 'en' ? 'Standard money spray' : 'Klasik para fırlatma efekti'}
+                  </div>
+                  <div style={{ marginTop: 8, width: '100%' }}>
+                    {currentPlayEffect === 'default' ? (
+                      <span style={{ fontSize: 9, fontWeight: 900, color: '#39ff14', background: 'rgba(57,255,20,0.1)', padding: '3px 8px', borderRadius: 6, display: 'block' }}>{lang === 'en' ? 'ACTIVE' : 'AKTİF'}</span>
+                    ) : (
+                      <span style={{ fontSize: 9, fontWeight: 900, color: '#94a3b8', background: 'rgba(255,255,255,0.05)', padding: '3px 8px', borderRadius: 6, display: 'block' }}>{lang === 'en' ? 'EQUIP' : 'KUŞAN'}</span>
+                    )}
+                  </div>
+                </div>
+
+                {/* Custom Play Effects */}
+                {playEffectItems.map(item => {
+                  const unlocked = unlockedPlayEffects.includes(item.id);
+                  const active = currentPlayEffect === item.id;
+
+                  return (
+                    <div
+                      key={item.id}
+                      className={`shop-item-card ${active ? 'is-active' : ''}`}
+                      style={{
+                        '--card-accent': item.border,
+                        '--card-glow': `${item.border}33`
+                      }}
+                      onMouseEnter={() => setHoveredShopItem({ type: 'playEffect', id: item.id })}
+                      onMouseLeave={() => setHoveredShopItem(null)}
+                    >
+                      <div style={{ width: 30, height: 40, borderRadius: 4, background: item.bg, border: `1.5px solid ${item.border}`, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 14, color: '#fff', marginBottom: 8 }}>{item.symbol}</div>
+                      <div style={{ fontSize: 11, fontWeight: 'bold', color: item.border, marginBottom: 2 }}>
+                        {lang === 'en' ? item.name.en : item.name.tr}
+                      </div>
+                      <div style={{ fontSize: 8, color: '#64748b', height: 20, overflow: 'hidden', lineHeight: 1.1 }}>
+                        {lang === 'en' ? item.desc.en : item.desc.tr}
+                      </div>
+                      <div style={{ marginTop: 8, width: '100%' }}>
+                        {active ? (
+                          <span style={{ fontSize: 9, fontWeight: 900, color: '#39ff14', background: 'rgba(57,255,20,0.1)', padding: '3px 8px', borderRadius: 6, display: 'block' }}>{lang === 'en' ? 'ACTIVE' : 'AKTİF'}</span>
+                        ) : unlocked ? (
+                          <button
+                            onClick={() => handleSelectCustomization('playEffect', item.id)}
+                            style={{ width: '100%', background: 'rgba(255,255,255,0.08)', border: 'none', color: '#fff', fontSize: 9, fontWeight: 'bold', padding: '4px 8px', borderRadius: 6, cursor: 'pointer' }}
+                          >
+                            {lang === 'en' ? 'EQUIP' : 'KUŞAN'}
+                          </button>
+                        ) : (
+                          <button
+                            onClick={(e) => handleBuyCustomization('playEffect', item.id, item.cost, e)}
+                            disabled={points < item.cost}
+                            style={{
+                              width: '100%',
+                              background: points >= item.cost ? `linear-gradient(135deg, ${item.border}, #000)` : 'rgba(255,255,255,0.03)',
+                              color: points >= item.cost ? '#fff' : '#555',
+                              border: 'none',
+                              fontSize: 9,
+                              fontWeight: 'bold',
+                              padding: '4px 8px',
+                              borderRadius: 6,
+                              cursor: points >= item.cost ? 'pointer' : 'default',
+                              boxShadow: points >= item.cost ? `0 2px 8px ${item.border}33` : 'none'
+                            }}
+                          >
+                            🪙 {item.cost}
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Player Badges Section */}
+            <div style={{ marginTop: 15 }}>
+              <h3 style={{ fontSize: 11, color: '#94a3b8', borderBottom: '1px solid rgba(255,255,255,0.08)', paddingBottom: 4, marginBottom: 10, textTransform: 'uppercase', letterSpacing: 0.5 }}>
+                {lang === 'en' ? '🏅 Player Badges' : '🏅 Oyuncu Rozetleri'}
+              </h3>
+              <p style={{ fontSize: 9, color: '#64748b', marginBottom: 10, fontStyle: 'italic' }}>
+                {lang === 'en' ? 'Shown next to your name during gameplay and in lobby.' : 'Oyun içinde ve lobide isminizin yanında görünür.'}
+              </p>
+              <div className="shop-items-grid">
+                {/* Default Badge */}
+                <div
+                  className={`shop-item-card ${currentBadge === 'default' ? 'is-active' : ''}`}
+                  style={{ '--card-accent': '#64748b', '--card-glow': 'rgba(100,116,139,0.15)' }}
+                  onMouseEnter={() => setHoveredShopItem({ type: 'badge', id: 'default' })}
+                  onMouseLeave={() => setHoveredShopItem(null)}
+                  onClick={() => currentBadge !== 'default' && handleSelectCustomization('badge', 'default')}
+                >
+                  <div style={{ fontSize: 20, marginBottom: 6 }}>🎮</div>
+                  <div style={{ fontSize: 11, fontWeight: 'bold', color: '#fff', marginBottom: 2 }}>
+                    {lang === 'en' ? 'No Badge' : 'Rozetsiz'}
+                  </div>
+                  <div style={{ fontSize: 8, color: '#64748b', height: 20, overflow: 'hidden', lineHeight: 1.1 }}>
+                    {lang === 'en' ? 'Standard player, no badge' : 'Rozetsiz standart görünüm'}
+                  </div>
+                  <div style={{ marginTop: 8, width: '100%' }}>
+                    {currentBadge === 'default' ? (
+                      <span style={{ fontSize: 9, fontWeight: 900, color: '#39ff14', background: 'rgba(57,255,20,0.1)', padding: '3px 8px', borderRadius: 6, display: 'block' }}>{lang === 'en' ? 'ACTIVE' : 'AKTİF'}</span>
+                    ) : (
+                      <span style={{ fontSize: 9, fontWeight: 900, color: '#94a3b8', background: 'rgba(255,255,255,0.05)', padding: '3px 8px', borderRadius: 6, display: 'block' }}>{lang === 'en' ? 'EQUIP' : 'KUŞAN'}</span>
+                    )}
+                  </div>
+                </div>
+
+                {/* Custom Badges */}
+                {badgeItems.map(item => {
+                  const unlocked = unlockedBadges.includes(item.id);
+                  const active = currentBadge === item.id;
+                  return (
+                    <div
+                      key={item.id}
+                      className={`shop-item-card ${active ? 'is-active' : ''}`}
+                      style={{ '--card-accent': item.color, '--card-glow': `${item.color}33` }}
+                      onMouseEnter={() => setHoveredShopItem({ type: 'badge', id: item.id })}
+                      onMouseLeave={() => setHoveredShopItem(null)}
+                    >
+                      <span className={`player-badge ${item.cssClass}`} style={{ fontSize: 10, marginBottom: 8, padding: '3px 8px' }}>
+                        {lang === 'en' ? item.name.en : item.name.tr}
+                      </span>
+                      <div style={{ fontSize: 11, fontWeight: 'bold', color: item.color, marginBottom: 2, marginTop: 4 }}>
+                        {lang === 'en' ? 'Player Badge' : 'Oyuncu Rozeti'}
+                      </div>
+                      <div style={{ fontSize: 8, color: '#64748b', height: 20, overflow: 'hidden', lineHeight: 1.1 }}>
+                        {lang === 'en' ? item.desc.en : item.desc.tr}
+                      </div>
+                      <div style={{ marginTop: 8, width: '100%' }}>
+                        {active ? (
+                          <span style={{ fontSize: 9, fontWeight: 900, color: '#39ff14', background: 'rgba(57,255,20,0.1)', padding: '3px 8px', borderRadius: 6, display: 'block' }}>{lang === 'en' ? 'ACTIVE' : 'AKTİF'}</span>
+                        ) : unlocked ? (
+                          <button onClick={() => handleSelectCustomization('badge', item.id)} style={{ width: '100%', background: 'rgba(255,255,255,0.08)', border: 'none', color: '#fff', fontSize: 9, fontWeight: 'bold', padding: '4px 8px', borderRadius: 6, cursor: 'pointer' }}>
+                            {lang === 'en' ? 'EQUIP' : 'KUŞAN'}
+                          </button>
+                        ) : (
+                          <button
+                            onClick={(e) => handleBuyCustomization('badge', item.id, item.cost, e)}
+                            disabled={points < item.cost}
+                            style={{
+                              width: '100%',
+                              background: points >= item.cost ? `linear-gradient(135deg, ${item.color}, #1e293b)` : 'rgba(255,255,255,0.03)',
+                              color: points >= item.cost ? '#fff' : '#555',
+                              border: 'none', fontSize: 9, fontWeight: 'bold', padding: '4px 8px', borderRadius: 6,
+                              cursor: points >= item.cost ? 'pointer' : 'default',
+                              boxShadow: points >= item.cost ? `0 2px 8px ${item.color}33` : 'none'
+                            }}
+                          >
+                            🪙 {item.cost}
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Table Themes Section */}
+            <div style={{ marginTop: 15 }}>
+              <h3 style={{ fontSize: 11, color: '#94a3b8', borderBottom: '1px solid rgba(255,255,255,0.08)', paddingBottom: 4, marginBottom: 10, textTransform: 'uppercase', letterSpacing: 0.5 }}>
+                {lang === 'en' ? '🖼️ Table Board Themes' : '🖼️ Oyun Masası Temaları'}
+              </h3>
+              <p style={{ fontSize: 9, color: '#64748b', marginBottom: 10, fontStyle: 'italic' }}>
+                {lang === 'en' ? 'Changes the table background style and ambiance.' : 'Oyun alanının arka planını ve atmosferini değiştirir.'}
+              </p>
+              <div className="shop-items-grid">
+                {/* Default Table Theme */}
+                <div
+                  className={`shop-item-card ${currentTableTheme === 'default' ? 'is-active' : ''}`}
+                  style={{ '--card-accent': '#64748b', '--card-glow': 'rgba(100,116,139,0.15)' }}
+                  onMouseEnter={() => setHoveredShopItem({ type: 'tableTheme', id: 'default' })}
+                  onMouseLeave={() => setHoveredShopItem(null)}
+                  onClick={() => currentTableTheme !== 'default' && handleSelectCustomization('tableTheme', 'default')}
+                >
+                  <div style={{ fontSize: 20, marginBottom: 6 }}>🌌</div>
+                  <div style={{ fontSize: 11, fontWeight: 'bold', color: '#fff', marginBottom: 2 }}>
+                    {lang === 'en' ? 'Classic Board' : 'Klasik Masa'}
+                  </div>
+                  <div style={{ fontSize: 8, color: '#64748b', height: 20, overflow: 'hidden', lineHeight: 1.1 }}>
+                    {lang === 'en' ? 'Standard steel blue background' : 'Standart çelik mavisi arka plan'}
+                  </div>
+                  <div style={{ marginTop: 8, width: '100%' }}>
+                    {currentTableTheme === 'default' ? (
+                      <span style={{ fontSize: 9, fontWeight: 900, color: '#39ff14', background: 'rgba(57,255,20,0.1)', padding: '3px 8px', borderRadius: 6, display: 'block' }}>{lang === 'en' ? 'ACTIVE' : 'AKTİF'}</span>
+                    ) : (
+                      <span style={{ fontSize: 9, fontWeight: 900, color: '#94a3b8', background: 'rgba(255,255,255,0.05)', padding: '3px 8px', borderRadius: 6, display: 'block' }}>{lang === 'en' ? 'EQUIP' : 'KUŞAN'}</span>
+                    )}
+                  </div>
+                </div>
+
+                {/* Custom Table Themes */}
+                {tableThemeItems.map(item => {
+                  const unlocked = unlockedTableThemes.includes(item.id);
+                  const active = currentTableTheme === item.id;
+                  return (
+                    <div
+                      key={item.id}
+                      className={`shop-item-card ${active ? 'is-active' : ''}`}
+                      style={{ '--card-accent': item.color, '--card-glow': `${item.color}33` }}
+                      onMouseEnter={() => setHoveredShopItem({ type: 'tableTheme', id: item.id })}
+                      onMouseLeave={() => setHoveredShopItem(null)}
+                    >
+                      <div style={{ fontSize: 20, marginBottom: 6 }}>{item.id === 'volcano' ? '🌋' : item.id === 'cosmic' ? '🌌' : item.id === 'matrix' ? '🟢' : '👑'}</div>
+                      <div style={{ fontSize: 11, fontWeight: 'bold', color: item.color, marginBottom: 2 }}>
+                        {lang === 'en' ? item.name.en : item.name.tr}
+                      </div>
+                      <div style={{ fontSize: 8, color: '#64748b', height: 20, overflow: 'hidden', lineHeight: 1.1 }}>
+                        {lang === 'en' ? item.desc.en : item.desc.tr}
+                      </div>
+                      <div style={{ marginTop: 8, width: '100%' }}>
+                        {active ? (
+                          <span style={{ fontSize: 9, fontWeight: 900, color: '#39ff14', background: 'rgba(57,255,20,0.1)', padding: '3px 8px', borderRadius: 6, display: 'block' }}>{lang === 'en' ? 'ACTIVE' : 'AKTİF'}</span>
+                        ) : unlocked ? (
+                          <button onClick={() => handleSelectCustomization('tableTheme', item.id)} style={{ width: '100%', background: 'rgba(255,255,255,0.08)', border: 'none', color: '#fff', fontSize: 9, fontWeight: 'bold', padding: '4px 8px', borderRadius: 6, cursor: 'pointer' }}>
+                            {lang === 'en' ? 'EQUIP' : 'KUŞAN'}
+                          </button>
+                        ) : (
+                          <button
+                            onClick={(e) => handleBuyCustomization('tableTheme', item.id, item.cost, e)}
+                            disabled={points < item.cost}
+                            style={{
+                              width: '100%',
+                              background: points >= item.cost ? `linear-gradient(135deg, ${item.color}, #1e293b)` : 'rgba(255,255,255,0.03)',
+                              color: points >= item.cost ? '#fff' : '#555',
+                              border: 'none', fontSize: 9, fontWeight: 'bold', padding: '4px 8px', borderRadius: 6,
+                              cursor: points >= item.cost ? 'pointer' : 'default',
+                              boxShadow: points >= item.cost ? `0 2px 8px ${item.color}33` : 'none'
+                            }}
+                          >
+                            🪙 {item.cost}
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Dice Skins Section */}
+            <div style={{ marginTop: 15 }}>
+              <h3 style={{ fontSize: 11, color: '#94a3b8', borderBottom: '1px solid rgba(255,255,255,0.08)', paddingBottom: 4, marginBottom: 10, textTransform: 'uppercase', letterSpacing: 0.5 }}>
+                {lang === 'en' ? '🎲 Dice Skins' : '🎲 Özel Zar Görünümleri'}
+              </h3>
+              <p style={{ fontSize: 9, color: '#64748b', marginBottom: 10, fontStyle: 'italic' }}>
+                {lang === 'en' ? 'Custom style for your gamble/chance dice rolls.' : 'Şans zarlarınızı atarken görünen özel stiller.'}
+              </p>
+              <div className="shop-items-grid">
+                {/* Default Dice Skin */}
+                <div
+                  className={`shop-item-card ${currentDiceSkin === 'default' ? 'is-active' : ''}`}
+                  style={{ '--card-accent': '#64748b', '--card-glow': 'rgba(100,116,139,0.15)' }}
+                  onMouseEnter={() => setHoveredShopItem({ type: 'diceSkin', id: 'default' })}
+                  onMouseLeave={() => setHoveredShopItem(null)}
+                  onClick={() => currentDiceSkin !== 'default' && handleSelectCustomization('diceSkin', 'default')}
+                >
+                  <div style={{ fontSize: 20, marginBottom: 6 }}>🎲</div>
+                  <div style={{ fontSize: 11, fontWeight: 'bold', color: '#fff', marginBottom: 2 }}>
+                    {lang === 'en' ? 'Classic Dice' : 'Klasik Zar'}
+                  </div>
+                  <div style={{ fontSize: 8, color: '#64748b', height: 20, overflow: 'hidden', lineHeight: 1.1 }}>
+                    {lang === 'en' ? 'Standard white dice' : 'Standart beyaz renkli zar'}
+                  </div>
+                  <div style={{ marginTop: 8, width: '100%' }}>
+                    {currentDiceSkin === 'default' ? (
+                      <span style={{ fontSize: 9, fontWeight: 900, color: '#39ff14', background: 'rgba(57,255,20,0.1)', padding: '3px 8px', borderRadius: 6, display: 'block' }}>{lang === 'en' ? 'ACTIVE' : 'AKTİF'}</span>
+                    ) : (
+                      <span style={{ fontSize: 9, fontWeight: 900, color: '#94a3b8', background: 'rgba(255,255,255,0.05)', padding: '3px 8px', borderRadius: 6, display: 'block' }}>{lang === 'en' ? 'EQUIP' : 'KUŞAN'}</span>
+                    )}
+                  </div>
+                </div>
+
+                {/* Custom Dice Skins */}
+                {diceSkinItems.map(item => {
+                  const unlocked = unlockedDiceSkins.includes(item.id);
+                  const active = currentDiceSkin === item.id;
+                  return (
+                    <div
+                      key={item.id}
+                      className={`shop-item-card ${active ? 'is-active' : ''}`}
+                      style={{ '--card-accent': item.color, '--card-glow': `${item.color}33` }}
+                      onMouseEnter={() => setHoveredShopItem({ type: 'diceSkin', id: item.id })}
+                      onMouseLeave={() => setHoveredShopItem(null)}
+                    >
+                      <div style={{ fontSize: 20, marginBottom: 6 }}>🎲</div>
+                      <div style={{ fontSize: 11, fontWeight: 'bold', color: item.color, marginBottom: 2 }}>
+                        {lang === 'en' ? item.name.en : item.name.tr}
+                      </div>
+                      <div style={{ fontSize: 8, color: '#64748b', height: 20, overflow: 'hidden', lineHeight: 1.1 }}>
+                        {lang === 'en' ? item.desc.en : item.desc.tr}
+                      </div>
+                      <div style={{ marginTop: 8, width: '100%' }}>
+                        {active ? (
+                          <span style={{ fontSize: 9, fontWeight: 900, color: '#39ff14', background: 'rgba(57,255,20,0.1)', padding: '3px 8px', borderRadius: 6, display: 'block' }}>{lang === 'en' ? 'ACTIVE' : 'AKTİF'}</span>
+                        ) : unlocked ? (
+                          <button onClick={() => handleSelectCustomization('diceSkin', item.id)} style={{ width: '100%', background: 'rgba(255,255,255,0.08)', border: 'none', color: '#fff', fontSize: 9, fontWeight: 'bold', padding: '4px 8px', borderRadius: 6, cursor: 'pointer' }}>
+                            {lang === 'en' ? 'EQUIP' : 'KUŞAN'}
+                          </button>
+                        ) : (
+                          <button
+                            onClick={(e) => handleBuyCustomization('diceSkin', item.id, item.cost, e)}
+                            disabled={points < item.cost}
+                            style={{
+                              width: '100%',
+                              background: points >= item.cost ? `linear-gradient(135deg, ${item.color}, #1e293b)` : 'rgba(255,255,255,0.03)',
+                              color: points >= item.cost ? '#fff' : '#555',
+                              border: 'none', fontSize: 9, fontWeight: 'bold', padding: '4px 8px', borderRadius: 6,
+                              cursor: points >= item.cost ? 'pointer' : 'default',
+                              boxShadow: points >= item.cost ? `0 2px 8px ${item.color}33` : 'none'
+                            }}
+                          >
+                            🪙 {item.cost}
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+
+          </div>
+        </div>
+      </Modal>
+    );
+  }
+
+  return null;
+};
+
+// ---- LOBİ AYARLARI PANELİ OLUŞTURUCU ----
+const renderRoomSettings = (disabled = false) => {
+  const selStyle = { background: 'rgba(0,0,0,0.6)', color: '#fff', border: '1px solid rgba(255,255,255,0.15)', borderRadius: 8, padding: '8px 12px', outline: 'none', cursor: 'pointer', fontSize: 13, width: '100%', boxSizing: 'border-box' };
+  const descStyle = { fontSize: 10, color: '#94a3b8', marginTop: 3, display: 'block', fontStyle: 'italic', lineHeight: 1.3, letterSpacing: 0.2 };
+  return (
+    <details className="settings-details" style={{ pointerEvents: disabled ? 'none' : 'auto', opacity: disabled ? 0.8 : 1, marginTop: 12, width: '100%' }}>
+      <summary style={{ fontWeight: 800, color: '#FFD700', letterSpacing: 0.5, cursor: 'pointer', padding: '8px 4px', borderBottom: '1px solid rgba(255,255,255,0.08)' }}>{lang === 'en' ? '⚙️ ADVANCED ROOM SETTINGS' : '⚙️ GELİŞMİŞ OYUN AYARLARI'}</summary>
+      <div className="settings-content" style={{ display: 'flex', flexDirection: 'column', gap: 16, marginTop: 12 }}>
+
+        {/* Hazır Şablonlar */}
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 12px', background: 'rgba(255,215,0,0.05)', borderRadius: 10, border: '1px solid rgba(255,215,0,0.15)' }}>
+          <span style={{ fontSize: 12, color: '#FFD700', fontWeight: 'bold' }}>{lang === 'en' ? '🎮 Presets:' : '🎮 Hazır Şablonlar:'}</span>
+          <select onChange={e => e.target.value && applyPreset(e.target.value)} style={{ background: 'rgba(0,0,0,0.5)', color: '#fff', border: '1px solid #FFD700', borderRadius: 8, padding: '6px 12px', outline: 'none', cursor: 'pointer', fontSize: 11 }}>
+            <option value="">{lang === 'en' ? 'Select Preset...' : 'Şablon Seç...'}</option>
+            <option value="classic">{lang === 'en' ? '🎲 Classic Mode' : '🎲 Klasik Mod'}</option>
+            <option value="speed">{lang === 'en' ? '⚡ Speed Mode' : '⚡ Hızlı Başlangıç'}</option>
+            <option value="chaos">{lang === 'en' ? '🔥 Chaos Mode' : '🔥 Kaos Modu'}</option>
+          </select>
+        </div>
+
+        {/* Bölüm 1: Genel Akış ve Hedefler */}
+        <div style={{ background: 'rgba(0,0,0,0.2)', padding: 12, borderRadius: 10, border: '1px solid rgba(255,255,255,0.04)' }}>
+          <h4 style={{ color: '#3498DB', fontSize: 11, fontWeight: 900, margin: '0 0 10px 0', letterSpacing: 1, textTransform: 'uppercase' }}>{lang === 'en' ? '⚡ GAME FLOW' : '⚡ OYUN AKIŞI'}</h4>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            <div style={{ marginBottom: 4 }}>
+              <span style={{ fontSize: 11, color: '#a0aec0', display: 'block', marginBottom: 4 }}>{lang === 'en' ? '🎮 Game Mode:' : '🎮 Oyun Modu:'}</span>
+              <select value={roomSettings.gameMode || 'normal'} onChange={e => {
+                const mode = e.target.value;
+                setRoomSettings(prev => {
+                  const updated = { ...prev, gameMode: mode };
+                  if (mode === 'blitz') {
+                    updated.turnTimer = 15;
+                    updated.startCards = 7;
+                    updated.winSets = 2;
+                  } else if (mode === 'scavenge') {
+                    updated.streetThugs = true;
+                  }
+                  return updated;
+                });
+              }} style={selStyle}>
+                <option value="normal">{lang === 'en' ? '🎲 Normal Mode' : '🎲 Normal Mod'}</option>
+                <option value="blitz">{lang === 'en' ? '⚡ Blitz Mode (15s, 7 Cards, 2 Sets)' : '⚡ Blitz Modu (15sn, 7 Kart, 2 Set)'}</option>
+                <option value="scavenge">{lang === 'en' ? '🕵️ Scavenge Madness (Free Karaborsa)' : '🕵️ Karaborsa Çılgınlığı (Bedava Karaborsa)'}</option>
+              </select>
+              <span style={descStyle}>
+                {lang === 'en' ? '🎮 Alters turn time, starting cards, and Black Market costs.' : '🎮 Sıra süresi, başlangıç kartları ve Karaborsa bedelini otomatik belirler.'}
+              </span>
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8 }}>
+              <div>
+                <span style={{ fontSize: 11, color: '#a0aec0', display: 'block', marginBottom: 4 }}>{lang === 'en' ? 'Win Condition:' : 'Kazanma Hedefi:'}</span>
+                <select value={roomSettings.winSets} onChange={e => setRoomSettings(prev => ({ ...prev, winSets: Number(e.target.value) }))} style={selStyle}>
+                  <option value={2}>{lang === 'en' ? '2 Sets (Fast)' : '2 Set (Hızlı)'}</option>
+                  <option value={3}>{lang === 'en' ? '3 Sets (Classic)' : '3 Set (Klasik)'}</option>
+                  <option value={4}>{lang === 'en' ? '4 Sets (Long)' : '4 Set (Uzun)'}</option>
+                  <option value={5}>{lang === 'en' ? '5 Sets (Epic)' : '5 Set (Destansı)'}</option>
+                </select>
+              </div>
+              <div>
+                <span style={{ fontSize: 11, color: '#a0aec0', display: 'block', marginBottom: 4 }}>{lang === 'en' ? 'Starting Hand:' : 'Başlangıç El Kartı:'}</span>
+                <select value={roomSettings.startCards} onChange={e => setRoomSettings(prev => ({ ...prev, startCards: Number(e.target.value) }))} style={selStyle}>
+                  <option value={5}>{lang === 'en' ? '5 Cards (Standard)' : '5 Kart (Standart)'}</option>
+                  <option value={7}>{lang === 'en' ? '7 Cards (Fast)' : '7 Kart (Hızlı)'}</option>
+                  <option value={10}>{lang === 'en' ? '10 Cards (Chaos)' : '10 Kart (Kaos)'}</option>
+                </select>
+              </div>
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 8, marginTop: 4 }}>
+              <div>
+                <span style={{ fontSize: 11, color: '#a0aec0', display: 'block', marginBottom: 4 }}>{lang === 'en' ? 'Turn Time:' : 'Hamle Süresi:'}</span>
+                <select value={roomSettings.turnTimer} onChange={e => setRoomSettings(prev => ({ ...prev, turnTimer: Number(e.target.value) }))} style={selStyle}>
+                  <option value={0}>{lang === 'en' ? 'Unlimited' : 'Sınırsız (Klasik)'}</option>
+                  <option value={30}>{lang === 'en' ? '30 Seconds' : '30 Saniye'}</option>
+                  <option value={60}>{lang === 'en' ? '60 Seconds' : '60 Saniye'}</option>
+                  <option value={120}>{lang === 'en' ? '2 Minutes' : '2 Dakika'}</option>
+                </select>
+              </div>
+              <div>
+                <span style={{ fontSize: 11, color: '#a0aec0', display: 'block', marginBottom: 4 }}>{lang === 'en' ? 'Bot Difficulty:' : 'Bot Zorluğu:'}</span>
+                <select value={roomSettings.botDifficulty || 'medium'} onChange={e => setRoomSettings(prev => ({ ...prev, botDifficulty: e.target.value }))} style={selStyle}>
+                  <option value="easy">{lang === 'en' ? 'Easy' : 'Kolay'}</option>
+                  <option value="medium">{lang === 'en' ? 'Medium' : 'Orta'}</option>
+                  <option value="hard">{lang === 'en' ? 'Hard (Aggressive)' : 'Zor (Agresif)'}</option>
+                </select>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Bölüm 2: Özel Kurallar */}
+        <div style={{ background: 'rgba(0,0,0,0.2)', padding: 12, borderRadius: 10, border: '1px solid rgba(255,255,255,0.04)' }}>
+          <h4 style={{ color: '#E67E22', fontSize: 11, fontWeight: 900, margin: '0 0 10px 0', letterSpacing: 1, textTransform: 'uppercase' }}>{lang === 'en' ? '🛡️ SPECIAL RULES' : '🛡️ ÖZEL KURALLAR'}</h4>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+
+            <div style={{ marginBottom: 6 }}>
+              <label className="switch-container">
+                <span className="switch-label">{lang === 'en' ? '⏱️ Auto End Turn (after 3 moves)' : '⏱️ Eli Otomatik Bitir (3 Hamle)'}</span>
+                <input type="checkbox" className="switch-checkbox" checked={roomSettings.autoEndTurn} onChange={e => setRoomSettings(prev => ({ ...prev, autoEndTurn: e.target.checked }))} />
+                <div className="switch-toggle" />
+              </label>
+              <span style={descStyle}>
+                {lang === 'en' ? '⏱️ Turn ends automatically after playing 3 cards.' : '⏱️ 3 kart oynama limitine ulaştığınızda sıranızı otomatik olarak sonlandırır.'}
+              </span>
+            </div>
+
+            <div style={{ marginBottom: 6 }}>
+              <label className="switch-container">
+                <span className="switch-label">{lang === 'en' ? '🛡️ Allow Counter Just Say No' : '🛡️ Çifte Reddet (Savunmaya İtiraz)'}</span>
+                <input type="checkbox" className="switch-checkbox" checked={roomSettings.allowCounterJustSayNo} onChange={e => setRoomSettings(prev => ({ ...prev, allowCounterJustSayNo: e.target.checked }))} />
+                <div className="switch-toggle" />
+              </label>
+              <span style={descStyle}>
+                {lang === 'en' ? '🛡️ Players can counter a "Just Say No" card with another "Just Say No" card.' : '🛡️ "Reddet!" (Just Say No) kartına karşı başka bir "Reddet!" kartı ile çifte itiraz/savunma yapılabilmesini sağlar.'}
+              </span>
+            </div>
+
+            <div style={{ marginBottom: 6 }}>
+              <label className="switch-container">
+                <span className="switch-label">{lang === 'en' ? '🔒 Lock Wildcards after placing' : '🔒 Joker Kilidi (Renk Sabitlenir)'}</span>
+                <input type="checkbox" className="switch-checkbox" checked={roomSettings.lockWildcards} onChange={e => setRoomSettings(prev => ({ ...prev, lockWildcards: e.target.checked }))} />
+                <div className="switch-toggle" />
+              </label>
+              <span style={descStyle}>
+                {lang === 'en' ? '🔒 Wildcards cannot change color once placed on the table.' : '🔒 Masaya konulan çift renkli jokerlerin rengi sonradan değiştirilemez.'}
+              </span>
+            </div>
+
+            <label className="switch-container">
+              <span className="switch-label">{lang === 'en' ? '🔁 Allow Property Trades' : '🔁 Barışçıl Takas İzni'}</span>
+              <input type="checkbox" className="switch-checkbox" checked={roomSettings.allowTrades} onChange={e => setRoomSettings(prev => ({ ...prev, allowTrades: e.target.checked }))} />
+              <div className="switch-toggle" />
+            </label>
+
+            <div style={{ marginTop: 4 }}>
+              <span style={{ fontSize: 11, color: '#a0aec0', display: 'block', marginBottom: 4 }}>{lang === 'en' ? 'Extra Deal Breakers:' : 'İlave Deal Breaker (Set Çalma):'}</span>
+              <select value={roomSettings.extraDealBreakers} onChange={e => setRoomSettings(prev => ({ ...prev, extraDealBreakers: Number(e.target.value) }))} style={selStyle}>
+                <option value={0}>{lang === 'en' ? 'None (Original 2 Cards)' : 'Yok (Orijinal 2 Kart)'}</option>
+                <option value={1}>{lang === 'en' ? '+1 Card (Total 3)' : '+1 Kart (Toplam 3)'}</option>
+                <option value={3}>{lang === 'en' ? '+3 Cards (Chaos!)' : '+3 Kart (Kaos!)'}</option>
+              </select>
+            </div>
+
+          </div>
+        </div>
+
+        {/* Bölüm 3: Modlar ve Eğlence */}
+        <div style={{ background: 'rgba(0,0,0,0.2)', padding: 12, borderRadius: 10, border: '1px solid rgba(255,255,255,0.04)' }}>
+          <h4 style={{ color: '#2ECC71', fontSize: 11, fontWeight: 900, margin: '0 0 10px 0', letterSpacing: 1, textTransform: 'uppercase' }}>{lang === 'en' ? '🔥 FUN MODES' : '🔥 EĞLENCE MODLARI'}</h4>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+
+            <div style={{ marginBottom: 6 }}>
+              <label className="switch-container">
+                <span className="switch-label">{lang === 'en' ? '👁️‍🗨️ Open Hands (Training)' : '👁️‍🗨️ Açık El Modu (Antrenman)'}</span>
+                <input type="checkbox" className="switch-checkbox" checked={roomSettings.openHands} onChange={e => setRoomSettings(prev => ({ ...prev, openHands: e.target.checked }))} />
+                <div className="switch-toggle" />
+              </label>
+              <span style={descStyle}>
+                {lang === 'en' ? '👁️‍🗨️ Opponents can see each other\'s cards in real time.' : '👁️‍🗨️ Tüm oyuncuların elindeki kartlar rakipler tarafından açık şekilde görülebilir.'}
+              </span>
+            </div>
+
+            <div style={{ marginBottom: 6 }}>
+              <label className="switch-container">
+                <span className="switch-label">{lang === 'en' ? '⚡ Fast Challenge (15s JSN limit)' : '⚡ Hızlı Reddet (15sn Savunma limit)'}</span>
+                <input type="checkbox" className="switch-checkbox" checked={roomSettings.fastChallenge} onChange={e => setRoomSettings(prev => ({ ...prev, fastChallenge: e.target.checked }))} />
+                <div className="switch-toggle" />
+              </label>
+              <span style={descStyle}>
+                {lang === 'en' ? '⚡ Reduces the "Just Say No" defense response window to 15 seconds.' : '⚡ "Reddet!" (Just Say No) savunma kartı oynamak için tanınan süreyi 15 saniyeye indirerek oyunu hızlandırır.'}
+              </span>
+            </div>
+
+            <div style={{ marginBottom: 6 }}>
+              <label className="switch-container">
+                <span className="switch-label">{lang === 'en' ? '🕵️ Street Thugs (Black Market)' : '🕵️ Sokak Haydutları (Karaborsa)'}</span>
+                <input type="checkbox" className="switch-checkbox" checked={roomSettings.streetThugs} onChange={e => setRoomSettings(prev => ({ ...prev, streetThugs: e.target.checked }))} />
+                <div className="switch-toggle" />
+              </label>
+              <span style={descStyle}>
+                {lang === 'en' ? '🕵️ Pay to draw the top card from the discard pile (Black Market).' : '🕵️ Çöp (Iskarta) destesinin en üstündeki kartı para karşılığında satın almanızı sağlar.'}
+              </span>
+            </div>
+
+            <div style={{ marginBottom: 6 }}>
+              <label className="switch-container">
+                <span className="switch-label">{lang === 'en' ? '🎲 Gambler\'s Die (Gamble roll)' : '🎲 Kumarbazın Zarı (Şans zarı)'}</span>
+                <input type="checkbox" className="switch-checkbox" checked={roomSettings.gambleZari} onChange={e => setRoomSettings(prev => ({ ...prev, gambleZari: e.target.checked }))} />
+                <div className="switch-toggle" />
+              </label>
+              <span style={descStyle}>
+                {lang === 'en' ? '🎲 Roll a die on your turn to gamble for winning or losing extra cash.' : '🎲 Turunuzda şans zarı atarak para kazanma veya kaybetme üzerine kumar oynamanızı sağlar.'}
+              </span>
+            </div>
+
+            <div style={{ marginBottom: 6 }}>
+              <label className="switch-container">
+                <span className="switch-label">{lang === 'en' ? '🐿️ Thief Squirrel Cards' : '🐿️ Hırsız Sincap Kartları'}</span>
+                <input type="checkbox" className="switch-checkbox" checked={roomSettings.thiefSquirrelEnabled} onChange={e => setRoomSettings(prev => ({ ...prev, thiefSquirrelEnabled: e.target.checked }))} />
+                <div className="switch-toggle" />
+              </label>
+              <span style={descStyle}>
+                {lang === 'en' ? '🐿️ Adds squirrel cards to steal bank money or property sets.' : '🐿️ Desteye, rakiplerin bankasını veya arazilerini soymaya yarayan sincap kartları ekler.'}
+              </span>
+            </div>
+
+          </div>
+        </div>
+
+      </div>
+    </details>
+  );
+};
+
+
+
+// ---- DESTE İSTATİSTİKLERİ MODALI ----
+const renderDeckStatsModal = () => {
+  if (!showDeckStats) return null;
+
+  const unknownCardsCount = gameState.deckCount + gameState.players.filter(p => p.id !== playerId).reduce((s, p) => s + p.handCount, 0);
+
+  const stats = Object.keys(CARD_TOTAL_COUNTS).map(key => {
+    const total = CARD_TOTAL_COUNTS[key];
+    let visible = 0;
+    const countFn = (c) => { if (c?.key === key) visible++; };
+    gameState.discard?.forEach(countFn);
+    me?.hand?.forEach(countFn);
+    gameState.players?.forEach(p => {
+      (p.bank || []).forEach(countFn);
+      Object.values(p.properties || {}).flat().forEach(countFn);
+    });
+    const remaining = Math.max(0, total - visible);
+    const probability = unknownCardsCount > 0 ? ((remaining / unknownCardsCount) * 100).toFixed(1) : 0;
+    return { key, total, visible, remaining, probability };
+  });
+
+  const categories = {
+    '⚡ Aksiyon Kartları': stats.filter(s => s.key.startsWith('action_')),
+    '🧾 Kira Kartları': stats.filter(s => s.key.startsWith('rent_')),
+    '💰 Para Kartları': stats.filter(s => s.key.startsWith('money_')),
+  };
+
+  const getName = (key) => {
+    if (key.startsWith('money_')) return `${key.split('_')[1]}M Nakit Para`;
+    if (key.startsWith('rent_')) {
+      const parts = key.split('_').slice(1);
+      if (parts[0] === 'all') return 'Herhangi Renk Kira';
+      return `${COLOR_INFO[parts[0]]?.name || parts[0]} / ${COLOR_INFO[parts[1]]?.name || parts[1]} Kira`;
+    }
+    if (key.startsWith('action_')) {
+      const action = key.split('_')[1];
+      const icon = ACTION_STYLE[action]?.icon || '⚡';
+      const names = { passgo: 'Başlangıç', dealbreaker: 'Anlaşma Bozucu', justsayno: 'Reddet!', slydeal: 'Sinsi Anlaşma', forceddeal: 'Zorunlu Anlaşma', debtcollector: 'Borç Tahsildarı', birthday: 'Doğum Günüm', house: 'Ev', hotel: 'Otel', doublerent: 'İki Kat Kira' };
+      return `${icon} ${names[action] || action}`;
+    }
+    return key;
+  };
+
+  return (
+    <Modal title="📊 Deste Kalan Kart İstatistikleri" onClose={() => setShowDeckStats(false)}>
+      <div style={{
+        background: 'rgba(255, 255, 255, 0.02)',
+        border: '1px solid rgba(255, 255, 255, 0.05)',
+        borderRadius: 12,
+        padding: 12,
+        marginBottom: 16
+      }}>
+        <p style={{ color: '#a0aec0', fontSize: 11, margin: 0, lineHeight: 1.5 }}>
+          Bu panel; elinizdeki, ortadaki ve ıskartadaki kartları hesaplayarak desteden çekilme ihtimallerini gösterir.
+          <span style={{ display: 'block', color: '#ffb020', marginTop: 4, fontWeight: 'bold' }}>
+            Bilinmeyen Kart Havuzu: {unknownCardsCount} kart (Deste + Rakiplerin Elleri)
+          </span>
+        </p>
+      </div>
+
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+        {Object.entries(categories).map(([cat, items]) => (
+          <div key={cat}>
+            <div style={{
+              color: '#FFD700',
+              fontSize: 13,
+              fontWeight: '800',
+              marginBottom: 10,
+              borderBottom: '1px solid rgba(255,215,0,0.2)',
+              paddingBottom: 6,
+              letterSpacing: '0.4px'
+            }}>
+              {cat}
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : '1fr 1fr', gap: 8 }}>
+              {items.map(item => {
+                const prob = parseFloat(item.probability);
+                let probColor = '#E74C3C'; // Low probability
+                let probBg = 'rgba(231, 76, 60, 0.1)';
+                if (prob >= 15) {
+                  probColor = '#2ECC71';
+                  probBg = 'rgba(46, 204, 113, 0.1)';
+                } else if (prob >= 5) {
+                  probColor = '#F39C12';
+                  probBg = 'rgba(243, 156, 18, 0.1)';
+                }
+
+                return (
+                  <div
+                    key={item.key}
+                    style={{
+                      display: 'flex',
+                      justifyContent: 'space-between',
+                      alignItems: 'center',
+                      fontSize: 12,
+                      background: 'rgba(255,255,255,0.01)',
+                      border: '1px solid rgba(255,255,255,0.04)',
+                      padding: '10px 12px',
+                      borderRadius: 8,
+                      transition: 'all 0.2s ease'
+                    }}
+                    onMouseOver={e => e.currentTarget.style.background = 'rgba(255,255,255,0.03)'}
+                    onMouseOut={e => e.currentTarget.style.background = 'rgba(255,255,255,0.01)'}
+                  >
+                    <span style={{ color: '#CBD5E0', fontWeight: '500', marginRight: 8 }}>{getName(item.key)}</span>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                      <span style={{
+                        color: probColor,
+                        background: probBg,
+                        padding: '2px 6px',
+                        borderRadius: 6,
+                        fontWeight: '800',
+                        fontSize: 10
+                      }}>
+                        %{item.probability}
+                      </span>
+                      <b style={{
+                        color: item.remaining > 0 ? '#fff' : '#a0aec0',
+                        background: 'rgba(0,0,0,0.3)',
+                        padding: '2px 8px',
+                        borderRadius: 6,
+                        fontSize: 11
+                      }}>
+                        {item.remaining} / {item.total}
+                      </b>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        ))}
+      </div>
+    </Modal>
+  );
+};
+
+// ── REDDET! (Just Say No) YANIT MODALI ──
+const renderChallengeModal = () => {
+  if (!gameState?.myPendingChallenge) return null;
+  const ch = gameState.myPendingChallenge;
+  const iAmDefender = ch.responderId === playerId;
+  if (!iAmDefender) return null; // sadece sırası gelen oyuncu görür
+
+  const haveJustSayNo = me?.hasJustSayNo;
+  const isCounter = ch.responderId === ch.sourceId; // sıra orijinal oyuncuya geri döndü (karşı-Reddet)
+
+  let description = '';
+  let alertTitle = lang === 'en' ? 'ACTION RESPONSE PENDING' : 'AKSİYON YANITI BEKLENİYOR';
+  let alertColor = '#e11d48';
+  let alertIcon = '⚡';
+
+  switch (ch.action) {
+    case 'rent':
+      description = lang === 'en'
+        ? `${ch.sourceName} wants rent from you: ${ch.data.amount}M (${translateReason(ch.data.reason, lang)})`
+        : `${ch.sourceName} sizden kira istiyor: ${ch.data.amount}M (${ch.data.reason})`;
+      alertTitle = lang === 'en' ? 'RENT PAYMENT' : 'KİRA ÖDEMESİ';
+      alertColor = '#e67e22';
+      alertIcon = '🧾';
+      break;
+    case 'birthday':
+      description = lang === 'en'
+        ? `${ch.sourceName} played "It's My Birthday!" and wants a 2M gift from you`
+        : `${ch.sourceName} "Doğum Günüm!" oynadı, sizden 2M hediye istiyor`;
+      alertTitle = lang === 'en' ? 'BIRTHDAY GIFT' : 'DOĞUM GÜNÜ HEDİYESİ';
+      alertColor = '#ec4899';
+      alertIcon = '🎂';
+      break;
+    case 'debtcollector':
+      description = lang === 'en'
+        ? `${ch.sourceName} played "Debt Collector" and demands 5M from you`
+        : `${ch.sourceName} "Borç Tahsildarı" oynadı, sizden 5M istiyor`;
+      alertTitle = lang === 'en' ? 'DEBT COLLECTION' : 'BORÇ TAHSİLATI';
+      alertColor = '#3b82f6';
+      alertIcon = '💸';
+      break;
+    case 'slydeal':
+      {
+        const cardNameEn = translateCard({ type: 'property', name: ch.data.cardName }, lang).name;
+        description = lang === 'en'
+          ? `${ch.sourceName} wants to steal your property "${cardNameEn}" (Sly Deal)`
+          : `${ch.sourceName} sizin "${ch.data.cardName}" arazinizi çalmak istiyor (Sinsi Anlaşma)`;
+      }
+      alertTitle = lang === 'en' ? 'SLY DEAL (STEAL)' : 'SİNSİ ANLAŞMA (HIRSIZLIK)';
+      alertColor = '#a855f7';
+      alertIcon = '🥷';
+      break;
+    case 'forceddeal':
+      {
+        const myCardNameEn = translateCard({ type: 'property', name: ch.data.myCardName }, lang).name;
+        const theirCardNameEn = translateCard({ type: 'property', name: ch.data.theirCardName }, lang).name;
+        description = lang === 'en'
+          ? `${ch.sourceName} wants to swap your property "${myCardNameEn}" with their "${theirCardNameEn}" (Forced Deal)`
+          : `${ch.sourceName} sizin "${ch.data.myCardName}" araziniz ile kendi "${ch.data.theirCardName}" arazisini takas etmek istiyor (Zorunlu Anlaşma)`;
+      }
+      alertTitle = lang === 'en' ? 'FORCED DEAL' : 'ZORUNLU ANLAŞMA';
+      alertColor = '#eab308';
+      alertIcon = '🔁';
+      break;
+    case 'dealbreaker':
+      {
+        const colorNameEn = {
+          brown: 'Brown', lightblue: 'Light Blue', pink: 'Pink', orange: 'Orange',
+          red: 'Red', yellow: 'Yellow', green: 'Green', blue: 'Dark Blue',
+          railroad: 'Railroad', utility: 'Utility'
+        }[ch.data.targetColor] || ch.data.targetColor;
+        const colorName = COLOR_INFO[ch.data.targetColor]?.name || ch.data.targetColor;
+        description = lang === 'en'
+          ? `${ch.sourceName} wants to steal your completed ${colorNameEn} set (Deal Breaker)!`
+          : `${ch.sourceName} sizin tamamlanmış ${colorName} setinizi çalmak istiyor (Anlaşma Bozucu)!`;
+      }
+      alertTitle = lang === 'en' ? 'DEAL BREAKER!' : 'ANLAŞMA BOZUCU!';
+      alertColor = '#dc2626';
+      alertIcon = '💣';
+      break;
+    default:
+      description = lang === 'en'
+        ? `${ch.sourceName} initiated an action against you`
+        : `${ch.sourceName} size karşı bir aksiyon başlattı`;
+  }
+
+  if (isCounter) {
+    alertTitle = lang === 'en' ? 'COUNTER JUST SAY NO!' : 'KARŞI REDDET!';
+    alertColor = '#eab308';
+    alertIcon = '🛡️';
+  }
+
+  let opponentCard = null;
+  if (isCounter) {
+    opponentCard = { type: 'action', action: 'justsayno', name: lang === 'en' ? 'Just Say No!' : 'Reddet!', value: 4, key: 'action_justsayno' };
+  } else {
+    switch (ch.action) {
+      case 'rent': opponentCard = { type: 'action', action: 'rent', name: lang === 'en' ? 'Rent Card' : 'Kira Kartı', value: 1, key: 'rent_all' }; break;
+      case 'birthday': opponentCard = { type: 'action', action: 'birthday', name: lang === 'en' ? 'Its My Birthday' : 'Doğum Günü', value: 2, key: 'action_birthday' }; break;
+      case 'debtcollector': opponentCard = { type: 'action', action: 'debtcollector', name: lang === 'en' ? 'Debt Collector' : 'Borç Tahsildarı', value: 3, key: 'action_debtcollector' }; break;
+      case 'slydeal': opponentCard = { type: 'action', action: 'slydeal', name: lang === 'en' ? 'Sly Deal' : 'Sinsi Anlaşma', value: 3, key: 'action_slydeal' }; break;
+      case 'forceddeal': opponentCard = { type: 'action', action: 'forceddeal', name: lang === 'en' ? 'Forced Deal' : 'Zorunlu Anlaşma', value: 3, key: 'action_forceddeal' }; break;
+      case 'dealbreaker': opponentCard = { type: 'action', action: 'dealbreaker', name: lang === 'en' ? 'Deal Breaker' : 'Anlaşma Bozucu', value: 5, key: 'action_dealbreaker' }; break;
+      default: opponentCard = { type: 'action', action: 'passgo', name: lang === 'en' ? 'Pass Go' : 'Pas Geç', value: 1, key: 'action_passgo' };
+    }
+  }
+
+  return (
+    <Modal title={isCounter ? (lang === 'en' ? '🛡️ Counter with Just Say No!' : '🛡️ Karşı Reddet! Şansın!') : `⚠️ ${alertTitle}`} onClose={() => { }}>
+      <div className="modal-split-layout">
+        {/* Left Column: 3D Card Preview */}
+        <div style={{
+          perspective: '1000px',
+          width: 132 * 1.15,
+          height: 192 * 1.15,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          marginBottom: isMobile ? 10 : 0
+        }}>
+          <div style={{
+            transform: 'rotateY(-12deg) rotateX(8deg)',
+            transformStyle: 'preserve-3d',
+            boxShadow: '0 15px 35px rgba(0,0,0,0.5), 0 0 15px rgba(255,215,0,0.2)',
+            borderRadius: '8px',
+            transition: 'transform 0.4s ease',
+          }}
+            onMouseEnter={(e) => e.currentTarget.style.transform = 'rotateY(0deg) rotateX(0deg) scale(1.03)'}
+            onMouseLeave={(e) => e.currentTarget.style.transform = 'rotateY(-12deg) rotateX(8deg)'}
+          >
+            <CardVisual card={opponentCard} small={false} lang={lang} />
+          </div>
+        </div>
+
+        {/* Right Column: Actions / Options */}
+        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 14, width: '100%' }}>
+          <div style={{
+            background: `${alertColor}15`,
+            border: `1px solid ${alertColor}40`,
+            borderRadius: 10,
+            padding: '10px 14px',
+            display: 'flex',
+            alignItems: 'center',
+            gap: 10
+          }}>
+            <span style={{ fontSize: 20 }}>{alertIcon}</span>
+            <span style={{ fontSize: 13, fontWeight: 900, color: alertColor, letterSpacing: 0.5 }}>{alertTitle}</span>
+          </div>
+
+          <p style={{ color: '#E2E8F0', fontSize: 14, margin: 0, fontWeight: 500, lineHeight: 1.5 }}>
+            {description}
+          </p>
+
+          {isCounter && (
+            <p style={{ color: '#94a3b8', fontSize: 12, margin: 0, lineHeight: 1.4 }}>
+              {lang === 'en'
+                ? 'Your opponent just played a "Just Say No!" card to block your action. If you have another "Just Say No!" card, you can play it to counter their block!'
+                : 'Rakibiniz az önce "Reddet!" kartınızı savunmak için kendi "Reddet!" kartını oynadı. Eğer elinizde başka bir "Reddet!" varsa, onu kullanarak hamleyi yeniden geçerli kılabilirsiniz!'}
+            </p>
+          )}
+
+          {gameState.fastChallenge && (
+            <div style={{
+              background: 'rgba(231, 76, 60, 0.08)',
+              border: '1px solid rgba(231, 76, 60, 0.2)',
+              borderRadius: 8,
+              padding: '6px 12px',
+              color: '#ef4444',
+              fontWeight: 700,
+              fontSize: 12,
+              display: 'flex',
+              alignItems: 'center',
+              gap: 6
+            }}>
+              ⏱️ {lang === 'en' ? 'Time remaining to accept:' : 'Kabul edilmesine kalan süre:'} <span style={{ color: '#fff', background: '#ef4444', padding: '1px 6px', borderRadius: 4 }}>{challengeTime}s</span>
+            </div>
+          )}
+
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginTop: 4 }}>
+            {haveJustSayNo ? (
+              <div style={{
+                background: 'rgba(255,215,0,0.03)',
+                border: '1px solid rgba(255,215,0,0.2)',
+                borderRadius: 12,
+                padding: 12,
+                boxShadow: '0 4px 15px rgba(255,215,0,0.02)'
+              }}>
+                <div style={{ fontSize: 10, color: '#FFD700', fontWeight: 800, textAlign: 'center', marginBottom: 10, letterSpacing: 0.5 }}>
+                  {lang === 'en' ? '🛡️ YOU HAVE A DEFENSE CARD! (Click to use)' : '🛡️ ELİNİZDE SAVUNMA KARTI VAR! (Kullanmak için tıkla)'}
+                </div>
+                <div style={{ display: 'flex', gap: 8, justifyContext: 'center', justifyContent: 'center' }}>
+                  {(me?.hand || []).filter(c => c.action === 'justsayno').map(c => (
+                    <div key={c.id}
+                      onClick={() => handleRespondChallenge(ch.id, true)}
+                      onMouseEnter={() => handleCardHover(c)}
+                      onMouseLeave={() => handleCardHover(null)}
+                      style={{ cursor: 'pointer', transition: 'transform 0.2s' }}
+                      onMouseOver={(e) => e.currentTarget.style.transform = 'scale(1.08) translateY(-4px)'}
+                      onMouseOut={(e) => e.currentTarget.style.transform = 'scale(1)'}
+                    >
+                      <CardVisual card={c} small lang={lang} />
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ) : (
+              <div style={{ background: 'rgba(231,76,60,0.06)', border: '1px dashed rgba(231,76,60,0.2)', borderRadius: 10, padding: 12, color: '#ef4444', fontSize: 11, fontWeight: 700, textAlign: 'center' }}>
+                {lang === 'en'
+                  ? '🛡️ You do not have a "Just Say No!" defense card in your hand.'
+                  : '🛡️ Elinizde "Reddet!" (Just Say No) savunma kartı bulunmuyor.'}
+              </div>
+            )}
 
             <button
-              onClick={() => { handleOpenLeaderboard(); sfxClick(); }}
+              onClick={() => handleRespondChallenge(ch.id, false)}
               style={{
-                background: 'linear-gradient(135deg, rgba(241,196,15,0.15), rgba(243,156,18,0.15))',
-                border: '1px solid rgba(241,196,15,0.35)',
-                color: '#FFD700',
+                ...btnStyle(isCounter ? 'linear-gradient(135deg, #475569, #334155)' : 'linear-gradient(135deg, #10b981, #059669)'),
+                width: '100%',
+                padding: '12px',
+                fontSize: 13,
+                height: 44,
+                borderRadius: 8,
+                margin: 0,
+                boxShadow: isCounter ? 'none' : '0 4px 15px rgba(16,185,129,0.3)'
+              }}
+            >
+              {isCounter
+                ? (lang === 'en' ? 'Do Not Counter, Let Action Be Blocked' : 'İtiraz Etme, Hamle İptal Kalsın')
+                : (lang === 'en' ? 'Accept and Pay / Give Property' : 'Kabul Et ve Öde / Kartı Devret')}
+            </button>
+          </div>
+        </div>
+      </div>
+    </Modal>
+  );
+};
+
+// ── ÖDEME MODALI ──
+const renderPaymentModal = () => {
+  if (!gameState?.myPendingPayment) return null;
+  const payment = gameState.myPendingPayment;
+  const hasBank = (me?.bank || []).length > 0;
+  const hasProps = Object.values(me?.properties || {}).flat().length > 0;
+  if (!hasBank && !hasProps) return null;
+
+  const selectedTotal =
+    (me?.bank || []).filter(c => paymentSelection.bankCardIds.includes(c.id)).reduce((s, c) => s + c.value, 0) +
+    Object.values(me?.properties || {}).flat().filter(c => paymentSelection.propertyCardIds.includes(c.id)).reduce((s, c) => s + c.value, 0);
+
+  const totalAssets =
+    (me?.bank || []).reduce((s, c) => s + c.value, 0) +
+    Object.values(me?.properties || {}).flat().reduce((s, c) => s + c.value, 0);
+
+  const enoughOrAll = selectedTotal >= payment.amount || selectedTotal === totalAssets;
+  const canSubmit = selectedTotal > 0 && enoughOrAll;
+
+  let paymentCard = null;
+  if (payment.reason.toLowerCase().includes('doğum günü') || payment.reason.toLowerCase().includes('birthday')) {
+    paymentCard = { type: 'action', action: 'birthday', name: 'Doğum Günü', value: 2, key: 'action_birthday' };
+  } else if (payment.reason.toLowerCase().includes('borç') || payment.reason.toLowerCase().includes('debt')) {
+    paymentCard = { type: 'action', action: 'debtcollector', name: 'Borç Tahsildarı', value: 3, key: 'action_debtcollector' };
+  } else {
+    paymentCard = { type: 'action', action: 'rent', name: 'Kira Ödemesi', value: payment.amount, key: 'rent_all' };
+  }
+
+  return (
+    <Modal title={lang === 'en' ? "💸 Pay Debt" : "💸 Ödeme Yap"} onClose={() => { }}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 14, width: '100%' }}>
+
+        {/* Üst Bilgi Kartı */}
+        <div style={{
+          background: 'rgba(231, 76, 60, 0.08)',
+          border: '1px solid rgba(231, 76, 60, 0.2)',
+          borderRadius: 12,
+          padding: '12px 16px',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          gap: 12,
+          flexWrap: 'wrap'
+        }}>
+          <div style={{ flex: 1, minWidth: 200 }}>
+            <div style={{ color: '#E2E8F0', fontSize: 14, fontWeight: 600 }}>
+              {lang === 'en' ? <>You need to pay a total of <b style={{ color: '#ef4444', fontSize: 16 }}>{payment.amount}M</b> to <b style={{ color: '#FFD700' }}>{payment.collectorName}</b>.</> : <><b style={{ color: '#FFD700' }}>{payment.collectorName}</b>'e toplam <b style={{ color: '#ef4444', fontSize: 16 }}>{payment.amount}M</b> ödemeniz gerekiyor.</>}
+            </div>
+            <div style={{ color: '#94a3b8', fontSize: 11, marginTop: 4, fontStyle: 'italic' }}>{lang === 'en' ? 'Reason' : 'Gerekçe'}: {translateReason(payment.reason, lang)}</div>
+          </div>
+          {/* Küçük Görsel Önizleme */}
+          <div style={{ width: 44, height: 60, borderRadius: 4, overflow: 'hidden', boxShadow: '0 4px 10px rgba(0,0,0,0.3)', flexShrink: 0 }}>
+            <CardVisual card={paymentCard} small lang={lang} />
+          </div>
+        </div>
+
+        {/* Hızlı Seçim Yardımcı Araçları (Daha uzakta, güvenli butonlar) */}
+        <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-start', flexWrap: 'wrap' }}>
+          <button
+            onClick={() => { sfxClick(); handleAutoSelectPayment(); }}
+            style={{ ...btnStyle('rgba(46, 204, 113, 0.12)'), border: '1px solid rgba(46, 204, 113, 0.3)', color: '#2ECC71', padding: '6px 12px', fontSize: 11, minHeight: 'auto', borderRadius: 8, margin: 0 }}
+          >
+            {lang === 'en' ? '🤖 Auto Select (Money First)' : '🤖 Otomatik Seç (Öncelikli Para)'}
+          </button>
+          <button
+            onClick={() => { sfxClick(); handleSelectAllPayment(); }}
+            style={{ ...btnStyle('rgba(255,255,255,0.05)'), border: '1px solid rgba(255,255,255,0.1)', color: '#aaa', padding: '6px 12px', fontSize: 11, minHeight: 'auto', borderRadius: 8, margin: 0 }}
+          >
+            {lang === 'en' ? 'Select All' : 'Tümünü Seç'}
+          </button>
+          <button
+            onClick={() => { sfxClick(); handleClearPaymentSelection(); }}
+            style={{ ...btnStyle('rgba(231, 76, 60, 0.05)'), border: '1px solid rgba(231, 76, 60, 0.15)', color: '#e74c3c', padding: '6px 12px', fontSize: 11, minHeight: 'auto', borderRadius: 8, margin: 0 }}
+          >
+            {lang === 'en' ? 'Clear' : 'Temizle'}
+          </button>
+        </div>
+
+        {/* Kart Grupları (Yatay Kaydırılabilir Şeritler - Mobil Dostu) */}
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+
+          {hasBank && (
+            <div style={{ background: 'rgba(255,255,255,0.01)', border: '1px solid rgba(255,255,255,0.04)', borderRadius: 12, padding: 12 }}>
+              <div style={{ fontSize: 10, color: '#10b981', fontWeight: 900, marginBottom: 8, letterSpacing: 0.5, textTransform: 'uppercase' }}>{lang === 'en' ? '💵 Cash in Bank Vault' : '💵 Banka Kasasındaki Paralar'}</div>
+              <div style={{ display: 'flex', gap: 10, overflowX: 'auto', paddingBottom: 6, WebkitOverflowScrolling: 'touch' }}>
+                {(me?.bank || []).map(c => {
+                  const isSelected = paymentSelection.bankCardIds.includes(c.id);
+                  return (
+                    <div key={c.id}
+                      onTouchStart={handleTouchStart}
+                      onClick={(e) => {
+                        if (isClickTouchScroll(e)) return;
+                        togglePaymentBankCard(c.id);
+                      }}
+                      style={{
+                        cursor: 'pointer',
+                        transition: 'all 0.2s ease',
+                        transform: isSelected ? 'scale(1.04) translateY(-2px)' : 'none',
+                        border: isSelected ? '3px solid #10b981' : '1px solid rgba(255,255,255,0.1)',
+                        borderRadius: 10,
+                        position: 'relative',
+                        flexShrink: 0,
+                        boxShadow: isSelected ? '0 6px 15px rgba(16,185,129,0.3)' : 'none'
+                      }}
+                    >
+                      <CardVisual card={c} small lang={lang} />
+                      {isSelected && (
+                        <div style={{
+                          position: 'absolute', top: 4, right: 4,
+                          width: 18, height: 18, borderRadius: '50%',
+                          background: '#10b981', color: '#fff',
+                          display: 'flex', alignItems: 'center', justifyContent: 'center',
+                          fontSize: 10, fontWeight: 'bold', zIndex: 10
+                        }}>✓</div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          {hasProps && (
+            <div style={{ background: 'rgba(255,255,255,0.01)', border: '1px solid rgba(255,255,255,0.04)', borderRadius: 12, padding: 12 }}>
+              <div style={{ fontSize: 10, color: '#f59e0b', fontWeight: 900, marginBottom: 8, letterSpacing: 0.5, textTransform: 'uppercase' }}>{lang === 'en' ? '🏠 Your Property Cards' : '🏠 Tapu Senetleriniz (Mülkleriniz)'}</div>
+              <div style={{ display: 'flex', gap: 10, overflowX: 'auto', paddingBottom: 6, WebkitOverflowScrolling: 'touch' }}>
+                {Object.entries(me?.properties || {}).flatMap(([color, cards]) => cards.map(c => {
+                  const isSelected = paymentSelection.propertyCardIds.includes(c.id);
+
+                  // Akıllı Uyarı Mantığı (Danger Glow)
+                  const collector = gameState.players.find(p => p.id === payment.collectorId);
+                  let isDangerous = false;
+                  if (collector) {
+                    if (c.isWild) isDangerous = true;
+                    else {
+                      const cColors = c.isDual ? c.colors : [c.color];
+                      isDangerous = cColors.some(clr => collector.properties?.[clr]?.length > 0);
+                    }
+                  }
+
+                  return (
+                    <div key={c.id}
+                      className={isDangerous && !isSelected ? 'danger-glow' : ''}
+                      onTouchStart={handleTouchStart}
+                      onClick={(e) => {
+                        if (isClickTouchScroll(e)) return;
+                        togglePaymentPropertyCard(c.id);
+                      }}
+                      style={{
+                        cursor: 'pointer',
+                        transition: 'all 0.2s ease',
+                        transform: isSelected ? 'scale(1.04) translateY(-2px)' : 'none',
+                        border: isSelected ? '3px solid #f59e0b' : (isDangerous ? '1px dashed #ef4444' : '1px solid rgba(255,255,255,0.1)'),
+                        borderRadius: 10,
+                        position: 'relative',
+                        flexShrink: 0,
+                        boxShadow: isSelected ? '0 6px 15px rgba(245,158,11,0.3)' : 'none'
+                      }}
+                    >
+                      <CardVisual card={c} small lang={lang} />
+                      {isSelected && (
+                        <div style={{
+                          position: 'absolute', top: 4, right: 4,
+                          width: 18, height: 18, borderRadius: '50%',
+                          background: '#f59e0b', color: '#fff',
+                          display: 'flex', alignItems: 'center', justifyContent: 'center',
+                          fontSize: 10, fontWeight: 'bold', zIndex: 10
+                        }}>✓</div>
+                      )}
+                      {isDangerous && !isSelected && (
+                        <div style={{
+                          position: 'absolute', bottom: 4, right: 4,
+                          background: '#ef4444', color: '#fff',
+                          padding: '1px 5px', borderRadius: 4,
+                          fontSize: 8, fontWeight: 'bold', zIndex: 10
+                        }}>{lang === 'en' ? '🚨 DANGER' : '🚨 TEHLİKE'}</div>
+                      )}
+                    </div>
+                  );
+                }))}
+              </div>
+            </div>
+          )}
+
+        </div>
+
+        {/* Alt Ödeme Gönderme Bölümü */}
+        <div style={{ borderTop: '1px solid rgba(255,255,255,0.08)', paddingTop: 14 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+            <div style={{ color: selectedTotal >= payment.amount ? '#10b981' : '#f59e0b', fontWeight: 900, fontSize: 13.5 }}>
+              {lang === 'en' ? 'Selected Total' : 'Seçilen Toplam'}: <span style={{ fontSize: 16, color: selectedTotal >= payment.amount ? '#10b981' : '#f59e0b' }}>{selectedTotal}M</span> / {payment.amount}M
+              {selectedTotal < payment.amount && selectedTotal === totalAssets && totalAssets > 0 && (
+                <span style={{ color: '#ef4444', display: 'block', fontSize: 11, fontWeight: 'normal', marginTop: 2 }}>{lang === 'en' ? '⚠️ You are paying with all your assets' : '⚠️ Tüm varlığınızla ödeme yapıyorsunuz'}</span>
+              )}
+            </div>
+          </div>
+
+          <button onClick={handleSubmitPayment} disabled={!canSubmit}
+            style={{
+              ...btnStyle('#10b981'),
+              width: '100%',
+              padding: '12px',
+              opacity: canSubmit ? 1 : 0.4,
+              fontSize: 14,
+              fontWeight: 900,
+              height: 48,
+              borderRadius: 10,
+              margin: 0,
+              boxShadow: canSubmit ? '0 4px 15px rgba(16,185,129,0.3)' : 'none'
+            }}
+          >
+            {lang === 'en' ? `Send Payment (${selectedTotal}M)` : `Ödeme Gönder (${selectedTotal}M)`}
+          </button>
+        </div>
+
+      </div>
+    </Modal>
+  );
+};
+
+const renderTradeModal = () => {
+  if (modal?.type === 'proposeTrade') {
+    const target = gameState.players.find(p => p.id === modal.targetId);
+    const toggle = (type, id) => setTradeSelection(p => ({ ...p, [type]: p[type].includes(id) ? p[type].filter(x => x !== id) : [...p[type], id] }));
+    const canSubmit = tradeSelection.offerBankIds.length + tradeSelection.offerPropIds.length + tradeSelection.requestBankIds.length + tradeSelection.requestPropIds.length > 0;
+    return (
+      <Modal title={lang === 'en' ? `🤝 Trade with ${target?.name}` : `🤝 ${target?.name} İle Takas Yap`} onClose={() => setModal(null)}>
+        <div style={{ color: '#94a3b8', fontSize: 13, marginBottom: 20 }}>
+          {lang === 'en' ? 'Trade cards based on mutual agreement. Details will be sent to the opponent for approval.' : 'Karşılıklı anlaşmaya dayalı olarak kart takas edin. Detaylar onay için karşı tarafa iletilir.'}
+        </div>
+        <div style={{ display: 'flex', gap: 14, flexDirection: isMobile ? 'column' : 'row' }}>
+          {/* Give Panel */}
+          <div style={{ flex: 1, background: 'rgba(239, 68, 68, 0.05)', border: '1px solid rgba(239, 68, 68, 0.15)', padding: 14, borderRadius: 12 }}>
+            <div style={{ color: '#f87171', fontWeight: 800, marginBottom: 12, fontSize: 13, letterSpacing: 0.5 }}>{lang === 'en' ? '📤 WHAT WILL YOU GIVE? (YOURS)' : '📤 NE VERECEKSİN? (SENİN)'}</div>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, maxHeight: '200px', overflowY: 'auto' }}>
+              {(me?.bank || []).map(c => (
+                <div key={c.id}
+                  onTouchStart={handleTouchStart}
+                  onClick={(e) => {
+                    if (isClickTouchScroll(e)) return;
+                    toggle('offerBankIds', c.id);
+                  }}
+                  style={{ cursor: 'pointer', transition: 'opacity 0.2s', opacity: tradeSelection.offerBankIds.includes(c.id) ? 1 : 0.35 }}
+                >
+                  <CardVisual card={c} small lang={lang} />
+                </div>
+              ))}
+              {Object.values(me?.properties || {}).flat().map(c => (
+                <div key={c.id}
+                  onTouchStart={handleTouchStart}
+                  onClick={(e) => {
+                    if (isClickTouchScroll(e)) return;
+                    toggle('offerPropIds', c.id);
+                  }}
+                  style={{ cursor: 'pointer', transition: 'opacity 0.2s', opacity: tradeSelection.offerPropIds.includes(c.id) ? 1 : 0.35 }}
+                >
+                  <CardVisual card={c} small lang={lang} />
+                </div>
+              ))}
+              {(me?.bank || []).length === 0 && Object.values(me?.properties || {}).flat().length === 0 && (
+                <span style={{ color: '#64748b', fontSize: 11, fontStyle: 'italic' }}>{lang === 'en' ? 'You have no assets to give' : 'Verebileceğiniz varlığınız yok'}</span>
+              )}
+            </div>
+          </div>
+
+          {/* Take Panel */}
+          <div style={{ flex: 1, background: 'rgba(16, 185, 129, 0.05)', border: '1px solid rgba(16, 185, 129, 0.15)', padding: 14, borderRadius: 12 }}>
+            <div style={{ color: '#34d399', fontWeight: 800, marginBottom: 12, fontSize: 13, letterSpacing: 0.5 }}>{lang === 'en' ? `📥 WHAT WILL YOU GET? (${target?.name.toUpperCase()})` : `📥 NE ALACAKSIN? (${target?.name.toUpperCase()})`}</div>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, maxHeight: '200px', overflowY: 'auto' }}>
+              {target.bank.map(c => (
+                <div key={c.id}
+                  onTouchStart={handleTouchStart}
+                  onClick={(e) => {
+                    if (isClickTouchScroll(e)) return;
+                    toggle('requestBankIds', c.id);
+                  }}
+                  style={{ cursor: 'pointer', transition: 'opacity 0.2s', opacity: tradeSelection.requestBankIds.includes(c.id) ? 1 : 0.35 }}
+                >
+                  <CardVisual card={c} small lang={lang} />
+                </div>
+              ))}
+              {Object.values(target.properties).flat().map(c => (
+                <div key={c.id}
+                  onTouchStart={handleTouchStart}
+                  onClick={(e) => {
+                    if (isClickTouchScroll(e)) return;
+                    toggle('requestPropIds', c.id);
+                  }}
+                  style={{ cursor: 'pointer', transition: 'opacity 0.2s', opacity: tradeSelection.requestPropIds.includes(c.id) ? 1 : 0.35 }}
+                >
+                  <CardVisual card={c} small lang={lang} />
+                </div>
+              ))}
+              {target.bank.length === 0 && Object.values(target.properties).flat().length === 0 && (
+                <span style={{ color: '#64748b', fontSize: 11, fontStyle: 'italic' }}>{lang === 'en' ? 'Player has no assets to trade' : 'Oyuncunun alınabilecek varlığı yok'}</span>
+              )}
+            </div>
+          </div>
+        </div>
+        <button
+          onClick={() => handleProposeTrade(target.id)}
+          disabled={!canSubmit}
+          style={{
+            ...btnStyle('linear-gradient(135deg, #10b981, #059669)'),
+            width: '100%',
+            marginTop: 16,
+            padding: 12,
+            borderRadius: 8,
+            opacity: canSubmit ? 1 : 0.4,
+            boxShadow: canSubmit ? '0 4px 15px rgba(16,185,129,0.3)' : 'none',
+            margin: '16px 0 0 0'
+          }}
+        >
+          {lang === 'en' ? '🤝 Send Trade Offer' : '🤝 Takas Teklifini Gönder'}
+        </button>
+      </Modal>
+    );
+  }
+
+  return null;
+};
+
+// ---- LOBBY ----
+if (screen === 'lobby') {
+  return (
+    <div className="lobby-imperial-bg" style={{ minHeight: '100vh', color: '#fff', display: 'flex', flexDirection: 'column', alignItems: 'center', padding: '16px', position: 'relative', overflowX: 'hidden' }}>
+      {/* Floating Ambient Lights */}
+      <div className="ambient-aura ambient-aura-1" />
+      <div className="ambient-aura ambient-aura-2" />
+
+      {/* PREMIUM NAVIGATION / HEADER BAR */}
+      <header style={{
+        width: '100%',
+        maxWidth: 640,
+        display: 'flex',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        gap: 12,
+        padding: '12px 16px',
+        background: 'rgba(22, 30, 49, 0.45)',
+        backdropFilter: 'blur(20px)',
+        border: '1px solid rgba(255,255,255,0.06)',
+        borderRadius: 16,
+        boxShadow: '0 8px 32px rgba(0,0,0,0.3)',
+        marginBottom: 16,
+        zIndex: 10,
+        boxSizing: 'border-box'
+      }}>
+        {/* Logo */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <img src="/logo.png" alt="Chaos Deal Cart" style={{ height: 26, filter: 'drop-shadow(0 2px 6px rgba(255, 215, 0, 0.3))' }} />
+          <span style={{ color: '#FFD700', fontSize: 14, fontWeight: 950, letterSpacing: '0.5px' }}>Chaos Deal</span>
+        </div>
+
+        {/* Actions: Lang, Leaderboard, Login/Logout */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+          <button
+            onClick={() => {
+              const nextLang = lang === 'tr' ? 'en' : 'tr';
+              setLang(nextLang);
+              localStorage.setItem('md_lang', nextLang);
+              sfxClick();
+            }}
+            style={{
+              background: 'rgba(255, 255, 255, 0.08)',
+              border: '1px solid rgba(255, 255, 255, 0.15)',
+              color: '#fff',
+              padding: '5px 8px',
+              borderRadius: 20,
+              fontSize: 10,
+              fontWeight: 'bold',
+              cursor: 'pointer',
+            }}
+          >
+            {lang === 'tr' ? '🇹🇷 TR' : '🇬🇧 EN'}
+          </button>
+
+          <button
+            onClick={() => { handleOpenLeaderboard(); sfxClick(); }}
+            style={{
+              background: 'linear-gradient(135deg, rgba(241,196,15,0.15), rgba(243,156,18,0.15))',
+              border: '1px solid rgba(241,196,15,0.35)',
+              color: '#FFD700',
+              padding: '5px 10px',
+              borderRadius: 20,
+              fontSize: 10,
+              fontWeight: 900,
+              cursor: 'pointer',
+              boxShadow: '0 2px 6px rgba(241,196,15,0.1)'
+            }}
+          >
+            🏆 {lang === 'en' ? 'Rank' : 'Sıralama'}
+          </button>
+
+          {dbUser ? (
+            <button
+              onClick={handleDbLogout}
+              style={{
+                background: 'linear-gradient(135deg, rgba(231,76,60,0.15), rgba(192,57,43,0.15))',
+                border: '1px solid rgba(231,76,60,0.35)',
+                color: '#E74C3C',
                 padding: '5px 10px',
                 borderRadius: 20,
                 fontSize: 10,
                 fontWeight: 900,
                 cursor: 'pointer',
-                boxShadow: '0 2px 6px rgba(241,196,15,0.1)'
+                boxShadow: '0 2px 6px rgba(231,76,60,0.1)'
               }}
             >
-              🏆 {lang === 'en' ? 'Rank' : 'Sıralama'}
+              🚪 {lang === 'en' ? 'Logout' : 'Çıkış'}
             </button>
+          ) : (
+            <button
+              onClick={() => { setAuthMode('login'); setModal({ type: 'auth' }); sfxClick(); }}
+              style={{
+                background: 'linear-gradient(135deg, #9b59b6, #8e44ad)',
+                border: 'none',
+                color: '#fff',
+                padding: '5px 10px',
+                borderRadius: 20,
+                fontSize: 10,
+                fontWeight: 900,
+                cursor: 'pointer',
+                boxShadow: '0 4px 10px rgba(155,89,182,0.2)'
+              }}
+            >
+              🔑 {lang === 'en' ? 'Login' : 'Giriş'}
+            </button>
+          )}
+        </div>
+      </header>
 
-            {dbUser ? (
-              <button
-                onClick={handleDbLogout}
+      {/* MAIN CONTAINER */}
+      <div className="glass-card" style={{ width: '100%', maxWidth: 640, boxShadow: '0 25px 60px rgba(0, 0, 0, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.08)', padding: 18, zIndex: 1, boxSizing: 'border-box' }}>
+
+        {/* USER PROFILE DASHBOARD CARD */}
+        {dbUser && (
+          <div style={{
+            background: 'linear-gradient(135deg, rgba(255, 255, 255, 0.03), rgba(255, 255, 255, 0.01))',
+            border: '1px solid rgba(255, 255, 255, 0.08)',
+            borderRadius: 16,
+            padding: '16px',
+            marginBottom: 20,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            flexWrap: 'wrap',
+            gap: 14,
+            boxShadow: '0 8px 32px rgba(0,0,0,0.2), inset 0 1px 0 rgba(255,255,255,0.05)',
+            boxSizing: 'border-box'
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 14, minWidth: 200 }}>
+              <div
+                className={`avatar-container border-style-${dbUser.selectedBorder || 'default'}`}
                 style={{
-                  background: 'linear-gradient(135deg, rgba(231,76,60,0.15), rgba(192,57,43,0.15))',
-                  border: '1px solid rgba(231,76,60,0.35)',
-                  color: '#E74C3C',
-                  padding: '5px 10px',
-                  borderRadius: 20,
-                  fontSize: 10,
-                  fontWeight: 900,
-                  cursor: 'pointer',
-                  boxShadow: '0 2px 6px rgba(231,76,60,0.1)'
+                  width: 52,
+                  height: 52,
+                  flexShrink: 0,
+                  boxShadow: dbUser.selectedBorder && dbUser.selectedBorder !== 'default' ? 'none' : '0 4px 15px rgba(0,0,0,0.4)',
                 }}
               >
-                🚪 {lang === 'en' ? 'Logout' : 'Çıkış'}
-              </button>
-            ) : (
-              <button
-                onClick={() => { setAuthMode('login'); setModal({ type: 'auth' }); sfxClick(); }}
-                style={{
-                  background: 'linear-gradient(135deg, #9b59b6, #8e44ad)',
-                  border: 'none',
-                  color: '#fff',
-                  padding: '5px 10px',
-                  borderRadius: 20,
-                  fontSize: 10,
-                  fontWeight: 900,
-                  cursor: 'pointer',
-                  boxShadow: '0 4px 10px rgba(155,89,182,0.2)'
-                }}
-              >
-                🔑 {lang === 'en' ? 'Login' : 'Giriş'}
-              </button>
-            )}
-          </div>
-        </header>
-
-        {/* MAIN CONTAINER */}
-        <div className="glass-card" style={{ width: '100%', maxWidth: 640, boxShadow: '0 25px 60px rgba(0, 0, 0, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.08)', padding: 18, zIndex: 1, boxSizing: 'border-box' }}>
-
-          {/* USER PROFILE DASHBOARD CARD */}
-          {dbUser && (
-            <div style={{
-              background: 'linear-gradient(135deg, rgba(255, 255, 255, 0.03), rgba(255, 255, 255, 0.01))',
-              border: '1px solid rgba(255, 255, 255, 0.08)',
-              borderRadius: 16,
-              padding: '16px',
-              marginBottom: 20,
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'space-between',
-              flexWrap: 'wrap',
-              gap: 14,
-              boxShadow: '0 8px 32px rgba(0,0,0,0.2), inset 0 1px 0 rgba(255,255,255,0.05)',
-              boxSizing: 'border-box'
-            }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 14, minWidth: 200 }}>
-                <div
-                  className={`avatar-container border-style-${dbUser.selectedBorder || 'default'}`}
-                  style={{
-                    width: 52,
-                    height: 52,
-                    flexShrink: 0,
-                    boxShadow: dbUser.selectedBorder && dbUser.selectedBorder !== 'default' ? 'none' : '0 4px 15px rgba(0,0,0,0.4)',
-                  }}
-                >
-                  <img
-                    src={`https://api.dicebear.com/7.x/${dbUser.avatar || 'avataaars'}/svg?seed=${dbUser.username}`}
-                    alt="avatar"
-                  />
-                </div>
-                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', minWidth: 0 }}>
+                <img
+                  src={`https://api.dicebear.com/7.x/${dbUser.avatar || 'avataaars'}/svg?seed=${dbUser.username}`}
+                  alt="avatar"
+                />
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', minWidth: 0 }}>
+                {/* Name + Badge on one row */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
                   <span style={{ fontSize: 15, fontWeight: 900, color: '#FFD700', textShadow: '0 2px 10px rgba(255,215,0,0.2)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', maxWidth: 180 }}>
                     {dbUser.displayName || dbUser.display_name || dbUser.username}
                   </span>
-                  <div className={`title-style-${dbUser.selectedTitle || 'default'}`} style={{ fontSize: 9.5, fontWeight: 'bold', marginTop: 2 }}>
-                    {
-                      dbUser.selectedTitle && dbUser.selectedTitle !== 'default'
-                        ? {
-                            gold: { tr: '💰 Para Babası', en: '💰 Money Bag' },
-                            flame: { tr: '🔥 Sinsi Hırsız', en: '🔥 Sly Thief' },
-                            cyber: { tr: '⚡ Siber Kartal', en: '⚡ Cyber Falcon' },
-                            kral: { tr: '👑 Oyunun Kralı', en: '👑 Game King' },
-                            cosmic: { tr: '🌌 Kozmik Efendi', en: '🌌 Cosmic Lord' }
-                          }[dbUser.selectedTitle]?.[lang] || dbUser.selectedTitle
-                        : (lang === 'en' ? 'Classic Player' : 'Klasik Oyuncu')
-                    }
-                  </div>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 6, flexWrap: 'wrap' }}>
-                    <span style={{ fontSize: 10.5, color: '#e2e8f0', background: 'rgba(255,255,255,0.06)', padding: '2px 8px', borderRadius: 8, display: 'inline-flex', alignItems: 'center', gap: 4, border: '1px solid rgba(255,255,255,0.04)' }}>
-                      🏆 <b>{dbUser.wins || 0}</b> {lang === 'en' ? 'Wins' : 'Zafer'}
+                  {dbUser.selectedBadge && dbUser.selectedBadge !== 'default' && (
+                    <span className={`player-badge badge-${dbUser.selectedBadge}`} style={{ fontSize: 10 }}>
+                      {{ rookie: '🌱 Çaylak', veteran: '⚔️ Veteran', ghost: '👻 Hayalet', legend: '🦁 Efsane', king: '🫅 Hükümdar' }[dbUser.selectedBadge] || dbUser.selectedBadge}
                     </span>
-                    <span style={{ fontSize: 10.5, color: '#F1C40F', background: 'rgba(241,196,15,0.1)', padding: '2px 8px', borderRadius: 8, display: 'inline-flex', alignItems: 'center', gap: 4, border: '1px solid rgba(241,196,15,0.15)' }}>
-                      🪙 <b>{dbUser.points || 100}</b> {lang === 'en' ? 'Pts' : 'Puan'}
-                    </span>
-                  </div>
-                </div>
-              </div>
-
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8, flex: '1 1 auto', justifyContent: 'flex-end', minWidth: 120 }}>
-                <button
-                  onClick={() => { setModal({ type: 'shop' }); sfxClick(); }}
-                  style={{
-                    ...btnStyle('linear-gradient(135deg, #f1c40f, #d4ac0d)'),
-                    margin: 0,
-                    padding: '10px 20px',
-                    borderRadius: 12,
-                    fontSize: 12,
-                    fontWeight: 900,
-                    boxShadow: '0 4px 15px rgba(241,196,15,0.25)',
-                    flex: 1,
-                    maxWidth: 160
-                  }}
-                >
-                  🛍️ {lang === 'en' ? 'Shop' : 'Mağaza'}
-                </button>
-              </div>
-            </div>
-          )}
-
-          {/* USER IDENTITY FORM */}
-          <div style={{
-            background: 'rgba(255, 255, 255, 0.02)',
-            border: '1px solid rgba(255, 255, 255, 0.05)',
-            borderRadius: 14,
-            padding: '14px 16px',
-            marginBottom: 20,
-            textAlign: 'center'
-          }}>
-            <div style={{ fontSize: 10, color: '#FFD700', fontWeight: 900, marginBottom: 12, letterSpacing: 1.5, textTransform: 'uppercase' }}>👤 KİMLİĞİNİ OLUŞTUR</div>
-            <div style={{ display: 'flex', gap: 10, justifyContent: 'center', alignItems: 'center', flexWrap: 'wrap', minHeight: 52 }}>
-              {AVATAR_STYLES.map(style => (
-                <div key={style} className={myAvatarStyle === style ? 'avatar-halo-active' : ''}>
-                  <img
-                    src={`https://api.dicebear.com/7.x/${style}/svg?seed=${myName || 'Oyuncu'}`}
-                    alt={style}
-                    onClick={() => handleSelectAvatar(style)}
-                    style={{
-                      width: 44, height: 44, borderRadius: '50%', cursor: 'pointer',
-                      border: myAvatarStyle === style ? '2.5px solid #FFD700' : '2px solid transparent',
-                      background: 'rgba(255,255,255,0.06)',
-                      transition: 'all 0.2s ease',
-                      transform: myAvatarStyle === style ? 'scale(1.1) translateY(-1px)' : 'scale(1)'
-                    }}
-                  />
-                </div>
-              ))}
-            </div>
-            <input
-              value={myName}
-              disabled={!!dbUser}
-              onChange={e => setMyName(e.target.value)}
-              placeholder="Oyuncu Adınızı Yazın..."
-              style={{ ...inputStyle, textAlign: 'center', fontSize: 14, fontWeight: 'bold', padding: '10px 14px', background: !!dbUser ? 'rgba(255,255,255,0.02)' : 'rgba(0,0,0,0.3)', border: '1px solid rgba(255,215,0,0.25)', marginTop: 14, marginBottom: 0, borderRadius: 8, cursor: !!dbUser ? 'not-allowed' : 'text', opacity: !!dbUser ? 0.8 : 1 }}
-            />
-          </div>
-
-          {/* HOME PANEL VS WAITING ROOM */}
-          {!roomCode ? (
-            <>
-              {/* TABS HEADER FOR MOBILE RESPONSIVENESS */}
-              <div className="lobby-tabs" style={{ display: 'flex', background: 'rgba(0, 0, 0, 0.2)', borderRadius: 12, padding: 4, marginBottom: 16 }}>
-                <button
-                  onClick={() => { setLobbyTab('create'); sfxClick(); }}
-                  className={`lobby-tab-btn ${lobbyTab === 'create' ? 'active' : ''}`}
-                  style={{
-                    flex: 1,
-                    padding: '8px 4px',
-                    background: lobbyTab === 'create' ? 'linear-gradient(135deg, #E67E22, #D35400)' : 'transparent',
-                    border: 'none',
-                    color: '#fff',
-                    borderRadius: 8,
-                    fontSize: 12,
-                    fontWeight: 900,
-                    cursor: 'pointer',
-                    transition: 'all 0.2s',
-                    boxShadow: lobbyTab === 'create' ? '0 4px 12px rgba(230, 126, 34, 0.3)' : 'none'
-                  }}
-                >
-                  {lang === 'en' ? '🎮 Create Room' : '🎮 Oda Kur'}
-                </button>
-                <button
-                  onClick={() => { setLobbyTab('join'); sfxClick(); }}
-                  className={`lobby-tab-btn ${lobbyTab === 'join' ? 'active' : ''}`}
-                  style={{
-                    flex: 1,
-                    padding: '8px 4px',
-                    background: lobbyTab === 'join' ? 'linear-gradient(135deg, #2ECC71, #27AE60)' : 'transparent',
-                    border: 'none',
-                    color: '#fff',
-                    borderRadius: 8,
-                    fontSize: 12,
-                    fontWeight: 900,
-                    cursor: 'pointer',
-                    transition: 'all 0.2s',
-                    boxShadow: lobbyTab === 'join' ? '0 4px 12px rgba(46, 204, 113, 0.3)' : 'none'
-                  }}
-                >
-                  {lang === 'en' ? '🔑 Join Room' : '🔑 Odaya Katıl'}
-                </button>
-                <button
-                  onClick={() => { setLobbyTab('public'); sfxClick(); }}
-                  className={`lobby-tab-btn ${lobbyTab === 'public' ? 'active' : ''}`}
-                  style={{
-                    flex: 1,
-                    padding: '8px 4px',
-                    background: lobbyTab === 'public' ? 'linear-gradient(135deg, #3498DB, #2980B9)' : 'transparent',
-                    border: 'none',
-                    color: '#fff',
-                    borderRadius: 8,
-                    fontSize: 12,
-                    fontWeight: 900,
-                    cursor: 'pointer',
-                    transition: 'all 0.2s',
-                    boxShadow: lobbyTab === 'public' ? '0 4px 12px rgba(52, 152, 219, 0.3)' : 'none'
-                  }}
-                >
-                  {lang === 'en' ? '🌍 Public Rooms' : '🌍 Açık Odalar'} {publicRooms.length > 0 && <span style={{ background: '#E74C3C', color: '#fff', fontSize: 9, padding: '1px 5px', borderRadius: 10, marginLeft: 4 }}>{publicRooms.length}</span>}
-                </button>
-              </div>
-
-              {/* TAB CONTENT */}
-              {lobbyTab === 'create' && (
-                <div className="lobby-card-orange" style={{ animation: 'fade-in-slide 0.25s ease-out' }}>
-                  <h3 style={{ color: '#E67E22', fontSize: 13, fontWeight: 900, marginBottom: 12, textAlign: 'center', letterSpacing: 0.5 }}>{lang === 'en' ? '✨ CREATE NEW ROOM' : '✨ YENİ OYUN KUR'}</h3>
-
-                  <label className="switch-container" style={{ marginBottom: 12, padding: '8px 12px' }}>
-                    <span className="switch-label" style={{ fontSize: 12 }}>{lang === 'en' ? '🌍 Public Room' : '🌍 Herkese Açık'}</span>
-                    <input type="checkbox" className="switch-checkbox" checked={roomSettings.isPublic} onChange={e => setRoomSettings(prev => ({ ...prev, isPublic: e.target.checked }))} />
-                    <div className="switch-toggle" />
-                  </label>
-
-                  {renderRoomSettings()}
-                  <div style={{ minHeight: 12 }}></div>
-                  <button onClick={handleCreate} className="lobby-action-btn" style={{ ...btnStyle('linear-gradient(135deg, #E67E22, #D35400)'), width: '100%', padding: '12px', fontSize: 13, borderRadius: 8, margin: 0 }}>
-                    {lang === 'en' ? '🚀 Create Room' : '🚀 Oda Oluştur'}
-                  </button>
-                </div>
-              )}
-
-              {lobbyTab === 'join' && (
-                <div className="lobby-card-green" style={{ animation: 'fade-in-slide 0.25s ease-out' }}>
-                  <h3 style={{ color: '#2ECC71', fontSize: 13, fontWeight: 900, marginBottom: 12, textAlign: 'center', letterSpacing: 0.5 }}>{lang === 'en' ? '🔑 JOIN PRIVATE ROOM' : '🔑 ÖZEL ODAYA KATIL'}</h3>
-                  <input value={joinCode} onChange={e => setJoinCode(e.target.value.toUpperCase())} placeholder={lang === 'en' ? 'Room Code' : 'Oda Kodu'} style={{ ...inputStyle, letterSpacing: 3, textAlign: 'center', fontWeight: 'bold', background: 'rgba(0,0,0,0.3)', border: '1px solid rgba(46,204,113,0.25)', marginBottom: 12, borderRadius: 8 }} />
-                  <div style={{ minHeight: 12 }}></div>
-                  <button onClick={handleJoin} className="lobby-action-btn" style={{ ...btnStyle('linear-gradient(135deg, #2ECC71, #27AE60)'), width: '100%', padding: '12px', fontSize: 13, borderRadius: 8, margin: 0 }}>
-                    {lang === 'en' ? '🚪 Enter Room' : '🚪 Odaya Giriş Yap'}
-                  </button>
-                </div>
-              )}
-
-              {lobbyTab === 'public' && (
-                <div className="lobby-card-blue" style={{ animation: 'fade-in-slide 0.25s ease-out' }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-                    <div style={{ fontSize: 11, color: '#94a3b8', fontWeight: 800, letterSpacing: 1 }}>{lang === 'en' ? '🌍 ACTIVE PUBLIC ROOMS' : '🌍 HAREKETLİ AÇIK ODALAR'}</div>
-                    <button onClick={() => socket?.emit('requestPublicRooms')} style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)', color: '#fff', padding: '4px 10px', borderRadius: 6, cursor: 'pointer', fontSize: 10, fontWeight: 800 }}>
-                      {lang === 'en' ? '🔄 Refresh' : '🔄 Yenile'}
-                    </button>
-                  </div>
-                  {publicRooms.length === 0 ? (
-                    <div style={{ fontSize: 12, color: '#64748b', textAlign: 'center', padding: '20px 0', fontStyle: 'italic' }}>{lang === 'en' ? 'No active public rooms currently available.' : 'Şu an katılabileceğiniz açık oda bulunmuyor.'}</div>
-                  ) : (
-                    <div style={{ maxHeight: 220, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 8, paddingRight: 4 }}>
-                      {publicRooms.map(r => (
-                        <div key={r.code} className="public-room-item" style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.05)', borderRadius: 8, padding: '8px 12px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                          <div>
-                            <div style={{ color: '#fff', fontSize: 13, fontWeight: 'bold' }}>{lang === 'en' ? `${r.hostName}'s Room` : `${r.hostName}'in Odası`}</div>
-                            <div style={{ color: '#94a3b8', fontSize: 11, marginTop: 2 }}>{lang === 'en' ? `Target: ${r.winSets} Sets | Players: ${r.playerCount}/5` : `Hedef: ${r.winSets} Set | Oyuncu: ${r.playerCount}/5`}</div>
-                          </div>
-                          <button onClick={() => { setJoinCode(r.code); handleJoin(); }} style={{ ...btnStyle('#3498DB'), padding: '6px 14px', fontSize: 11, margin: 0 }}>{lang === 'en' ? 'JOIN' : 'GİRİŞ'}</button>
-                        </div>
-                      ))}
-                    </div>
                   )}
                 </div>
-              )}
-            </>
-          ) : (
-            <div style={{ textAlign: 'center' }}>
-              {/* WAITING ROOM / ACTIVE LOBBY */}
-              <div style={{ fontSize: 11, color: '#94a3b8', marginBottom: 12, textTransform: 'uppercase', letterSpacing: 1 }}>{lang === 'en' ? 'ROOM ACCESS TICKET (Click to Copy)' : 'ODA GİRİŞ BİLETİ (Kopyalamak İçin Tıkla)'}</div>
-
-              <div className="glass-card" style={{
-                background: 'linear-gradient(135deg, rgba(255, 215, 0, 0.05), rgba(0,0,0,0.5))',
-                border: '1.5px solid rgba(255, 215, 0, 0.3)',
-                boxShadow: '0 8px 32px rgba(255, 215, 0, 0.08), inset 0 1px 0 rgba(255,255,255,0.05)',
-                padding: '14px 24px',
-                borderRadius: '12px',
-                display: 'inline-block',
-                marginBottom: 20,
-                cursor: 'pointer',
-                transition: 'all 0.2s ease',
-                width: '100%',
-                maxWidth: 320,
-                boxSizing: 'border-box'
-              }}
-                onMouseEnter={e => {
-                  e.currentTarget.style.transform = 'scale(1.02) translateY(-1px)';
-                  e.currentTarget.style.borderColor = '#FFD700';
-                  e.currentTarget.style.boxShadow = '0 12px 40px rgba(255, 215, 0, 0.2)';
-                }}
-                onMouseLeave={e => {
-                  e.currentTarget.style.transform = 'none';
-                  e.currentTarget.style.borderColor = 'rgba(255, 215, 0, 0.3)';
-                  e.currentTarget.style.boxShadow = '0 8px 32px rgba(255, 215, 0, 0.08)';
-                }}
-                onClick={() => { navigator.clipboard.writeText(roomCode); showToast(lang === 'en' ? 'Room code copied!' : 'Oda kodu kopyalandı!', 'success'); sfxClick(); }}>
-                <div style={{ fontSize: 9, color: '#FFD700', fontWeight: 900, letterSpacing: 1.5, textTransform: 'uppercase', marginBottom: 4 }}>{lang === 'en' ? 'COPY' : 'KOPYALA'}</div>
-                <div style={{ fontSize: 28, fontWeight: 900, color: '#FFD700', letterSpacing: 4, textShadow: '0 0 12px rgba(255,215,0,0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10 }}>
-                  {roomCode}
-                  <span style={{ fontSize: 16, opacity: 0.8 }}>📋</span>
-                </div>
-              </div>
-
-              <div style={{ color: '#fff', fontSize: 14, marginBottom: 16, fontWeight: 800, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
-                <span>{lang === 'en' ? '👥 Players' : '👥 Oyuncular'}</span>
-                <span style={{ background: 'rgba(255,255,255,0.1)', padding: '2px 8px', borderRadius: 12, fontSize: 11 }}>{gameState?.players?.length || 1} / 5</span>
-              </div>
-
-              {/* LOBBY PLAYER SLOTS (GRID SYSTEM FOR MOBILE RESPONSIVENESS) */}
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 20 }}>
-                {Array.from({ length: 5 }).map((_, idx) => {
-                  const p = gameState?.players?.[idx];
-
-                  if (p) {
-                    const isSelf = p.id === playerId;
-                    const isReady = p.isReady || idx === 0; // Host is always ready
-
-                    return (
-                      <div
-                        key={p.id}
-                        className={`waiting-player-card ${isReady ? 'ready-halo-active' : ''}`}
-                        style={{
-                          display: 'flex',
-                          alignItems: 'center',
-                          gap: 12,
-                          background: 'rgba(22, 30, 49, 0.4)',
-                          border: `1.5px solid ${isReady ? '#2ecc71' : 'rgba(255,255,255,0.08)'}`,
-                          borderRadius: 16,
-                          padding: '10px 14px',
-                          boxShadow: isReady ? '0 8px 24px rgba(46,204,113,0.15)' : '0 8px 24px rgba(0,0,0,0.3)',
-                          transition: 'all 0.25s ease',
-                          position: 'relative'
-                        }}
-                      >
-                        <div style={{ position: 'relative' }}>
-                          {((isSelf ? (dbUser?.wins || 0) : (p.isBot ? 2 : 0)) > 0) && (
-                            <span className="avatar-gear-crown" style={{ position: 'absolute', top: -10, left: '50%', transform: 'translateX(-50%)', fontSize: 14, filter: 'drop-shadow(0 2px 4px rgba(255,215,0,0.5))', zIndex: 2 }}>👑</span>
-                          )}
-                          <div
-                            className={`avatar-container border-style-${isSelf ? (dbUser?.selectedBorder || p.selectedBorder || 'default') : (p.selectedBorder || 'default')}`}
-                            style={{
-                              width: 44,
-                              height: 44,
-                              cursor: 'pointer',
-                              boxShadow: isSelf ? '0 0 12px rgba(255,215,0,0.35)' : 'none',
-                              transition: 'transform 0.2s'
-                            }}
-                            onClick={() => {
-                              if (isSelf) {
-                                const newName = prompt(lang === 'en' ? "Enter your new name:" : "Yeni isminizi girin:", p.name);
-                                if (newName && newName.trim()) {
-                                  setMyName(newName.trim());
-                                  localStorage.setItem('md_name', newName.trim());
-                                  socket?.emit('updatePlayerName', { roomCode, newName: newName.trim() });
-                                }
-                              } else {
-                                setProfilePlayer(p);
-                                socket?.emit('sendEmote', { targetId: p.id, emoji: '👋' });
-                              }
-                            }}
-                            title={isSelf ? (lang === 'en' ? "Click to change name" : "İsmini değiştirmek için tıkla") : (lang === 'en' ? "View profile" : "Profili gör")}
-                          >
-                            <img
-                              src={`https://api.dicebear.com/7.x/${p.avatar || 'avataaars'}/svg?seed=${p.name}`}
-                              alt="avatar"
-                            />
-                          </div>
-                        </div>
-
-                        <div style={{ display: 'flex', flexDirection: 'column', flex: 1, textAlign: 'left' }}>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
-                            <span style={{ color: '#fff', fontSize: 13, fontWeight: 'bold' }}>{p.name}</span>
-                            {isSelf && <span style={{ fontSize: 8, background: '#FFD700', color: '#000', padding: '1px 5px', borderRadius: 8, fontWeight: 900 }}>{lang === 'en' ? 'YOU' : 'SEN'}</span>}
-                            {idx === 0 && <span style={{ fontSize: 8, background: '#8E44AD', color: '#fff', padding: '1px 5px', borderRadius: 8, fontWeight: 900 }}>HOST</span>}
-                          </div>
-                          <span style={{ fontSize: 9, color: '#a0aec0', marginTop: 1 }}>
-                            {p.isBot ? (lang === 'en' ? '🤖 AI Player' : '🤖 Yapay Zeka Oyuncu') : (lang === 'en' ? '👤 Online Player' : '👤 Çevrimiçi Oyuncu')}
-                          </span>
-                        </div>
-
-                        {/* Status badge */}
-                        <div style={{
-                          padding: '4px 10px',
-                          borderRadius: 20,
-                          fontSize: 9,
-                          fontWeight: 900,
-                          background: isReady ? 'rgba(46, 204, 113, 0.12)' : 'rgba(230, 126, 34, 0.12)',
-                          color: isReady ? '#2ECC71' : '#E67E22',
-                          border: `1px solid ${isReady ? 'rgba(46, 204, 113, 0.25)' : 'rgba(230, 126, 34, 0.25)'}`
-                        }}>
-                          {isReady ? (lang === 'en' ? '✓ READY' : '✓ HAZIR') : (lang === 'en' ? '⏳ WAITING' : '⏳ BEKLİYOR')}
-                        </div>
-                      </div>
-                    );
-                  } else {
-                    return (
-                      <div
-                        key={`empty-${idx}`}
-                        style={{
-                          display: 'flex',
-                          alignItems: 'center',
-                          gap: 12,
-                          background: 'rgba(255,255,255,0.01)',
-                          border: '1.5px dashed rgba(255,255,255,0.08)',
-                          borderRadius: 16,
-                          padding: '12px 14px',
-                          color: '#64748b'
-                        }}
-                      >
-                        <div style={{ width: 38, height: 38, borderRadius: '50%', border: '1.5px dashed rgba(255,255,255,0.08)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 16, color: 'rgba(255,255,255,0.1)' }}>
-                          ?
-                        </div>
-                        <div style={{ flex: 1, textAlign: 'left', display: 'flex', flexDirection: 'column' }}>
-                          <span style={{ fontSize: 12, fontWeight: 700, color: 'rgba(255,255,255,0.15)' }}>{lang === 'en' ? 'Empty Slot' : 'Boş Yuva'}</span>
-                          <span style={{ fontSize: 9, color: 'rgba(255,255,255,0.08)', marginTop: 1 }}>{lang === 'en' ? 'Waiting for player...' : 'Oyuncu bekleniyor...'}</span>
-                        </div>
-                        <div className="lobby-pulse-dot" style={{ width: 6, height: 6, borderRadius: '50%', background: 'rgba(255,255,255,0.08)' }} />
-                      </div>
-                    );
+                {/* Title */}
+                <div className={`title-style-${dbUser.selectedTitle || 'default'}`} style={{ fontSize: 9.5, fontWeight: 'bold', marginTop: 2 }}>
+                  {
+                    dbUser.selectedTitle && dbUser.selectedTitle !== 'default'
+                      ? {
+                        gold: { tr: '💰 Para Babası', en: '💰 Money Bag' },
+                        flame: { tr: '🔥 Sinsi Hırsız', en: '🔥 Sly Thief' },
+                        cyber: { tr: '⚡ Siber Kartal', en: '⚡ Cyber Falcon' },
+                        kral: { tr: '👑 Oyunun Kralı', en: '👑 Game King' },
+                        cosmic: { tr: '🌌 Kozmik Efendi', en: '🌌 Cosmic Lord' }
+                      }[dbUser.selectedTitle]?.[lang] || dbUser.selectedTitle
+                      : (lang === 'en' ? 'Classic Player' : 'Klasik Oyuncu')
                   }
-                })}
-              </div>
-
-              {/* ACTION PANEL (DEPENDING ON HOST OR GUEST ROLE) */}
-              {gameState?.players?.[0]?.id === playerId ? (
-                <>
-                  {/* Host Panel */}
-                  <div style={{
-                    background: 'rgba(255,255,255,0.02)',
-                    border: '1px solid rgba(255,255,255,0.05)',
-                    padding: 14,
-                    borderRadius: 14,
-                    marginBottom: 16
-                  }}>
-                    <div style={{ color: '#94a3b8', fontSize: 11, marginBottom: 8, fontWeight: 900, letterSpacing: 0.5, textTransform: 'uppercase' }}>{lang === 'en' ? '🎨 CARD THEME SETTINGS' : '🎨 KART TEMA AYARI'}</div>
-                    <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', justifyContent: 'center' }}>
-                      {THEMES.map(t => (
-                        <button key={t.id} onClick={() => { setSelectedTheme(t.id); sfxClick(); }} style={{
-                          padding: '6px 12px', borderRadius: 8, cursor: 'pointer', fontSize: 11, fontWeight: 800,
-                          border: selectedTheme === t.id ? '1.5px solid #FFD700' : '1px solid rgba(255,255,255,0.12)',
-                          background: selectedTheme === t.id ? 'rgba(255,215,0,0.1)' : 'rgba(255,255,255,0.04)',
-                          color: '#fff',
-                          margin: 0,
-                          transition: 'all 0.15s ease'
-                        }}>
-                          {t.id === 'default' ? (lang === 'en' ? '🎲 Classic' : t.name) : (t.id === 'wood' ? (lang === 'en' ? '🪵 Wooden Table' : t.name) : t.name)}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-
-                  {/* Advanced Settings */}
-                  {renderRoomSettings()}
-                  <div style={{ height: 16 }} />
-
-                  {/* Action Buttons */}
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                    {gameState?.players?.length < 5 && (
-                      <button onClick={() => {
-                        socket?.emit('addBot', { roomCode }, res => {
-                          if (res?.ok) showToast(lang === 'en' ? 'Bot added to room' : 'Bot odaya eklendi', 'success');
-                          else if (res?.error) showToast(res.error, 'error');
-                        });
-                      }} style={{ ...btnStyle('linear-gradient(135deg, #8E44AD, #9B59B6)'), width: '100%', padding: '12px', fontSize: 13, borderRadius: 8, margin: 0 }}>
-                        {lang === 'en' ? '🤖 Add Bot (AI)' : '🤖 Bot Ekle (Yapay Zeka)'}
-                      </button>
-                    )}
-
-                    <button onClick={handleStart} style={{ ...btnStyle('linear-gradient(135deg, #10b981, #059669)'), width: '100%', padding: '12px', fontSize: 13, borderRadius: 8, margin: 0 }}>
-                      {lang === 'en' ? `🏁 Start Game (${gameState?.players?.length || 1} Players)` : `🏁 Oyunu Başlat (${gameState?.players?.length || 1} Oyuncu)`}
-                    </button>
-
-                    <button onClick={handleCloseRoom} style={{
-                      ...btnStyle('rgba(231,76,60,0.15)'),
-                      width: '100%', padding: '10px', fontSize: 12, borderRadius: 8, border: '1px solid rgba(231,76,60,0.3)', color: '#E74C3C', margin: 0
-                    }}>
-                      {lang === 'en' ? '❌ Close Room' : '❌ Odayı Kapat'}
-                    </button>
-                  </div>
-                </>
-              ) : (
-                <>
-                  {/* Guest Panel */}
-                  <p style={{ color: '#94a3b8', fontSize: 12, marginTop: 8, marginBottom: 12, fontStyle: 'italic' }}>{lang === 'en' ? 'Host will start the game, please wait...' : 'Host oyunu başlatacak, lütfen bekleyin...'}</p>
-
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                    {/* Ready Toggle */}
-                    <button
-                      onClick={() => {
-                        socket?.emit('toggleReady', { roomCode });
-                        sfxClick();
-                      }}
-                      style={{
-                        ...btnStyle(gameState?.players?.find(p => p.id === playerId)?.isReady ? 'linear-gradient(135deg, #e74c3c, #c0392b)' : 'linear-gradient(135deg, #2ecc71, #27ae60)'),
-                        width: '100%', padding: '12px', fontSize: 13, borderRadius: 8, fontWeight: 900, margin: 0
-                      }}
-                    >
-                      {gameState?.players?.find(p => p.id === playerId)?.isReady ? (lang === 'en' ? '❌ NOT READY' : '❌ HAZIR DEĞİLİM') : (lang === 'en' ? '✅ READY UP!' : '✅ HAZIR OL!')}
-                    </button>
-
-                    {/* View Only Settings */}
-                    {renderRoomSettings(true)}
-
-                    <button
-                      onClick={() => {
-                        if (!window.confirm(lang === 'en' ? 'Are you sure you want to leave the room?' : 'Odadan ayrılmak istediğinden emin misin?')) return;
-                        socket?.emit('leaveRoom', { roomCode }, () => { });
-                        handleExit();
-                      }}
-                      style={{
-                        ...btnStyle('rgba(255,255,255,0.06)'),
-                        width: '100%', padding: '10px', fontSize: 12,
-                        borderRadius: 8, border: '1px solid rgba(255,255,255,0.15)',
-                        color: '#eee', margin: 0
-                      }}
-                    >
-                      {lang === 'en' ? '🚪 Leave Room' : '🚪 Odadan Ayrıl'}
-                    </button>
-                  </div>
-                </>
-              )}
-            </div>
-          )}
-
-          {error && <div style={{ color: '#ef4444', marginTop: 14, fontSize: 12, fontWeight: 'bold', textAlign: 'center' }}>⚠️ {error}</div>}
-          <div style={{ color: '#64748b', marginTop: 8, fontSize: 11, textAlign: 'center' }}>{status}</div>
-        </div>
-        {renderModal()}
-      </div>
-    );
-  }
-  // ---- GAME ----
-  if (!gameState || !me) return (
-    <div style={{ minHeight: '100vh', background: '#0f0f23', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '24px', fontWeight: 'bold' }}>
-      Oyun Yükleniyor...
-    </div>
-  );
-
-  const myCompleteSets = Object.entries(me.properties || {}).filter(([c, cards]) => isSetComplete(cards, c)).length;
-  const over = (me.hand?.length || 0) - (gameState?.handLimit || 7);
-
-  const remainingTime = gameState?.turnPausedRemaining != null
-    ? Math.floor(gameState.turnPausedRemaining)
-    : (gameState?.turnTimer > 0 && gameState?.turnStartTime && gameState?.serverTime
-      ? Math.max(0, gameState.turnTimer - Math.floor(((gameState.serverTime + (Date.now() - stateReceivedTimeRef.current)) - gameState.turnStartTime) / 1000))
-      : null);
-  const showDanger = isMyTurn && !isBlocked && remainingTime !== null && remainingTime <= 10 && remainingTime > 0;
-
-  // Kazananın Rengi
-  const winnerColor = gameState?.winner ? PLAYER_COLORS[gameState.players.findIndex(p => p.id === gameState.winner.id) % PLAYER_COLORS.length] : '#0f0f23';
-
-  const getDynamicBackground = () => {
-    if (gameState?.winner) {
-      return `radial-gradient(circle at center, ${winnerColor}55 0%, #0b071e 80%)`;
-    }
-    if (showDanger) {
-      // Süre azaldığında tehlikeli kırmızı
-      return 'radial-gradient(circle at center, #781c1c 0%, #0c081e 80%)';
-    }
-    if (isBlocked) {
-      // Ödeme/itiraz beklenirken yumuşak kömür/slate geçişi
-      return 'radial-gradient(circle at center, #1e1520 0%, #08070d 80%)';
-    }
-    if (isMyTurn) {
-      // Sıra bendeyken şık çelik mavisi odak geçişi
-      if (activeTheme === 'cyberpunk') return 'radial-gradient(circle at center, #1a162b 0%, #06050b 80%)';
-      if (activeTheme === 'retro') return 'radial-gradient(circle at center, #0f1813 0%, #050806 80%)';
-      if (activeTheme === 'wood') return 'radial-gradient(circle at center, #241a15 0%, #0d0907 80%)';
-      return 'radial-gradient(circle at center, #162238 0%, #070a12 80%)';
-    }
-    // Varsayılan premium kömür grisi arka planlar
-    if (activeTheme === 'cyberpunk') return 'radial-gradient(circle at center, #13121a 0%, #06050b 80%)';
-    if (activeTheme === 'retro') return 'radial-gradient(circle at center, #0a0d0a 0%, #050806 80%)';
-    if (activeTheme === 'wood') return 'radial-gradient(circle at center, #1c1511 0%, #0d0907 80%)';
-    return 'radial-gradient(circle at center, #121829 0%, #06080e 80%)';
-  };
-
-  return (
-    <ThemeContext.Provider value={{ themeId: activeTheme, manifest }}>
-      <style>
-        {`
-        .rage-quit-active { animation: rage-quit-anim 1.5s cubic-bezier(0.25, 0.46, 0.45, 0.94) forwards; pointer-events: none; }
-        @keyframes rage-quit-anim {
-           0% { transform: rotate(0deg) scale(1); filter: blur(0px); }
-           20% { transform: rotate(-5deg) scale(1.05) translateY(-20px); filter: blur(1px); }
-           100% { transform: rotate(180deg) scale(0.2) translateY(1500px); filter: blur(10px); opacity: 0; }
-        }
-      `}
-      </style>
-      <div className={`game-layout game-board-container theme-${activeTheme} ${is3DTable ? 'table-3d' : ''} ${boardShake === 'heavy' ? "board-shake-heavy" : boardShake ? "board-shake-active" : ""}`} style={{ background: getDynamicBackground(), color: '#fff', fontSize: 13, transition: 'background 0.8s ease-in-out' }}>
-
-        {/* Holographic Grid Overlay */}
-        <div className="holographic-mesh-grid" />
-        <div className="ambient-nebula-left" />
-        <div className="ambient-nebula-right" />
-
-        {/* Sıra Geçiş Ekran Parlaması */}
-        {showTurnFlash && <div className="turn-flash-overlay" />}
-        {showTurnFlash && (
-          <div style={{
-            position: 'fixed',
-            top: '50%',
-            left: '50%',
-            transform: 'translate(-50%, -50%)',
-            zIndex: 99999,
-            pointerEvents: 'none',
-            display: 'flex',
-            flexDirection: 'column',
-            alignItems: 'center',
-            justifyContent: 'center',
-          }}>
-            <motion.div
-              initial={{ scale: 0.3, opacity: 0 }}
-              animate={{ scale: 1.1, opacity: 1 }}
-              exit={{ scale: 0.5, opacity: 0 }}
-              transition={{ type: 'spring', stiffness: 260, damping: 20 }}
-              style={{
-                background: 'linear-gradient(135deg, rgba(251, 191, 36, 0.95), rgba(217, 119, 6, 0.95))',
-                padding: '16px 40px',
-                borderRadius: 20,
-                boxShadow: '0 15px 45px rgba(251, 191, 36, 0.45), 0 0 25px rgba(251, 191, 36, 0.2)',
-                border: '2px solid #FFF',
-                display: 'flex',
-                alignItems: 'center',
-                gap: 12,
-              }}
-            >
-              <span style={{ fontSize: 28 }}>🎲</span>
-              <span style={{
-                color: '#FFF',
-                fontSize: 22,
-                fontWeight: 900,
-                letterSpacing: 2,
-                textShadow: '0 2px 4px rgba(0,0,0,0.3)',
-                textTransform: 'uppercase'
-              }}>{lang === 'en' ? 'YOUR TURN!' : 'Sıra Sende!'}</span>
-            </motion.div>
-          </div>
-        )}
-
-        {/* Fullscreen Kalkan Efekti */}
-        {showShield && <div className="jsn-shield-overlay" />}
-
-        {/* Fullscreen Hırsız Sincap Pençe Efekti */}
-        {showScratch && (
-          <div className="claw-scratch-container">
-            <div className="claw-scratch-mark" />
-            <div className="claw-scratch-mark claw-scratch-mark-2" />
-          </div>
-        )}
-
-        {/* Fullscreen Yıldırım Şimşek Efekti */}
-        {showSparks && (
-          <div style={{
-            position: 'fixed',
-            inset: 0,
-            pointerEvents: 'none',
-            zIndex: 99999,
-            border: '8px solid #818cf8',
-            boxShadow: 'inset 0 0 80px rgba(129, 138, 248, 0.65)',
-            animation: 'sparks-pulse-anim 0.4s infinite alternate ease-in-out'
-          }} />
-        )}
-
-        {/* Üst bar */}
-        {!isHeaderOpen ? (
-          <div
-            onClick={() => { setIsHeaderOpen(true); sfxClick(); }}
-            style={{
-              background: '#1a1a2e',
-              height: '24px',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              cursor: 'pointer',
-              borderBottom: '1px solid rgba(255,255,255,0.1)',
-              transition: 'background 0.2s',
-              zIndex: 100,
-              fontSize: '11px',
-              color: '#aaa',
-              fontWeight: 'bold',
-              letterSpacing: 1,
-              userSelect: 'none'
-            }}
-            onMouseEnter={e => e.currentTarget.style.background = '#22223b'}
-            onMouseLeave={e => e.currentTarget.style.background = '#1a1a2e'}
-          >
-            ▼ ÜST BARI GÖSTER
-          </div>
-        ) : (
-          <div className="game-topbar" style={{ background: '#1a1a2e', padding: '10px 16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid rgba(255,255,255,0.1)', flexWrap: 'wrap', gap: 8, zIndex: 100 }}>
-            {isMobile ? (
-              <div style={{ display: 'flex', width: '100%', justifyContent: 'space-between', alignItems: 'center' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 6, color: '#FFD700', fontWeight: 900, fontSize: 13.5 }}><img src="/logo.png" alt="logo" style={{ height: 18 }} /> Chaos Deal Cart</div>
-                <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-                  <span style={{
-                    background: isMyTurn ? '#FFD700' : 'rgba(255,255,255,0.05)',
-                    color: isMyTurn ? '#000' : '#aaa',
-                    fontWeight: 700,
-                    padding: '2px 6px',
-                    borderRadius: 4,
-                    fontSize: 10,
-                    border: isMyTurn ? 'none' : '1px solid rgba(255,255,255,0.1)',
-                    display: 'inline-flex',
-                    alignItems: 'center',
-                    gap: 4
-                  }}>
-                    {isMyTurn ? 'SIRA SENDE' : `${gameState.players.find(p => p.id === gameState.currentPlayerId)?.name || 'Rakip'}'de`}
-                    {renderActionPoints(gameState.actionsLeft)}
+                </div>
+                {/* Stats */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginTop: 6, flexWrap: 'wrap' }}>
+                  <span style={{ fontSize: 10.5, color: '#e2e8f0', background: 'rgba(255,255,255,0.06)', padding: '2px 8px', borderRadius: 8, display: 'inline-flex', alignItems: 'center', gap: 4, border: '1px solid rgba(255,255,255,0.04)' }}>
+                    🏆 <b>{dbUser.wins || 0}</b> {lang === 'en' ? 'Wins' : 'Zafer'}
                   </span>
-                  <button
-                    onClick={() => {
-                      const nextLang = lang === 'tr' ? 'en' : 'tr';
-                      setLang(nextLang);
-                      localStorage.setItem('md_lang', nextLang);
-                      sfxClick();
-                    }}
-                    style={{
-                      background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.2)',
-                      color: '#fff', borderRadius: 4, cursor: 'pointer', fontSize: 9, padding: '4px 6px',
-                      fontWeight: 'bold'
-                    }}
-                  >
-                    {lang === 'tr' ? '🇹🇷' : '🇬🇧'}
-                  </button>
-                  <button onClick={() => { setIsMenuOpen(true); sfxClick(); }} style={{ ...btnStyle('rgba(255,255,255,0.1)'), padding: '4px 10px', fontSize: 11, border: '1px solid rgba(255,255,255,0.2)' }}>
-                    ⚙️ MENÜ
-                  </button>
-                  <button onClick={() => { setIsHeaderOpen(false); sfxClick(); }} style={{ background: 'transparent', border: 'none', color: '#aaa', cursor: 'pointer', fontSize: 14, padding: '0 4px' }} title="Barı Gizle">
-                    ▲
-                  </button>
+                  <span style={{ fontSize: 10.5, color: '#F1C40F', background: 'rgba(241,196,15,0.1)', padding: '2px 8px', borderRadius: 8, display: 'inline-flex', alignItems: 'center', gap: 4, border: '1px solid rgba(241,196,15,0.15)' }}>
+                    🪙 <b>{dbUser.points || 100}</b> {lang === 'en' ? 'Pts' : 'Puan'}
+                  </span>
                 </div>
               </div>
+            </div>
+
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, flex: '1 1 auto', justifyContent: 'flex-end', minWidth: 120 }}>
+              <button
+                onClick={() => { setModal({ type: 'shop' }); sfxClick(); }}
+                style={{
+                  ...btnStyle('linear-gradient(135deg, #f1c40f, #d4ac0d)'),
+                  margin: 0,
+                  padding: '10px 20px',
+                  borderRadius: 12,
+                  fontSize: 12,
+                  fontWeight: 900,
+                  boxShadow: '0 4px 15px rgba(241,196,15,0.25)',
+                  flex: 1,
+                  maxWidth: 160
+                }}
+              >
+                🛍️ {lang === 'en' ? 'Shop' : 'Mağaza'}
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* USER IDENTITY FORM */}
+        <div style={{
+          background: 'rgba(255, 255, 255, 0.02)',
+          border: '1px solid rgba(255, 255, 255, 0.05)',
+          borderRadius: 14,
+          padding: '14px 16px',
+          marginBottom: 20,
+          textAlign: 'center'
+        }}>
+          <div style={{ fontSize: 10, color: '#FFD700', fontWeight: 900, marginBottom: 12, letterSpacing: 1.5, textTransform: 'uppercase' }}>👤 KİMLİĞİNİ OLUŞTUR</div>
+          <div style={{ display: 'flex', gap: 10, justifyContent: 'center', alignItems: 'center', flexWrap: 'wrap', minHeight: 52 }}>
+            {AVATAR_STYLES.map(style => (
+              <div key={style} className={myAvatarStyle === style ? 'avatar-halo-active' : ''}>
+                <img
+                  src={`https://api.dicebear.com/7.x/${style}/svg?seed=${myName || 'Oyuncu'}`}
+                  alt={style}
+                  onClick={() => handleSelectAvatar(style)}
+                  style={{
+                    width: 44, height: 44, borderRadius: '50%', cursor: 'pointer',
+                    border: myAvatarStyle === style ? '2.5px solid #FFD700' : '2px solid transparent',
+                    background: 'rgba(255,255,255,0.06)',
+                    transition: 'all 0.2s ease',
+                    transform: myAvatarStyle === style ? 'scale(1.1) translateY(-1px)' : 'scale(1)'
+                  }}
+                />
+              </div>
+            ))}
+          </div>
+          <input
+            value={myName}
+            disabled={!!dbUser}
+            onChange={e => setMyName(e.target.value)}
+            placeholder="Oyuncu Adınızı Yazın..."
+            style={{ ...inputStyle, textAlign: 'center', fontSize: 14, fontWeight: 'bold', padding: '10px 14px', background: !!dbUser ? 'rgba(255,255,255,0.02)' : 'rgba(0,0,0,0.3)', border: '1px solid rgba(255,215,0,0.25)', marginTop: 14, marginBottom: 0, borderRadius: 8, cursor: !!dbUser ? 'not-allowed' : 'text', opacity: !!dbUser ? 0.8 : 1 }}
+          />
+        </div>
+
+        {/* HOME PANEL VS WAITING ROOM */}
+        {!roomCode ? (
+          <>
+            {/* TABS HEADER FOR MOBILE RESPONSIVENESS */}
+            <div className="lobby-tabs" style={{ display: 'flex', background: 'rgba(0, 0, 0, 0.2)', borderRadius: 12, padding: 4, marginBottom: 16 }}>
+              <button
+                onClick={() => { setLobbyTab('create'); sfxClick(); }}
+                className={`lobby-tab-btn ${lobbyTab === 'create' ? 'active' : ''}`}
+                style={{
+                  flex: 1,
+                  padding: '8px 4px',
+                  background: lobbyTab === 'create' ? 'linear-gradient(135deg, #E67E22, #D35400)' : 'transparent',
+                  border: 'none',
+                  color: '#fff',
+                  borderRadius: 8,
+                  fontSize: 12,
+                  fontWeight: 900,
+                  cursor: 'pointer',
+                  transition: 'all 0.2s',
+                  boxShadow: lobbyTab === 'create' ? '0 4px 12px rgba(230, 126, 34, 0.3)' : 'none'
+                }}
+              >
+                {lang === 'en' ? '🎮 Create Room' : '🎮 Oda Kur'}
+              </button>
+              <button
+                onClick={() => { setLobbyTab('join'); sfxClick(); }}
+                className={`lobby-tab-btn ${lobbyTab === 'join' ? 'active' : ''}`}
+                style={{
+                  flex: 1,
+                  padding: '8px 4px',
+                  background: lobbyTab === 'join' ? 'linear-gradient(135deg, #2ECC71, #27AE60)' : 'transparent',
+                  border: 'none',
+                  color: '#fff',
+                  borderRadius: 8,
+                  fontSize: 12,
+                  fontWeight: 900,
+                  cursor: 'pointer',
+                  transition: 'all 0.2s',
+                  boxShadow: lobbyTab === 'join' ? '0 4px 12px rgba(46, 204, 113, 0.3)' : 'none'
+                }}
+              >
+                {lang === 'en' ? '🔑 Join Room' : '🔑 Odaya Katıl'}
+              </button>
+              <button
+                onClick={() => { setLobbyTab('public'); sfxClick(); }}
+                className={`lobby-tab-btn ${lobbyTab === 'public' ? 'active' : ''}`}
+                style={{
+                  flex: 1,
+                  padding: '8px 4px',
+                  background: lobbyTab === 'public' ? 'linear-gradient(135deg, #3498DB, #2980B9)' : 'transparent',
+                  border: 'none',
+                  color: '#fff',
+                  borderRadius: 8,
+                  fontSize: 12,
+                  fontWeight: 900,
+                  cursor: 'pointer',
+                  transition: 'all 0.2s',
+                  boxShadow: lobbyTab === 'public' ? '0 4px 12px rgba(52, 152, 219, 0.3)' : 'none'
+                }}
+              >
+                {lang === 'en' ? '🌍 Public Rooms' : '🌍 Açık Odalar'} {publicRooms.length > 0 && <span style={{ background: '#E74C3C', color: '#fff', fontSize: 9, padding: '1px 5px', borderRadius: 10, marginLeft: 4 }}>{publicRooms.length}</span>}
+              </button>
+            </div>
+
+            {/* TAB CONTENT */}
+            {lobbyTab === 'create' && (
+              <div className="lobby-card-orange" style={{ animation: 'fade-in-slide 0.25s ease-out' }}>
+                <h3 style={{ color: '#E67E22', fontSize: 13, fontWeight: 900, marginBottom: 12, textAlign: 'center', letterSpacing: 0.5 }}>{lang === 'en' ? '✨ CREATE NEW ROOM' : '✨ YENİ OYUN KUR'}</h3>
+
+                <label className="switch-container" style={{ marginBottom: 12, padding: '8px 12px' }}>
+                  <span className="switch-label" style={{ fontSize: 12 }}>{lang === 'en' ? '🌍 Public Room' : '🌍 Herkese Açık'}</span>
+                  <input type="checkbox" className="switch-checkbox" checked={roomSettings.isPublic} onChange={e => setRoomSettings(prev => ({ ...prev, isPublic: e.target.checked }))} />
+                  <div className="switch-toggle" />
+                </label>
+
+                {renderRoomSettings()}
+                <div style={{ minHeight: 12 }}></div>
+                <button onClick={handleCreate} className="lobby-action-btn" style={{ ...btnStyle('linear-gradient(135deg, #E67E22, #D35400)'), width: '100%', padding: '12px', fontSize: 13, borderRadius: 8, margin: 0 }}>
+                  {lang === 'en' ? '🚀 Create Room' : '🚀 Oda Oluştur'}
+                </button>
+              </div>
+            )}
+
+            {lobbyTab === 'join' && (
+              <div className="lobby-card-green" style={{ animation: 'fade-in-slide 0.25s ease-out' }}>
+                <h3 style={{ color: '#2ECC71', fontSize: 13, fontWeight: 900, marginBottom: 12, textAlign: 'center', letterSpacing: 0.5 }}>{lang === 'en' ? '🔑 JOIN PRIVATE ROOM' : '🔑 ÖZEL ODAYA KATIL'}</h3>
+                <input value={joinCode} onChange={e => setJoinCode(e.target.value.toUpperCase())} placeholder={lang === 'en' ? 'Room Code' : 'Oda Kodu'} style={{ ...inputStyle, letterSpacing: 3, textAlign: 'center', fontWeight: 'bold', background: 'rgba(0,0,0,0.3)', border: '1px solid rgba(46,204,113,0.25)', marginBottom: 12, borderRadius: 8 }} />
+                <div style={{ minHeight: 12 }}></div>
+                <button onClick={handleJoin} className="lobby-action-btn" style={{ ...btnStyle('linear-gradient(135deg, #2ECC71, #27AE60)'), width: '100%', padding: '12px', fontSize: 13, borderRadius: 8, margin: 0 }}>
+                  {lang === 'en' ? '🚪 Enter Room' : '🚪 Odaya Giriş Yap'}
+                </button>
+              </div>
+            )}
+
+            {lobbyTab === 'public' && (
+              <div className="lobby-card-blue" style={{ animation: 'fade-in-slide 0.25s ease-out' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+                  <div style={{ fontSize: 11, color: '#94a3b8', fontWeight: 800, letterSpacing: 1 }}>{lang === 'en' ? '🌍 ACTIVE PUBLIC ROOMS' : '🌍 HAREKETLİ AÇIK ODALAR'}</div>
+                  <button onClick={() => socket?.emit('requestPublicRooms')} style={{ background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)', color: '#fff', padding: '4px 10px', borderRadius: 6, cursor: 'pointer', fontSize: 10, fontWeight: 800 }}>
+                    {lang === 'en' ? '🔄 Refresh' : '🔄 Yenile'}
+                  </button>
+                </div>
+                {publicRooms.length === 0 ? (
+                  <div style={{ fontSize: 12, color: '#64748b', textAlign: 'center', padding: '20px 0', fontStyle: 'italic' }}>{lang === 'en' ? 'No active public rooms currently available.' : 'Şu an katılabileceğiniz açık oda bulunmuyor.'}</div>
+                ) : (
+                  <div style={{ maxHeight: 220, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 8, paddingRight: 4 }}>
+                    {publicRooms.map(r => (
+                      <div key={r.code} className="public-room-item" style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.05)', borderRadius: 8, padding: '8px 12px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <div>
+                          <div style={{ color: '#fff', fontSize: 13, fontWeight: 'bold' }}>{lang === 'en' ? `${r.hostName}'s Room` : `${r.hostName}'in Odası`}</div>
+                          <div style={{ color: '#94a3b8', fontSize: 11, marginTop: 2 }}>{lang === 'en' ? `Target: ${r.winSets} Sets | Players: ${r.playerCount}/5` : `Hedef: ${r.winSets} Set | Oyuncu: ${r.playerCount}/5`}</div>
+                        </div>
+                        <button onClick={() => { setJoinCode(r.code); handleJoin(); }} style={{ ...btnStyle('#3498DB'), padding: '6px 14px', fontSize: 11, margin: 0 }}>{lang === 'en' ? 'JOIN' : 'GİRİŞ'}</button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+          </>
+        ) : (
+          <div style={{ textAlign: 'center' }}>
+            {/* WAITING ROOM / ACTIVE LOBBY */}
+            <div style={{ fontSize: 11, color: '#94a3b8', marginBottom: 12, textTransform: 'uppercase', letterSpacing: 1 }}>{lang === 'en' ? 'ROOM ACCESS TICKET (Click to Copy)' : 'ODA GİRİŞ BİLETİ (Kopyalamak İçin Tıkla)'}</div>
+
+            <div className="glass-card" style={{
+              background: 'linear-gradient(135deg, rgba(255, 215, 0, 0.05), rgba(0,0,0,0.5))',
+              border: '1.5px solid rgba(255, 215, 0, 0.3)',
+              boxShadow: '0 8px 32px rgba(255, 215, 0, 0.08), inset 0 1px 0 rgba(255,255,255,0.05)',
+              padding: '14px 24px',
+              borderRadius: '12px',
+              display: 'inline-block',
+              marginBottom: 20,
+              cursor: 'pointer',
+              transition: 'all 0.2s ease',
+              width: '100%',
+              maxWidth: 320,
+              boxSizing: 'border-box'
+            }}
+              onMouseEnter={e => {
+                e.currentTarget.style.transform = 'scale(1.02) translateY(-1px)';
+                e.currentTarget.style.borderColor = '#FFD700';
+                e.currentTarget.style.boxShadow = '0 12px 40px rgba(255, 215, 0, 0.2)';
+              }}
+              onMouseLeave={e => {
+                e.currentTarget.style.transform = 'none';
+                e.currentTarget.style.borderColor = 'rgba(255, 215, 0, 0.3)';
+                e.currentTarget.style.boxShadow = '0 8px 32px rgba(255, 215, 0, 0.08)';
+              }}
+              onClick={() => { navigator.clipboard.writeText(roomCode); showToast(lang === 'en' ? 'Room code copied!' : 'Oda kodu kopyalandı!', 'success'); sfxClick(); }}>
+              <div style={{ fontSize: 9, color: '#FFD700', fontWeight: 900, letterSpacing: 1.5, textTransform: 'uppercase', marginBottom: 4 }}>{lang === 'en' ? 'COPY' : 'KOPYALA'}</div>
+              <div style={{ fontSize: 28, fontWeight: 900, color: '#FFD700', letterSpacing: 4, textShadow: '0 0 12px rgba(255,215,0,0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10 }}>
+                {roomCode}
+                <span style={{ fontSize: 16, opacity: 0.8 }}>📋</span>
+              </div>
+            </div>
+
+            <div style={{ color: '#fff', fontSize: 14, marginBottom: 16, fontWeight: 800, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6 }}>
+              <span>{lang === 'en' ? '👥 Players' : '👥 Oyuncular'}</span>
+              <span style={{ background: 'rgba(255,255,255,0.1)', padding: '2px 8px', borderRadius: 12, fontSize: 11 }}>{gameState?.players?.length || 1} / 5</span>
+            </div>
+
+            {/* LOBBY PLAYER SLOTS (GRID SYSTEM FOR MOBILE RESPONSIVENESS) */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 10, marginBottom: 20 }}>
+              {Array.from({ length: 5 }).map((_, idx) => {
+                const p = gameState?.players?.[idx];
+
+                if (p) {
+                  const isSelf = p.id === playerId;
+                  const isReady = p.isReady || idx === 0; // Host is always ready
+
+                  return (
+                    <div
+                      key={p.id}
+                      className={`waiting-player-card ${isReady ? 'ready-halo-active' : ''}`}
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: 12,
+                        background: 'rgba(22, 30, 49, 0.4)',
+                        border: `1.5px solid ${isReady ? '#2ecc71' : 'rgba(255,255,255,0.08)'}`,
+                        borderRadius: 16,
+                        padding: '10px 14px',
+                        boxShadow: isReady ? '0 8px 24px rgba(46,204,113,0.15)' : '0 8px 24px rgba(0,0,0,0.3)',
+                        transition: 'all 0.25s ease',
+                        position: 'relative'
+                      }}
+                    >
+                      <div style={{ position: 'relative' }}>
+                        {((isSelf ? (dbUser?.wins || 0) : (p.isBot ? 2 : 0)) > 0) && (
+                          <span className="avatar-gear-crown" style={{ position: 'absolute', top: -10, left: '50%', transform: 'translateX(-50%)', fontSize: 14, filter: 'drop-shadow(0 2px 4px rgba(255,215,0,0.5))', zIndex: 2 }}>👑</span>
+                        )}
+                        <div
+                          className={`avatar-container border-style-${isSelf ? (dbUser?.selectedBorder || p.selectedBorder || 'default') : (p.selectedBorder || 'default')}`}
+                          style={{
+                            width: 44,
+                            height: 44,
+                            cursor: 'pointer',
+                            boxShadow: isSelf ? '0 0 12px rgba(255,215,0,0.35)' : 'none',
+                            transition: 'transform 0.2s'
+                          }}
+                          onClick={() => {
+                            if (isSelf) {
+                              const newName = prompt(lang === 'en' ? "Enter your new name:" : "Yeni isminizi girin:", p.name);
+                              if (newName && newName.trim()) {
+                                setMyName(newName.trim());
+                                localStorage.setItem('md_name', newName.trim());
+                                socket?.emit('updatePlayerName', { roomCode, newName: newName.trim() });
+                              }
+                            } else {
+                              setProfilePlayer(p);
+                              socket?.emit('sendEmote', { targetId: p.id, emoji: '👋' });
+                            }
+                          }}
+                          title={isSelf ? (lang === 'en' ? "Click to change name" : "İsmini değiştirmek için tıkla") : (lang === 'en' ? "View profile" : "Profili gör")}
+                        >
+                          <img
+                            src={`https://api.dicebear.com/7.x/${p.avatar || 'avataaars'}/svg?seed=${p.name}`}
+                            alt="avatar"
+                          />
+                        </div>
+                      </div>
+
+                      <div style={{ display: 'flex', flexDirection: 'column', flex: 1, textAlign: 'left' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                          <span style={{ color: '#fff', fontSize: 13, fontWeight: 'bold' }}>{p.name}</span>
+                          {isSelf && <span style={{ fontSize: 8, background: '#FFD700', color: '#000', padding: '1px 5px', borderRadius: 8, fontWeight: 900 }}>{lang === 'en' ? 'YOU' : 'SEN'}</span>}
+                          {idx === 0 && <span style={{ fontSize: 8, background: '#8E44AD', color: '#fff', padding: '1px 5px', borderRadius: 8, fontWeight: 900 }}>HOST</span>}
+                          {/* Player Badge */}
+                          {((isSelf ? dbUser?.selectedBadge : p.selectedBadge) && (isSelf ? dbUser?.selectedBadge : p.selectedBadge) !== 'default') && (
+                            <span className={`player-badge badge-${isSelf ? dbUser.selectedBadge : p.selectedBadge}`} style={{ fontSize: 8, padding: '1px 4px' }}>
+                              {{ rookie: '🌱', veteran: '⚔️', ghost: '👻', legend: '🦁', king: '🫅' }[isSelf ? dbUser.selectedBadge : p.selectedBadge]}
+                            </span>
+                          )}
+                        </div>
+                        {/* Player Custom Title */}
+                        {((isSelf ? dbUser?.selectedTitle : p.selectedTitle) && (isSelf ? dbUser?.selectedTitle : p.selectedTitle) !== 'default') && (
+                          <div className={`title-style-${isSelf ? dbUser.selectedTitle : p.selectedTitle}`} style={{ fontSize: 8, fontWeight: 'bold', marginTop: 1 }}>
+                            {
+                              {
+                                gold: { tr: '💰 Para Babası', en: '💰 Money Bag' },
+                                flame: { tr: '🔥 Sinsi Hırsız', en: '🔥 Sly Thief' },
+                                cyber: { tr: '⚡ Siber Kartal', en: '⚡ Cyber Falcon' },
+                                kral: { tr: '👑 Oyunun Kralı', en: '👑 Game King' },
+                                cosmic: { tr: '🌌 Kozmik Efendi', en: '🌌 Cosmic Lord' }
+                              }[isSelf ? dbUser.selectedTitle : p.selectedTitle]?.[lang] || (isSelf ? dbUser.selectedTitle : p.selectedTitle)
+                            }
+                          </div>
+                        )}
+                        <span style={{ fontSize: 8.5, color: '#a0aec0', marginTop: 1 }}>
+                          {p.isBot ? (lang === 'en' ? '🤖 AI Player' : '🤖 Yapay Zeka Oyuncu') : (lang === 'en' ? '👤 Online Player' : '👤 Çevrimiçi Oyuncu')}
+                        </span>
+                      </div>
+
+                      {/* Status badge */}
+                      <div style={{
+                        padding: '4px 10px',
+                        borderRadius: 20,
+                        fontSize: 9,
+                        fontWeight: 900,
+                        background: isReady ? 'rgba(46, 204, 113, 0.12)' : 'rgba(230, 126, 34, 0.12)',
+                        color: isReady ? '#2ECC71' : '#E67E22',
+                        border: `1px solid ${isReady ? 'rgba(46, 204, 113, 0.25)' : 'rgba(230, 126, 34, 0.25)'}`
+                      }}>
+                        {isReady ? (lang === 'en' ? '✓ READY' : '✓ HAZIR') : (lang === 'en' ? '⏳ WAITING' : '⏳ BEKLİYOR')}
+                      </div>
+                    </div>
+                  );
+                } else {
+                  return (
+                    <div
+                      key={`empty-${idx}`}
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: 12,
+                        background: 'rgba(255,255,255,0.01)',
+                        border: '1.5px dashed rgba(255,255,255,0.08)',
+                        borderRadius: 16,
+                        padding: '12px 14px',
+                        color: '#64748b'
+                      }}
+                    >
+                      <div style={{ width: 38, height: 38, borderRadius: '50%', border: '1.5px dashed rgba(255,255,255,0.08)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 16, color: 'rgba(255,255,255,0.1)' }}>
+                        ?
+                      </div>
+                      <div style={{ flex: 1, textAlign: 'left', display: 'flex', flexDirection: 'column' }}>
+                        <span style={{ fontSize: 12, fontWeight: 700, color: 'rgba(255,255,255,0.15)' }}>{lang === 'en' ? 'Empty Slot' : 'Boş Yuva'}</span>
+                        <span style={{ fontSize: 9, color: 'rgba(255,255,255,0.08)', marginTop: 1 }}>{lang === 'en' ? 'Waiting for player...' : 'Oyuncu bekleniyor...'}</span>
+                      </div>
+                      <div className="lobby-pulse-dot" style={{ width: 6, height: 6, borderRadius: '50%', background: 'rgba(255,255,255,0.08)' }} />
+                    </div>
+                  );
+                }
+              })}
+            </div>
+
+            {/* ACTION PANEL (DEPENDING ON HOST OR GUEST ROLE) */}
+            {gameState?.players?.[0]?.id === playerId ? (
+              <>
+                {/* Host Panel */}
+                <div style={{
+                  background: 'rgba(255,255,255,0.02)',
+                  border: '1px solid rgba(255,255,255,0.05)',
+                  padding: 14,
+                  borderRadius: 14,
+                  marginBottom: 16
+                }}>
+                  <div style={{ color: '#94a3b8', fontSize: 11, marginBottom: 8, fontWeight: 900, letterSpacing: 0.5, textTransform: 'uppercase' }}>{lang === 'en' ? '🎨 CARD THEME SETTINGS' : '🎨 KART TEMA AYARI'}</div>
+                  <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', justifyContent: 'center' }}>
+                    {THEMES.map(t => (
+                      <button key={t.id} onClick={() => { setSelectedTheme(t.id); sfxClick(); }} style={{
+                        padding: '6px 12px', borderRadius: 8, cursor: 'pointer', fontSize: 11, fontWeight: 800,
+                        border: selectedTheme === t.id ? '1.5px solid #FFD700' : '1px solid rgba(255,255,255,0.12)',
+                        background: selectedTheme === t.id ? 'rgba(255,215,0,0.1)' : 'rgba(255,255,255,0.04)',
+                        color: '#fff',
+                        margin: 0,
+                        transition: 'all 0.15s ease'
+                      }}>
+                        {t.id === 'default' ? (lang === 'en' ? '🎲 Classic' : t.name) : (t.id === 'wood' ? (lang === 'en' ? '🪵 Wooden Table' : t.name) : t.name)}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Advanced Settings */}
+                {renderRoomSettings()}
+                <div style={{ height: 16 }} />
+
+                {/* Action Buttons */}
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                  {gameState?.players?.length < 5 && (
+                    <button onClick={() => {
+                      socket?.emit('addBot', { roomCode }, res => {
+                        if (res?.ok) showToast(lang === 'en' ? 'Bot added to room' : 'Bot odaya eklendi', 'success');
+                        else if (res?.error) showToast(res.error, 'error');
+                      });
+                    }} style={{ ...btnStyle('linear-gradient(135deg, #8E44AD, #9B59B6)'), width: '100%', padding: '12px', fontSize: 13, borderRadius: 8, margin: 0 }}>
+                      {lang === 'en' ? '🤖 Add Bot (AI)' : '🤖 Bot Ekle (Yapay Zeka)'}
+                    </button>
+                  )}
+
+                  <button onClick={handleStart} style={{ ...btnStyle('linear-gradient(135deg, #10b981, #059669)'), width: '100%', padding: '12px', fontSize: 13, borderRadius: 8, margin: 0 }}>
+                    {lang === 'en' ? `🏁 Start Game (${gameState?.players?.length || 1} Players)` : `🏁 Oyunu Başlat (${gameState?.players?.length || 1} Oyuncu)`}
+                  </button>
+
+                  <button onClick={handleCloseRoom} style={{
+                    ...btnStyle('rgba(231,76,60,0.15)'),
+                    width: '100%', padding: '10px', fontSize: 12, borderRadius: 8, border: '1px solid rgba(231,76,60,0.3)', color: '#E74C3C', margin: 0
+                  }}>
+                    {lang === 'en' ? '❌ Close Room' : '❌ Odayı Kapat'}
+                  </button>
+                </div>
+              </>
             ) : (
               <>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8, color: '#FFD700', fontWeight: 900, fontSize: 15.5 }}><img src="/logo.png" alt="logo" style={{ height: 22 }} /> Chaos Deal Cart</div>
-                <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
-                  <span style={{ color: '#aaa', fontSize: 11 }}>Oda: <b style={{ color: '#fff' }}>{roomCode}</b></span>
-                  <button ref={deckRef} onClick={() => setShowDeckStats(true)} style={{ background: 'rgba(255,255,255,0.1)', padding: '4px 8px', borderRadius: 6, color: '#aaa', fontSize: 11, border: 'none', cursor: 'pointer' }}>
-                    🎴 Deste: <b style={{ color: '#fff' }}>{gameState.deckCount}</b> (Detay)
-                  </button>
-                  {gameState.turnTimer > 0 && gameState.turnStartTime && (
-                    <span style={{ background: 'rgba(231, 76, 60, 0.2)', padding: '4px 8px', borderRadius: 6, color: '#fff', fontSize: 11, border: '1px solid rgba(231,76,60,0.5)' }}>
-                      ⏱️ Süre: <b style={{ color: '#FFD700' }}>
-                        {isBlocked ? `DURDURULDU (${remainingTime}s)` : `${remainingTime}s`}
-                      </b>
-                    </span>
-                  )}
-                  <button onClick={() => setShowDiscardModal(true)} style={{ ...btnStyle('rgba(255,255,255,0.1)'), padding: '4px 8px', fontSize: 11 }}>
-                    🗑️ Iskarta ({gameState.discard?.length || 0})
-                  </button>
-                  <button onClick={() => { const next = !is3DTable; setIs3DTable(next); localStorage.setItem('md_3d', next ? 'on' : 'off'); sfxClick(); }} style={{ ...btnStyle(is3DTable ? 'rgba(46,204,113,0.15)' : 'rgba(255,255,255,0.1)'), padding: '4px 8px', fontSize: 11, border: is3DTable ? '1px solid rgba(46,204,113,0.4)' : 'none' }}>
-                    {is3DTable ? '👓 3D Masa: Açık' : '👓 3D Masa: Kapalı'}
-                  </button>
-                  <span style={{
-                    background: isMyTurn ? '#FFD700' : 'rgba(255,255,255,0.05)',
-                    color: isMyTurn ? '#000' : '#aaa',
-                    fontWeight: 700,
-                    padding: '4px 8px',
-                    borderRadius: 6,
-                    fontSize: 11,
-                    border: isMyTurn ? 'none' : '1px solid rgba(255,255,255,0.1)',
-                    display: 'inline-flex',
-                    alignItems: 'center',
-                    gap: 6
-                  }}>
-                    {isMyTurn ? 'SIRA SENDE' : `SIRA: ${gameState.players.find(p => p.id === gameState.currentPlayerId)?.name || 'Rakip'}`}
-                    {renderActionPoints(gameState.actionsLeft)}
-                  </span>
-                  <button onClick={() => setShowHistoryModal(true)} style={{ ...btnStyle('rgba(52, 152, 219, 0.2)'), padding: '4px 8px', fontSize: 11, border: '1px solid rgba(52, 152, 219, 0.5)' }}>
-                    📜 Geçmiş
-                  </button>
-                  {gameState.streetThugs && gameState.scavengeMarket?.length > 0 && (
-                    <button onClick={() => setShowScavengeModal(true)} style={{ ...btnStyle('rgba(231, 76, 60, 0.2)'), padding: '4px 8px', fontSize: 11, border: '1px solid rgba(231, 76, 60, 0.5)' }}>
-                      🕵️ Karaborsa ({gameState.scavengeMarket.length})
-                    </button>
-                  )}
+                {/* Guest Panel */}
+                <p style={{ color: '#94a3b8', fontSize: 12, marginTop: 8, marginBottom: 12, fontStyle: 'italic' }}>{lang === 'en' ? 'Host will start the game, please wait...' : 'Host oyunu başlatacak, lütfen bekleyin...'}</p>
+
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                  {/* Ready Toggle */}
                   <button
                     onClick={() => {
-                      const nextLang = lang === 'tr' ? 'en' : 'tr';
-                      setLang(nextLang);
-                      localStorage.setItem('md_lang', nextLang);
+                      socket?.emit('toggleReady', { roomCode });
                       sfxClick();
                     }}
                     style={{
-                      background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.2)',
-                      color: '#fff', borderRadius: 6, cursor: 'pointer', fontSize: 11, padding: '4px 8px',
-                      fontWeight: 'bold'
+                      ...btnStyle(gameState?.players?.find(p => p.id === playerId)?.isReady ? 'linear-gradient(135deg, #e74c3c, #c0392b)' : 'linear-gradient(135deg, #2ecc71, #27ae60)'),
+                      width: '100%', padding: '12px', fontSize: 13, borderRadius: 8, fontWeight: 900, margin: 0
                     }}
                   >
-                    {lang === 'tr' ? '🇹🇷 TR' : '🇬🇧 EN'}
+                    {gameState?.players?.find(p => p.id === playerId)?.isReady ? (lang === 'en' ? '❌ NOT READY' : '❌ HAZIR DEĞİLİM') : (lang === 'en' ? '✅ READY UP!' : '✅ HAZIR OL!')}
                   </button>
-                  <button onClick={toggleSound} title={soundOn ? 'Sesi Kapat' : 'Sesi Aç'} style={{
-                    background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.2)',
-                    color: '#fff', borderRadius: 6, cursor: 'pointer', fontSize: 13, padding: '3px 8px',
-                  }}>
-                    {soundOn ? '🔊' : '🔇'}
-                  </button>
-                  {soundOn && (
-                    <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, background: 'rgba(0,0,0,0.2)', padding: '3px 8px', borderRadius: 6, border: '1px solid rgba(255,255,255,0.1)' }}>
-                      <span style={{ fontSize: 10, color: '#718096' }} title="Müzik">🎵</span>
-                      <input
-                        type="range" min="0" max="0.5" step="0.01"
-                        value={bgmVolume}
-                        onChange={e => { setBgmVolumeState(e.target.value); setBgmVolume(e.target.value); }}
-                        title="Arka Plan Müziği Sesi"
-                        style={{ width: 45, cursor: 'pointer', height: 4, accentColor: '#FFD700' }}
-                      />
-                      <span style={{ fontSize: 10, color: '#718096' }} title="Ses Efektleri">🔊</span>
-                      <input
-                        type="range" min="0" max="1.0" step="0.02"
-                        value={sfxVolume}
-                        onChange={e => { setSfxVolumeState(e.target.value); setSfxVolume(e.target.value); }}
-                        title="Ses Efektleri Sesi"
-                        style={{ width: 45, cursor: 'pointer', height: 4, accentColor: '#FFD700' }}
-                      />
-                    </div>
-                  )}
-                  {gameState?.players?.[0]?.id === playerId && (
-                    <button onClick={() => {
-                      socket.emit('returnToLobby', { roomCode }, (res) => {
-                        if (res && !res.ok) setError(res.error || 'Oyun bitirilemedi');
-                      });
-                    }} style={{ background: '#E67E22', border: 'none', color: '#fff', padding: '4px 10px', borderRadius: 6, cursor: 'pointer', fontSize: 11, fontWeight: 'bold' }}>
-                      Oyunu Bitir
-                    </button>
-                  )}
-                  <button onClick={handleRageQuit} style={{ background: 'transparent', border: '1px solid #E74C3C', color: '#E74C3C', padding: '4px 10px', borderRadius: 6, cursor: 'pointer', fontSize: 11, fontWeight: 'bold' }}>
-                    (╯°□°)╯︵ ┻━┻ Masayı Devir
-                  </button>
-                  <button onClick={() => { setIsHeaderOpen(false); sfxClick(); }} style={{ ...btnStyle('rgba(255,255,255,0.1)'), padding: '4px 8px', fontSize: 11 }}>
-                    ▲ Gizle
+
+                  {/* View Only Settings */}
+                  {renderRoomSettings(true)}
+
+                  <button
+                    onClick={() => {
+                      if (!window.confirm(lang === 'en' ? 'Are you sure you want to leave the room?' : 'Odadan ayrılmak istediğinden emin misin?')) return;
+                      socket?.emit('leaveRoom', { roomCode }, () => { });
+                      handleExit();
+                    }}
+                    style={{
+                      ...btnStyle('rgba(255,255,255,0.06)'),
+                      width: '100%', padding: '10px', fontSize: 12,
+                      borderRadius: 8, border: '1px solid rgba(255,255,255,0.15)',
+                      color: '#eee', margin: 0
+                    }}
+                  >
+                    {lang === 'en' ? '🚪 Leave Room' : '🚪 Odadan Ayrıl'}
                   </button>
                 </div>
               </>
@@ -6919,784 +7304,965 @@ export default function App() {
           </div>
         )}
 
+        {error && <div style={{ color: '#ef4444', marginTop: 14, fontSize: 12, fontWeight: 'bold', textAlign: 'center' }}>⚠️ {error}</div>}
+        <div style={{ color: '#64748b', marginTop: 8, fontSize: 11, textAlign: 'center' }}>{status}</div>
+      </div>
+      {renderModal()}
+    </div>
+  );
+}
+// ---- GAME ----
+if (!gameState || !me) return (
+  <div style={{ minHeight: '100vh', background: '#0f0f23', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '24px', fontWeight: 'bold' }}>
+    Oyun Yükleniyor...
+  </div>
+);
 
+const myCompleteSets = Object.entries(me.properties || {}).filter(([c, cards]) => isSetComplete(cards, c)).length;
+const over = (me.hand?.length || 0) - (gameState?.handLimit || 7);
 
-        {/* Zaman Sınırı Fitil Sayacı (Burning Fuse) */}
-        {gameState.turnTimer > 0 && gameState.turnStartTime && !isBlocked && (() => {
-          const pct = Math.max(0, Math.min(100, (remainingTime / gameState.turnTimer) * 100));
-          let timerClass = 'safe';
-          if (pct <= 20) timerClass = 'danger';
-          else if (pct <= 55) timerClass = 'warning';
+const remainingTime = gameState?.turnPausedRemaining != null
+  ? Math.floor(gameState.turnPausedRemaining)
+  : (gameState?.turnTimer > 0 && gameState?.turnStartTime && gameState?.serverTime
+    ? Math.max(0, gameState.turnTimer - Math.floor(((gameState.serverTime + (Date.now() - stateReceivedTimeRef.current)) - gameState.turnStartTime) / 1000))
+    : null);
+const showDanger = isMyTurn && !isBlocked && remainingTime !== null && remainingTime <= 10 && remainingTime > 0;
 
-          return (
-            <div className="fuse-bar-container" title={`Kalan Tur Süresi: ${remainingTime} saniye`}>
-              <div className={`fuse-bar ${timerClass}`} style={{ width: `${pct}%` }} />
-              <div className={`fuse-spark ${timerClass}`} style={{ left: `calc(${pct}% - 7px)` }} />
+// Kazananın Rengi
+const winnerColor = gameState?.winner ? PLAYER_COLORS[gameState.players.findIndex(p => p.id === gameState.winner.id) % PLAYER_COLORS.length] : '#0f0f23';
+
+const getDynamicBackground = () => {
+  if (gameState?.winner) {
+    return `radial-gradient(circle at center, ${winnerColor}55 0%, #0b071e 80%)`;
+  }
+  if (showDanger) {
+    return 'radial-gradient(circle at center, #781c1c 0%, #0c081e 80%)';
+  }
+  if (isBlocked) {
+    return 'radial-gradient(circle at center, #1e1520 0%, #08070d 80%)';
+  }
+
+  // Check if player has selected a custom Table Board Theme
+  const tableTheme = dbUser?.selectedTableTheme || 'default';
+  if (tableTheme === 'volcano') {
+    return 'radial-gradient(circle at center, #2d0e07 0%, #0c0200 100%)';
+  }
+  if (tableTheme === 'cosmic') {
+    return 'radial-gradient(circle at center, #150926 0%, #05020c 100%)';
+  }
+  if (tableTheme === 'matrix') {
+    return 'radial-gradient(circle at center, #041404 0%, #010501 100%)';
+  }
+  if (tableTheme === 'gold') {
+    return 'radial-gradient(circle at center, #221a08 0%, #070502 100%)';
+  }
+
+  if (isMyTurn) {
+    if (activeTheme === 'cyberpunk') return 'radial-gradient(circle at center, #1a162b 0%, #06050b 80%)';
+    if (activeTheme === 'retro') return 'radial-gradient(circle at center, #0f1813 0%, #050806 80%)';
+    if (activeTheme === 'wood') return 'radial-gradient(circle at center, #241a15 0%, #0d0907 80%)';
+    return 'radial-gradient(circle at center, #162238 0%, #070a12 80%)';
+  }
+  if (activeTheme === 'cyberpunk') return 'radial-gradient(circle at center, #13121a 0%, #06050b 80%)';
+  if (activeTheme === 'retro') return 'radial-gradient(circle at center, #0a0d0a 0%, #050806 80%)';
+  if (activeTheme === 'wood') return 'radial-gradient(circle at center, #1c1511 0%, #0d0907 80%)';
+  return 'radial-gradient(circle at center, #121829 0%, #06080e 80%)';
+};
+
+return (
+  <ThemeContext.Provider value={{ themeId: activeTheme, manifest }}>
+    <style>
+      {`
+        .rage-quit-active { animation: rage-quit-anim 1.5s cubic-bezier(0.25, 0.46, 0.45, 0.94) forwards; pointer-events: none; }
+        @keyframes rage-quit-anim {
+           0% { transform: rotate(0deg) scale(1); filter: blur(0px); }
+           20% { transform: rotate(-5deg) scale(1.05) translateY(-20px); filter: blur(1px); }
+           100% { transform: rotate(180deg) scale(0.2) translateY(1500px); filter: blur(10px); opacity: 0; }
+        }
+      `}
+    </style>
+    <div className={`game-layout game-board-container theme-${activeTheme} ${is3DTable ? 'table-3d' : ''} ${boardShake === 'heavy' ? "board-shake-heavy" : boardShake ? "board-shake-active" : ""}`} style={{ background: getDynamicBackground(), color: '#fff', fontSize: 13, transition: 'background 0.8s ease-in-out' }}>
+
+      {/* Holographic Grid Overlay */}
+      <div className="holographic-mesh-grid" />
+      <div className="ambient-nebula-left" />
+      <div className="ambient-nebula-right" />
+
+      {/* Custom Table Themeoverlay = { text:s Overlays */}
+      {dbUser?.selectedTableTheme && dbUser.selectedTableTheme !== 'default' && (
+        <>
+          <div className={`table-theme-overlay theme-overlay-${dbUser.selectedTableTheme}`} />
+          {dbUser.selectedTableTheme === 'volcano' && (
+            <div className="lava-bubbles-container">
+              <div className="lava-bubble" style={{ '--left': '10%', '--size': '80px', '--delay': '0s', '--dur': '12s' }} />
+              <div className="lava-bubble" style={{ '--left': '30%', '--size': '120px', '--delay': '3s', '--dur': '16s' }} />
+              <div className="lava-bubble" style={{ '--left': '55%', '--size': '90px', '--delay': '1s', '--dur': '14s' }} />
+              <div className="lava-bubble" style={{ '--left': '80%', '--size': '110px', '--delay': '5s', '--dur': '18s' }} />
             </div>
-          );
-        })()}
-
-        {renderModal()}
-        {renderChallengeModal()}
-        {renderPaymentModal()}
-        {renderDiscardModal()}
-        {renderMenuModal()}
-        {renderDeckStatsModal()}
-        {renderPlayerDetailsModal()}
-        {renderTradeModal()}
-        {renderScavengeModal()}
-        {renderHistoryModal()}
-        <ToastStack toasts={toasts} />
-
-        {/* Son Saniye Kırmızı Tehlike Ekranı */}
-        {showDanger && <div className="danger-vignette" />}
-
-        {/* Anlaşma Bozucu Sinematik Flaş */}
-        {boardShake === 'heavy' && <div className="flash-red-overlay" />}
-
-        {/* Kanlı Kira Gecesi Efekti */}
-        {gameState.myPendingPayment && <div className="bloody-payment-overlay" />}
-
-        {/* Bağlantı Kesildi Ekranı */}
-        {!isConnected && (
-          <div style={{ position: 'fixed', inset: 0, zIndex: 2000, background: 'rgba(20, 20, 40, 0.92)', display: 'flex', alignItems: 'center', justifyContent: 'center', backdropFilter: 'blur(10px)', animation: 'fw-fade-in 0.3s ease-out' }}>
-            <div style={{ textAlign: 'center' }}>
-              <div style={{ fontSize: 80, marginBottom: 20, animation: 'system-log-blink 1s infinite' }}>📡</div>
-              <h1 style={{ color: '#E74C3C', fontWeight: 900, letterSpacing: 2 }}>BAĞLANTI KESİLDİ</h1>
-              <p style={{ color: '#aaa', fontSize: 16 }}>Sunucu ile bağlantı koptu. Yeniden bağlanmaya çalışılıyor...</p>
+          )}
+          {dbUser.selectedTableTheme === 'cosmic' && (
+            <div className="cosmic-stars-container">
+              <div className="cosmic-star" style={{ '--top': '15%', '--left': '15%', '--delay': '0s' }} />
+              <div className="cosmic-star" style={{ '--top': '25%', '--left': '75%', '--delay': '1.5s' }} />
+              <div className="cosmic-star" style={{ '--top': '65%', '--left': '10%', '--delay': '0.5s' }} />
+              <div className="cosmic-star" style={{ '--top': '80%', '--left': '85%', '--delay': '2s' }} />
+              <div className="cosmic-star" style={{ '--top': '40%', '--left': '50%', '--delay': '2.5s' }} />
             </div>
-          </div>
-        )}
-
-        {/* BARIŞÇIL TAKAS ONAY EKRANI (Hedef İçin) */}
-        {myPendingTrade && (
-          <div style={{ position: 'fixed', inset: 0, zIndex: 3000, background: 'rgba(0,0,0,0.85)', display: 'flex', alignItems: 'center', justifyContent: 'center', backdropFilter: 'blur(8px)' }}>
-            <div style={{ background: '#1a1a2e', padding: 24, borderRadius: 12, border: '2px solid #3498DB', maxWidth: 520, width: '90%', textAlign: 'center' }}>
-              <div style={{ fontSize: 40, marginBottom: 10 }}>🤝</div>
-              <h2 style={{ color: '#3498DB', marginBottom: 8 }}>{lang === 'en' ? `${myPendingTrade.sourceName} is Proposing a Trade!` : `${myPendingTrade.sourceName} Takas Teklif Ediyor!`}</h2>
-              <p style={{ color: '#aaa', fontSize: 13, marginBottom: 20 }}>
-                {lang === 'en' ? 'Do you approve the mutual trade of the following cards?' : 'Aşağıdaki kartların karşılıklı olarak takas edilmesini onaylıyor musunuz?'}
-              </p>
-
-              <div style={{ display: 'flex', gap: 14, marginBottom: 24, textAlign: 'left', flexDirection: 'row' }}>
-                {/* Sana Verilecek (Offered by source player) */}
-                <div style={{ flex: 1, background: 'rgba(46, 204, 113, 0.05)', border: '1px solid rgba(46, 204, 113, 0.15)', padding: 12, borderRadius: 10, display: 'flex', flexDirection: 'column' }}>
-                  <div style={{ color: '#2ECC71', fontSize: 11, fontWeight: 900, marginBottom: 10, letterSpacing: 0.5 }}>{lang === 'en' ? '📤 TO BE GIVEN TO YOU' : '📤 SANA VERİLECEK'}</div>
-                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, maxHeight: 160, overflowY: 'auto', padding: '2px 0' }}>
-                    {[...myPendingTrade.offerBankIds, ...myPendingTrade.offerPropIds].map(id => {
-                      const c = findCardInGame(id);
-                      return c ? <CardVisual key={id} card={c} small lang={lang} /> : null;
-                    })}
-                    {myPendingTrade.offerBankIds.length + myPendingTrade.offerPropIds.length === 0 && (
-                      <span style={{ color: '#64748b', fontSize: 11, fontStyle: 'italic' }}>{lang === 'en' ? 'No cards offered' : 'Hiç kart verilmiyor'}</span>
-                    )}
-                  </div>
-                </div>
-
-                {/* Senden İstenecek (Requested from me) */}
-                <div style={{ flex: 1, background: 'rgba(239, 68, 68, 0.05)', border: '1px solid rgba(239, 68, 68, 0.15)', padding: 12, borderRadius: 10, display: 'flex', flexDirection: 'column' }}>
-                  <div style={{ color: '#F87171', fontSize: 11, fontWeight: 900, marginBottom: 10, letterSpacing: 0.5 }}>{lang === 'en' ? '📥 REQUESTED FROM YOU' : '📥 SENDEN İSTENEN'}</div>
-                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, maxHeight: 160, overflowY: 'auto', padding: '2px 0' }}>
-                    {[...myPendingTrade.requestBankIds, ...myPendingTrade.requestPropIds].map(id => {
-                      const c = findCardInGame(id);
-                      return c ? <CardVisual key={id} card={c} small lang={lang} /> : null;
-                    })}
-                    {myPendingTrade.requestBankIds.length + myPendingTrade.requestPropIds.length === 0 && (
-                      <span style={{ color: '#64748b', fontSize: 11, fontStyle: 'italic' }}>{lang === 'en' ? 'No cards requested' : 'Hiç kart istenmiyor'}</span>
-                    )}
-                  </div>
-                </div>
-              </div>
-
-              <div style={{ display: 'flex', gap: 10 }}>
-                <button onClick={() => handleRespondTrade(myPendingTrade.id, true)} style={{ ...btnStyle('#2ECC71'), flex: 1, padding: 12, fontSize: 14 }}>{lang === 'en' ? '✅ Accept' : '✅ Kabul Et'}</button>
-                <button onClick={() => handleRespondTrade(myPendingTrade.id, false)} style={{ ...btnStyle('#E74C3C'), flex: 1, padding: 12, fontSize: 14 }}>{lang === 'en' ? '❌ Reject' : '❌ Reddet'}</button>
-              </div>
+          )}
+          {dbUser.selectedTableTheme === 'gold' && (
+            <div className="gold-sparkles-container">
+              <div className="gold-sparkle" style={{ '--left': '5%', '--delay': '0s', '--dur': '6s' }} />
+              <div className="gold-sparkle" style={{ '--left': '25%', '--delay': '2s', '--dur': '8s' }} />
+              <div className="gold-sparkle" style={{ '--left': '45%', '--delay': '1s', '--dur': '7s' }} />
+              <div className="gold-sparkle" style={{ '--left': '70%', '--delay': '3s', '--dur': '9s' }} />
+              <div className="gold-sparkle" style={{ '--left': '90%', '--delay': '1.5s', '--dur': '6s' }} />
             </div>
-          </div>
-        )}
-
-        {/* Desteden Uçan Kartlar (Çekme Animasyonu) */}
-        <AnimatePresence>
-          {flyingCards.map(fc => (
-            <div key={fc.id} className="card-draw-3d-wrapper">
-              <motion.div
-                initial={{ x: fc.startX, y: fc.startY, scale: 0.1, rotateY: 180, rotateZ: -30, opacity: 0 }}
-                animate={{
-                  x: [fc.startX, window.innerWidth / 2, window.innerWidth / 2 - 60 + (Math.random() * 20 - 10)],
-                  y: [fc.startY, window.innerHeight / 2 - 100, window.innerHeight - 150],
-                  scale: [0.1, 1.8, 0.8],
-                  rotateY: [180, 270, 360], /* 3D Hearthstone Çevirme Efekti */
-                  rotateZ: [-30, 10, 360 + (Math.random() * 20 - 10)],
-                  opacity: [0, 1, 1]
-                }}
-                exit={{ opacity: 0, scale: 0.5 }}
-                transition={{ duration: 0.85, delay: fc.delay, ease: "easeOut", times: [0, 0.4, 1] }}
-                style={{ position: 'relative' }}
-              >
-                <CardVisual card={fc.card} lang={lang} />
-              </motion.div>
-            </div>
-          ))}
-        </AnimatePresence>
-
-        {/* Büyük Aksiyon Duyurusu */}
-        {actionOverlay && (
-          <div className="action-overlay">
-            <div style={{ textAlign: 'center', color: '#fff', textShadow: '0 0 20px rgba(0,0,0,0.5)' }}>
-              <div style={{ fontSize: 80, marginBottom: 10 }}>{actionOverlay.icon}</div>
-              <div style={{ fontSize: 40, fontWeight: 900, letterSpacing: 4 }}>{actionOverlay.text}</div>
-            </div>
-          </div>
-        )}
-
-        {/* Kart Önizleme Tooltip Kaldırıldı */}
-
-        {/* Ödeme Yaparken Uçan Kartlar */}
-        {payingFlyingCards.map(card => (
-          <div key={card.id} className="thrown-card-ghost" style={{ '--sx': '0px', '--sy': '400px' }}>
-            <CardVisual card={card} lang={lang} />
-          </div>
-        ))}
-
-        {/* Yönlü Uçan Ödeme Kartları (Flying Card Payments) */}
-        {directionalFlyingCards.map(fc => (
-          <div
-            key={fc.id}
-            className="flying-card-entity"
+          )}
+        </>
+      )}
+      {/* Sıra Geçiş Ekran Parlaması */}
+      {showTurnFlash && <div className="turn-flash-overlay" />}
+      {showTurnFlash && (
+        <div style={{
+          position: 'fixed',
+          top: '50%',
+          left: '50%',
+          transform: 'translate(-50%, -50%)',
+          zIndex: 99999,
+          pointerEvents: 'none',
+          display: 'flex',
+          flexDirection: 'column',
+          alignItems: 'center',
+          justifyContent: 'center',
+        }}>
+          <motion.div
+            initial={{ scale: 0.3, opacity: 0 }}
+            animate={{ scale: 1.1, opacity: 1 }}
+            exit={{ scale: 0.5, opacity: 0 }}
+            transition={{ type: 'spring', stiffness: 260, damping: 20 }}
             style={{
-              '--fsx': fc.sx + 'px',
-              '--fsy': fc.sy + 'px',
-              '--fdx': fc.dx + 'px',
-              '--fdy': fc.dy + 'px'
+              background: 'linear-gradient(135deg, rgba(251, 191, 36, 0.95), rgba(217, 119, 6, 0.95))',
+              padding: '16px 40px',
+              borderRadius: 20,
+              boxShadow: '0 15px 45px rgba(251, 191, 36, 0.45), 0 0 25px rgba(251, 191, 36, 0.2)',
+              border: '2px solid #FFF',
+              display: 'flex',
+              alignItems: 'center',
+              gap: 12,
             }}
           >
-            <CardVisual card={fc.card} small lang={lang} />
-          </div>
-        ))}
+            <span style={{ fontSize: 28 }}>🎲</span>
+            <span style={{
+              color: '#FFF',
+              fontSize: 22,
+              fontWeight: 900,
+              letterSpacing: 2,
+              textShadow: '0 2px 4px rgba(0,0,0,0.3)',
+              textTransform: 'uppercase'
+            }}>{lang === 'en' ? 'YOUR TURN!' : 'Sıra Sende!'}</span>
+          </motion.div>
+        </div>
+      )}
 
-        {/* Kendi Uçan Emojilerimiz */}
-        {emotes.filter(e => e.senderId === playerId).map(emote => (
-          <div
-            key={emote.id}
-            className="floating-emote"
-            style={{
-              position: 'fixed',
-              bottom: '160px',
-              left: '50%',
-              transform: 'translateX(-50%)',
-              fontSize: '44px',
-              pointerEvents: 'none',
-              zIndex: 1050
-            }}
-          >
-            {emote.emoji}
-          </div>
-        ))}
+      {/* Fullscreen Kalkan Efekti */}
+      {showShield && <div className="jsn-shield-overlay" />}
 
-        {/* Toz Dumanı Efekti */}
-        {smokeParticles.map(p => (
-          <div key={p.id} className="smoke-particle" style={{ '--sdx': p.dx, '--sdy': p.dy }} />
-        ))}
+      {/* Fullscreen Hırsız Sincap Pençe Efekti */}
+      {showScratch && (
+        <div className="claw-scratch-container">
+          <div className="claw-scratch-mark" />
+          <div className="claw-scratch-mark claw-scratch-mark-2" />
+        </div>
+      )}
 
-        {/* Para Parçacıkları */}
-        {moneyParticles.map(p => (
-          <div key={p.id} className="money-particle" style={{ '--sx': p.sx, '--sy': p.sy, '--dx': p.dx, '--dy': p.dy, '--dr': p.dr }}>
-            {p.icon}
-          </div>
-        ))}
+      {/* Fullscreen Yıldırım Şimşek Efekti */}
+      {showSparks && (
+        <div style={{
+          position: 'fixed',
+          inset: 0,
+          pointerEvents: 'none',
+          zIndex: 99999,
+          border: '8px solid #818cf8',
+          boxShadow: 'inset 0 0 80px rgba(129, 138, 248, 0.65)',
+          animation: 'sparks-pulse-anim 0.4s infinite alternate ease-in-out'
+        }} />
+      )}
 
-        {/* Kazanan */}
-        {gameState.winner && (
-          <VictoryOverlay
-            winnerName={gameState.winner.name}
-            myPlayerId={playerId}
-            players={gameState.players}
-            isHost={gameState.players?.[0]?.id === playerId}
-            onReturnToLobby={handleReturnToLobby}
-            onNewGame={handleNewGame}
-            onExit={handleExit}
-            history={gameState.history}
-            lang={lang}
-          />
-        )}
-
-        {/* Bekleyen itiraz/ödeme bildirimi (diğer oyuncular için) */}
-        {isBlocked && !gameState.myPendingChallenge && !gameState.myPendingPayment && (
-          <div style={{ background: 'rgba(255,215,0,0.15)', borderBottom: '1px solid rgba(255,215,0,0.3)', color: '#FFD700', textAlign: 'center', padding: 8, fontSize: 12 }}>
-            {gameState.pendingChallenges?.length > 0 && gameState.pendingChallenges.map(ch => (
-              <div key={ch.id}>
-                ⏳ {ch.action === 'birthday' ? (lang === 'en' ? `${ch.sourceName}'s Birthday gift` : `${ch.sourceName}'in Doğum Günü hediyesi`) : (lang === 'en' ? `${ch.sourceName} made a move` : `${ch.sourceName} bir hamle yaptı`)} — <b>{ch.responderName}</b> {lang === 'en' ? 'is responding...' : 'yanıt veriyor...'}
-              </div>
-            ))}
-            {gameState.pendingPayments?.length > 0 && gameState.pendingPayments.map(p => (
-              <div key={p.id}>
-                ⏳ {lang === 'en' ? <><b>{p.payerName}</b> is paying {p.amount}M to {p.collectorName}...</> : <><b>{p.payerName}</b>, {p.collectorName}'e {p.amount}M ödeme yapıyor...</>}
-              </div>
-            ))}
-          </div>
-        )}
-
-        <div className={`game-content ${rageQuit ? 'rage-quit-active' : ''} ${isTimeRunningOut ? 'time-running-out-glow' : ''}`}>
-
-          {/* ═══ SOL SÜTUN: OYUNCULAR ═══ */}
-          <div className="players-col player-avatar-strip">
-            {gameState.players.map(player => {
-              const pIdx = gameState.players.findIndex(x => x.id === player.id);
-              const playerColor = PLAYER_COLORS[pIdx % PLAYER_COLORS.length];
-              const isTargeted = gameState.pendingChallenges.some(ch =>
-                (ch.action === 'slydeal' || ch.action === 'dealbreaker' || ch.action === 'debtcollector') && ch.targetId === player.id
-              );
-              const isCurrent = player.id === gameState.currentPlayerId;
-              const propColors = Object.entries(player.properties || {})
-                .filter(([, cards]) => cards.length > 0)
-                .map(([color, cards]) => ({ color, isComplete: isSetComplete(cards, color) }));
-              const completeSets = propColors.filter(p => p.isComplete).length;
-
-              return (
-                <div
-                  key={player.id}
-                  ref={el => (playerPanelRefs.current[player.id] = el)}
-                  onClick={() => setViewingPlayerId(player.id)}
-                  className={isCurrent ? 'player-strip-card ref-style spotlight-glow turn-pulsate' : 'player-strip-card ref-style'}
+      {/* Üst bar */}
+      {!isHeaderOpen ? (
+        <div
+          onClick={() => { setIsHeaderOpen(true); sfxClick(); }}
+          style={{
+            background: '#1a1a2e',
+            height: '24px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            cursor: 'pointer',
+            borderBottom: '1px solid rgba(255,255,255,0.1)',
+            transition: 'background 0.2s',
+            zIndex: 100,
+            fontSize: '11px',
+            color: '#aaa',
+            fontWeight: 'bold',
+            letterSpacing: 1,
+            userSelect: 'none'
+          }}
+          onMouseEnter={e => e.currentTarget.style.background = '#22223b'}
+          onMouseLeave={e => e.currentTarget.style.background = '#1a1a2e'}
+        >
+          ▼ ÜST BARI GÖSTER
+        </div>
+      ) : (
+        <div className="game-topbar" style={{ background: '#1a1a2e', padding: '10px 16px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '1px solid rgba(255,255,255,0.1)', flexWrap: 'wrap', gap: 8, zIndex: 100 }}>
+          {isMobile ? (
+            <div style={{ display: 'flex', width: '100%', justifyContent: 'space-between', alignItems: 'center' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6, color: '#FFD700', fontWeight: 900, fontSize: 13.5 }}><img src="/logo.png" alt="logo" style={{ height: 18 }} /> Chaos Deal Cart</div>
+              <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                <span style={{
+                  background: isMyTurn ? '#FFD700' : 'rgba(255,255,255,0.05)',
+                  color: isMyTurn ? '#000' : '#aaa',
+                  fontWeight: 700,
+                  padding: '2px 6px',
+                  borderRadius: 4,
+                  fontSize: 10,
+                  border: isMyTurn ? 'none' : '1px solid rgba(255,255,255,0.1)',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: 4
+                }}>
+                  {isMyTurn ? 'SIRA SENDE' : `${gameState.players.find(p => p.id === gameState.currentPlayerId)?.name || 'Rakip'}'de`}
+                  {renderActionPoints(gameState.actionsLeft)}
+                </span>
+                <button
+                  onClick={() => {
+                    const nextLang = lang === 'tr' ? 'en' : 'tr';
+                    setLang(nextLang);
+                    localStorage.setItem('md_lang', nextLang);
+                    sfxClick();
+                  }}
                   style={{
-                    flexShrink: 0,
-                    width: isMobile ? 120 : '100%',
-                    borderRadius: 14,
-                    padding: isMobile ? '8px 8px' : '10px 10px',
-                    background: isCurrent
-                      ? `linear-gradient(160deg, ${playerColor}35 0%, rgba(10,8,22,0.95) 100%)`
-                      : `linear-gradient(160deg, ${playerColor}15 0%, rgba(10,8,22,0.85) 100%)`,
-                    border: isCurrent ? `2px solid ${playerColor}` : `1px solid ${playerColor}45`,
-                    boxShadow: isCurrent ? `0 0 20px ${playerColor}50, inset 0 0 12px ${playerColor}10` : '0 3px 12px rgba(0,0,0,0.4)',
-                    display: 'flex',
-                    flexDirection: 'column',
-                    gap: 6,
-                    cursor: 'pointer',
-                    position: 'relative',
-                    transition: 'all 0.3s ease',
-                    overflow: 'hidden',
-                    boxSizing: 'border-box',
+                    background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.2)',
+                    color: '#fff', borderRadius: 4, cursor: 'pointer', fontSize: 9, padding: '4px 6px',
+                    fontWeight: 'bold'
                   }}
                 >
-                  {/* Hedef çarpı */}
-                  {isTargeted && <div className="target-crosshair" />}
-
-                  {/* Aktif sıra göstergesi — üst çizgi */}
-                  {isCurrent && (
-                    <div style={{
-                      position: 'absolute', top: 0, left: 0, right: 0, height: 3,
-                      background: `linear-gradient(90deg, transparent, ${playerColor}, transparent)`,
-                      borderRadius: '14px 14px 0 0',
-                      animation: 'active-player-pulse 1.5s ease-in-out infinite',
-                    }} />
-                  )}
-
-                  {/* ── ÜSTE: Avatar yuvarlak + İsim + Para ── */}
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
-                    {/* Avatar */}
-                    <div
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setProfilePlayer(player);
-                        socket?.emit('sendEmote', { targetId: player.id, emoji: '👋' });
-                      }}
-                      className={`avatar-container border-style-${player.selectedBorder || 'default'}`}
-                      style={{
-                        width: 34, height: 34, flexShrink: 0,
-                        cursor: 'pointer',
-                        boxShadow: isCurrent ? `0 0 12px ${playerColor}` : `0 0 4px ${playerColor}44`,
-                      }}
-                    >
-                      <img
-                        src={`https://api.dicebear.com/7.x/${player.avatar || 'bottts'}/svg?seed=${player.name}`}
-                        alt={player.name}
-                        onError={e => { e.target.style.display = 'none'; }}
-                      />
-                    </div>
-                    {/* İsim + Durum */}
-                    <div style={{ flex: 1, minWidth: 0 }}>
-                      <div style={{
-                        color: '#fff', fontWeight: 800, fontSize: isMobile ? 10 : 12,
-                        whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
-                        textShadow: `0 0 10px ${playerColor}88`,
-                        letterSpacing: 0.3,
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: 3
-                      }}>
-                        <span>{player.name}</span>
-                        {player.id === playerId && <span style={{ fontSize: 8, background: '#FFD700', color: '#000', padding: '0 4px', borderRadius: 4, fontWeight: 900 }}>{lang === 'en' ? 'YOU' : 'SEN'}</span>}
-                        {player.isAFK && ' 💤'}
-                        {player.connected === false && <span style={{ color: '#f44', fontSize: 8 }}> ●</span>}
-                      </div>
-                      {/* Active customization title */}
-                      <div className={`title-style-${player.selectedTitle || 'default'}`} style={{ fontSize: 8.5, fontWeight: 'bold', marginTop: 1 }}>
-                        {
-                          player.selectedTitle && player.selectedTitle !== 'default'
-                            ? {
-                                gold: { tr: '💰 Para Babası', en: '💰 Money Bag' },
-                                flame: { tr: '🔥 Sinsi Hırsız', en: '🔥 Sly Thief' },
-                                cyber: { tr: '⚡ Siber Kartal', en: '⚡ Cyber Falcon' },
-                                kral: { tr: '👑 Oyunun Kralı', en: '👑 Game King' },
-                                cosmic: { tr: '🌌 Kozmik Efendi', en: '🌌 Cosmic Lord' }
-                              }[player.selectedTitle]?.[lang] || player.selectedTitle
-                            : (lang === 'en' ? 'Classic' : 'Klasik')
-                        }
-                      </div>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginTop: 1 }}>
-                        {/* Monopoly M rozeti */}
-                        <div style={{
-                          width: 14, height: 14, borderRadius: '50%', background: '#e63946',
-                          display: 'flex', alignItems: 'center', justifyContent: 'center',
-                          fontSize: 7, fontWeight: 900, color: '#fff', flexShrink: 0,
-                        }}>M</div>
-                        <span style={{ fontSize: 10, color: '#2ECC71', fontWeight: 800 }}>
-                          {player.bankTotal}M
-                        </span>
-                        {isCurrent && (
-                          <div style={{ display: 'inline-flex', alignItems: 'center', gap: 2 }}>
-                            <span style={{
-                              fontSize: 7, color: '#FFD700', fontWeight: 900, letterSpacing: 0.5,
-                              background: 'rgba(255,215,0,0.15)', padding: '1px 4px', borderRadius: 4,
-                              border: '1px solid rgba(255,215,0,0.35)',
-                              animation: 'active-player-pulse 1s ease-in-out infinite',
-                            }}>{lang === 'en' ? '▶ TURN' : '▶ SIRADA'}</span>
-                            {renderActionPoints(gameState.actionsLeft)}
-                          </div>
-                        )}
-                      </div>
-                    </div>
+                  {lang === 'tr' ? '🇹🇷' : '🇬🇧'}
+                </button>
+                <button onClick={() => { setIsMenuOpen(true); sfxClick(); }} style={{ ...btnStyle('rgba(255,255,255,0.1)'), padding: '4px 10px', fontSize: 11, border: '1px solid rgba(255,255,255,0.2)' }}>
+                  ⚙️ MENÜ
+                </button>
+                <button onClick={() => { setIsHeaderOpen(false); sfxClick(); }} style={{ background: 'transparent', border: 'none', color: '#aaa', cursor: 'pointer', fontSize: 14, padding: '0 4px' }} title="Barı Gizle">
+                  ▲
+                </button>
+              </div>
+            </div>
+          ) : (
+            <>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, color: '#FFD700', fontWeight: 900, fontSize: 15.5 }}><img src="/logo.png" alt="logo" style={{ height: 22 }} /> Chaos Deal Cart</div>
+              <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap' }}>
+                <span style={{ color: '#aaa', fontSize: 11 }}>Oda: <b style={{ color: '#fff' }}>{roomCode}</b></span>
+                <button ref={deckRef} onClick={() => setShowDeckStats(true)} style={{ background: 'rgba(255,255,255,0.1)', padding: '4px 8px', borderRadius: 6, color: '#aaa', fontSize: 11, border: 'none', cursor: 'pointer' }}>
+                  🎴 Deste: <b style={{ color: '#fff' }}>{gameState.deckCount}</b> (Detay)
+                </button>
+                {gameState.turnTimer > 0 && gameState.turnStartTime && (
+                  <span style={{ background: 'rgba(231, 76, 60, 0.2)', padding: '4px 8px', borderRadius: 6, color: '#fff', fontSize: 11, border: '1px solid rgba(231,76,60,0.5)' }}>
+                    ⏱️ Süre: <b style={{ color: '#FFD700' }}>
+                      {isBlocked ? `DURDURULDU (${remainingTime}s)` : `${remainingTime}s`}
+                    </b>
+                  </span>
+                )}
+                <button onClick={() => setShowDiscardModal(true)} style={{ ...btnStyle('rgba(255,255,255,0.1)'), padding: '4px 8px', fontSize: 11 }}>
+                  🗑️ Iskarta ({gameState.discard?.length || 0})
+                </button>
+                <button onClick={() => { const next = !is3DTable; setIs3DTable(next); localStorage.setItem('md_3d', next ? 'on' : 'off'); sfxClick(); }} style={{ ...btnStyle(is3DTable ? 'rgba(46,204,113,0.15)' : 'rgba(255,255,255,0.1)'), padding: '4px 8px', fontSize: 11, border: is3DTable ? '1px solid rgba(46,204,113,0.4)' : 'none' }}>
+                  {is3DTable ? '👓 3D Masa: Açık' : '👓 3D Masa: Kapalı'}
+                </button>
+                <span style={{
+                  background: isMyTurn ? '#FFD700' : 'rgba(255,255,255,0.05)',
+                  color: isMyTurn ? '#000' : '#aaa',
+                  fontWeight: 700,
+                  padding: '4px 8px',
+                  borderRadius: 6,
+                  fontSize: 11,
+                  border: isMyTurn ? 'none' : '1px solid rgba(255,255,255,0.1)',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: 6
+                }}>
+                  {isMyTurn ? 'SIRA SENDE' : `SIRA: ${gameState.players.find(p => p.id === gameState.currentPlayerId)?.name || 'Rakip'}`}
+                  {renderActionPoints(gameState.actionsLeft)}
+                </span>
+                <button onClick={() => setShowHistoryModal(true)} style={{ ...btnStyle('rgba(52, 152, 219, 0.2)'), padding: '4px 8px', fontSize: 11, border: '1px solid rgba(52, 152, 219, 0.5)' }}>
+                  📜 Geçmiş
+                </button>
+                {gameState.streetThugs && gameState.scavengeMarket?.length > 0 && (
+                  <button onClick={() => setShowScavengeModal(true)} style={{ ...btnStyle('rgba(231, 76, 60, 0.2)'), padding: '4px 8px', fontSize: 11, border: '1px solid rgba(231, 76, 60, 0.5)' }}>
+                    🕵️ Karaborsa ({gameState.scavengeMarket.length})
+                  </button>
+                )}
+                <button
+                  onClick={() => {
+                    const nextLang = lang === 'tr' ? 'en' : 'tr';
+                    setLang(nextLang);
+                    localStorage.setItem('md_lang', nextLang);
+                    sfxClick();
+                  }}
+                  style={{
+                    background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.2)',
+                    color: '#fff', borderRadius: 6, cursor: 'pointer', fontSize: 11, padding: '4px 8px',
+                    fontWeight: 'bold'
+                  }}
+                >
+                  {lang === 'tr' ? '🇹🇷 TR' : '🇬🇧 EN'}
+                </button>
+                <button onClick={toggleSound} title={soundOn ? 'Sesi Kapat' : 'Sesi Aç'} style={{
+                  background: 'rgba(255,255,255,0.08)', border: '1px solid rgba(255,255,255,0.2)',
+                  color: '#fff', borderRadius: 6, cursor: 'pointer', fontSize: 13, padding: '3px 8px',
+                }}>
+                  {soundOn ? '🔊' : '🔇'}
+                </button>
+                {soundOn && (
+                  <div style={{ display: 'inline-flex', alignItems: 'center', gap: 6, background: 'rgba(0,0,0,0.2)', padding: '3px 8px', borderRadius: 6, border: '1px solid rgba(255,255,255,0.1)' }}>
+                    <span style={{ fontSize: 10, color: '#718096' }} title="Müzik">🎵</span>
+                    <input
+                      type="range" min="0" max="0.5" step="0.01"
+                      value={bgmVolume}
+                      onChange={e => { setBgmVolumeState(e.target.value); setBgmVolume(e.target.value); }}
+                      title="Arka Plan Müziği Sesi"
+                      style={{ width: 45, cursor: 'pointer', height: 4, accentColor: '#FFD700' }}
+                    />
+                    <span style={{ fontSize: 10, color: '#718096' }} title="Ses Efektleri">🔊</span>
+                    <input
+                      type="range" min="0" max="1.0" step="0.02"
+                      value={sfxVolume}
+                      onChange={e => { setSfxVolumeState(e.target.value); setSfxVolume(e.target.value); }}
+                      title="Ses Efektleri Sesi"
+                      style={{ width: 45, cursor: 'pointer', height: 4, accentColor: '#FFD700' }}
+                    />
                   </div>
+                )}
+                {gameState?.players?.[0]?.id === playerId && (
+                  <button onClick={() => {
+                    socket.emit('returnToLobby', { roomCode }, (res) => {
+                      if (res && !res.ok) setError(res.error || 'Oyun bitirilemedi');
+                    });
+                  }} style={{ background: '#E67E22', border: 'none', color: '#fff', padding: '4px 10px', borderRadius: 6, cursor: 'pointer', fontSize: 11, fontWeight: 'bold' }}>
+                    Oyunu Bitir
+                  </button>
+                )}
+                <button onClick={handleRageQuit} style={{ background: 'transparent', border: '1px solid #E74C3C', color: '#E74C3C', padding: '4px 10px', borderRadius: 6, cursor: 'pointer', fontSize: 11, fontWeight: 'bold' }}>
+                  (╯°□°)╯︵ ┻━┻ Masayı Devir
+                </button>
+                <button onClick={() => { setIsHeaderOpen(false); sfxClick(); }} style={{ ...btnStyle('rgba(255,255,255,0.1)'), padding: '4px 8px', fontSize: 11 }}>
+                  ▲ Gizle
+                </button>
+              </div>
+            </>
+          )}
+        </div>
+      )}
 
-                  {/* ── ORTA: El Kartları (arka yüz stacked mini) ── */}
-                  {player.handCount > 0 && (
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
-                      {/* Stacked kart görseli */}
-                      <div style={{ position: 'relative', flexShrink: 0 }}>
-                        {/* Arka kart gölgesi (derinlik) */}
-                        {player.handCount > 2 && (
-                          <div style={{
-                            position: 'absolute', top: -2, left: 2,
-                            width: 22, height: 30, borderRadius: 4,
-                            background: 'linear-gradient(135deg, #1a2a4a, #0d1520)',
-                            border: '1px solid rgba(255,255,255,0.12)',
-                          }} />
-                        )}
-                        {player.handCount > 1 && (
-                          <div style={{
-                            position: 'absolute', top: -1, left: 1,
-                            width: 22, height: 30, borderRadius: 4,
-                            background: 'linear-gradient(135deg, #1e3158, #0f1c30)',
-                            border: '1px solid rgba(255,255,255,0.15)',
-                          }} />
-                        )}
-                        {/* Öne kart */}
-                        <div style={{
-                          width: 22, height: 30, borderRadius: 4,
-                          position: 'relative', zIndex: 2,
-                          overflow: 'hidden',
-                          boxShadow: `0 2px 6px rgba(0,0,0,0.5), 0 0 4px ${playerColor}33`,
-                        }}>
-                          <CardBack theme={player.selectedCardBack || 'default'} small />
-                        </div>
-                      </div>
-                      {/* Kart sayısı etiketi */}
-                      <div style={{ display: 'flex', flexDirection: 'column' }}>
-                        <span style={{
-                          fontSize: 13, fontWeight: 900, color: '#fff',
-                          textShadow: '0 1px 4px rgba(0,0,0,0.8)',
-                          lineHeight: 1,
-                        }}>×{player.handCount}</span>
-                        <span style={{ fontSize: 8, color: '#aaa', marginTop: 1 }}>{lang === 'en' ? 'cards' : 'kart'}</span>
-                      </div>
-                    </div>
-                  )}
 
-                  {/* ── ALT: Arazi mini kartları (renk şeritli) ── */}
-                  {propColors.length > 0 && (
-                    <div style={{
-                      display: 'flex',
-                      flexWrap: 'wrap',
-                      gap: 3,
-                      paddingTop: 5,
-                      borderTop: '1px solid rgba(255,255,255,0.06)',
-                    }}>
-                      {propColors.map(({ color, isComplete }) => {
-                        const info = COLOR_INFO[color] || { hex: '#aaa' };
-                        const setSize = SET_SIZES[color] || 2;
-                        const owned = Object.entries(player.properties || {}).find(([c]) => c === color)?.[1]?.length || 0;
-                        return (
-                          <div
-                            key={color}
-                            title={`${color}${isComplete ? ' (TAM SET)' : ` (${owned}/${setSize})`}`}
-                            style={{
-                              width: 20, height: 28, borderRadius: 3,
-                              background: '#fff',
-                              border: isComplete ? `1.5px solid ${info.hex}` : '1px solid rgba(0,0,0,0.2)',
-                              display: 'flex', flexDirection: 'column', alignItems: 'center',
-                              overflow: 'hidden', position: 'relative',
-                              boxShadow: isComplete
-                                ? `0 0 6px ${info.hex}88, 0 1px 3px rgba(0,0,0,0.4)`
-                                : '0 1px 3px rgba(0,0,0,0.4)',
-                              transition: 'all 0.2s',
-                            }}
-                          >
-                            {/* Renk şeridi */}
-                            <div style={{
-                              width: '100%', height: 6,
-                              background: info.hex,
-                              flexShrink: 0,
-                            }} />
-                            {/* Değer */}
-                            <div style={{
-                              fontSize: 7, fontWeight: 900, color: '#222',
-                              marginTop: 2, lineHeight: 1,
-                            }}>{owned}/{setSize}</div>
-                            {/* Tam set yıldız */}
-                            {isComplete && (
-                              <div style={{
-                                position: 'absolute', bottom: 0, right: 0,
-                                fontSize: 7, color: '#FFD700',
-                              }}>★</div>
-                            )}
-                          </div>
-                        );
-                      })}
-                      {completeSets > 0 && (
-                        <div style={{
-                          fontSize: 8, color: '#FFD700', fontWeight: 900,
-                          alignSelf: 'center',
-                          background: 'rgba(255,215,0,0.12)',
-                          padding: '2px 4px', borderRadius: 4,
-                          border: '1px solid rgba(255,215,0,0.3)',
-                        }}>⭐{completeSets}</div>
-                      )}
-                    </div>
-                  )}
-                  {propColors.length === 0 && (
-                    <div style={{
-                      fontSize: 8, color: '#333', fontStyle: 'italic',
-                      textAlign: 'center', paddingTop: 3,
-                      borderTop: '1px solid rgba(255,255,255,0.04)',
-                    }}>{TRANSLATIONS[lang]?.noPropertiesYet || 'henüz arazi yok'}</div>
-                  )}
-                </div>
-              );
-            })}
+
+      {/* Zaman Sınırı Fitil Sayacı (Burning Fuse) */}
+      {gameState.turnTimer > 0 && gameState.turnStartTime && !isBlocked && (() => {
+        const pct = Math.max(0, Math.min(100, (remainingTime / gameState.turnTimer) * 100));
+        let timerClass = 'safe';
+        if (pct <= 20) timerClass = 'danger';
+        else if (pct <= 55) timerClass = 'warning';
+
+        return (
+          <div className="fuse-bar-container" title={`Kalan Tur Süresi: ${remainingTime} saniye`}>
+            <div className={`fuse-bar ${timerClass}`} style={{ width: `${pct}%` }} />
+            <div className={`fuse-spark ${timerClass}`} style={{ left: `calc(${pct}% - 7px)` }} />
           </div>
+        );
+      })()}
 
+      {renderModal()}
+      {renderChallengeModal()}
+      {renderPaymentModal()}
+      {renderDiscardModal()}
+      {renderMenuModal()}
+      {renderDeckStatsModal()}
+      {renderPlayerDetailsModal()}
+      {renderTradeModal()}
+      {renderScavengeModal()}
+      {renderHistoryModal()}
+      <ToastStack toasts={toasts} />
 
-          {/* ═══ ORTA SÜTUN: MASA / ARAZİLER ═══ */}
-          <div className="board-col">
+      {/* Son Saniye Kırmızı Tehlike Ekranı */}
+      {showDanger && <div className="danger-vignette" />}
 
-            {/* Orta Panel (Responsive Masa / Log Görünümü) */}
-            {isMobile ? (
-              <div className="center-panel" style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'visible' }}>
-                <div style={{ display: 'flex', flexDirection: 'column', gap: 8, padding: 8, flex: 1, overflow: 'hidden' }}>
-                  {/* Yeni Yatay Deste ve Son Oynanan (Mobil - Hologram Temalı) */}
-                  <div style={{
-                    position: 'relative',
-                    height: '100px',
-                    background: 'rgba(17, 12, 38, 0.45)',
-                    border: '1px solid rgba(255, 255, 255, 0.08)',
-                    borderRadius: 14,
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'space-around',
-                    padding: '8px 16px',
-                    boxShadow: '0 8px 32px 0 rgba(0,0,0,0.3)',
-                    overflow: 'hidden',
-                    flexShrink: 0
-                  }}>
-                    {/* Glowing holo ring in background */}
-                    <div className="holo-board-ring" style={{ width: 84, height: 84 }} />
+      {/* Anlaşma Bozucu Sinematik Flaş */}
+      {boardShake === 'heavy' && <div className="flash-red-overlay" />}
 
-                    {/* Deste */}
-                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4, zIndex: 1 }}>
-                      <div style={{
-                        width: 44,
-                        height: 60,
-                        borderRadius: 8,
-                        boxShadow: '0 4px 15px rgba(255,215,0,0.25)',
-                        cursor: 'default',
-                        position: 'relative',
-                        overflow: 'hidden'
-                      }}>
-                        <CardBack theme={dbUser?.selectedCardBack || 'default'} small />
-                        <div style={{
-                          position: 'absolute', bottom: -4, right: -4,
-                          background: '#FFD700', color: '#000',
-                          fontSize: 9, fontWeight: 900, borderRadius: '50%',
-                          width: 18, height: 18, display: 'flex', alignItems: 'center', justifyContent: 'center',
-                          boxShadow: '0 2px 5px rgba(0,0,0,0.3)'
-                        }}>{gameState.deckCount}</div>
-                      </div>
-                      <span style={{ fontSize: 9, color: '#aaa', fontWeight: 'bold', letterSpacing: 0.5 }}>{lang === 'en' ? 'DECK' : 'DESTE'}</span>
-                    </div>
+      {/* Kanlı Kira Gecesi Efekti */}
+      {gameState.myPendingPayment && <div className="bloody-payment-overlay" />}
 
-                    {/* Son Oynanan / Discard */}
-                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4, zIndex: 1 }}>
-                      <div style={{
-                        width: 44,
-                        height: 60,
-                        borderRadius: 8,
-                        background: 'rgba(0,0,0,0.4)',
-                        border: '1px dashed rgba(255,255,255,0.2)',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        position: 'relative',
-                        boxShadow: '0 4px 10px rgba(0,0,0,0.3)',
-                      }}>
-                        {gameState.discard?.length > 0 ? (
-                          <div style={{ transform: 'scale(0.5)', cursor: 'pointer', position: 'absolute' }}
-                            onClick={() => { setPreviewCard(gameState.discard[gameState.discard.length - 1]); setPreviewLocked(true); }}>
-                            <CardVisual card={gameState.discard[gameState.discard.length - 1]} small lang={lang} />
-                          </div>
-                        ) : (
-                          <span style={{ fontSize: 8, color: '#666' }}>{TRANSLATIONS[lang]?.empty || 'BOŞ'}</span>
-                        )}
-                      </div>
-                      <span style={{ fontSize: 9, color: '#aaa', fontWeight: 'bold', letterSpacing: 0.5 }}>{lang === 'en' ? 'LAST MOVE' : 'SON HAMLE'}</span>
-                    </div>
-                  </div>
+      {/* Bağlantı Kesildi Ekranı */}
+      {!isConnected && (
+        <div style={{ position: 'fixed', inset: 0, zIndex: 2000, background: 'rgba(20, 20, 40, 0.92)', display: 'flex', alignItems: 'center', justifyContent: 'center', backdropFilter: 'blur(10px)', animation: 'fw-fade-in 0.3s ease-out' }}>
+          <div style={{ textAlign: 'center' }}>
+            <div style={{ fontSize: 80, marginBottom: 20, animation: 'system-log-blink 1s infinite' }}>📡</div>
+            <h1 style={{ color: '#E74C3C', fontWeight: 900, letterSpacing: 2 }}>BAĞLANTI KESİLDİ</h1>
+            <p style={{ color: '#aaa', fontSize: 16 }}>Sunucu ile bağlantı koptu. Yeniden bağlanmaya çalışılıyor...</p>
+          </div>
+        </div>
+      )}
 
-                  {/* Benim Bankam ve Arazilerim (Mobil) */}
-                  <div data-drop-target="properties" style={{
-                    flex: 1, padding: 8, background: dragOverTarget === 'properties' ? 'rgba(255,215,0,0.08)' : 'rgba(255,255,255,0.02)',
-                    borderRadius: 8, display: 'flex', flexDirection: 'column', overflowY: 'auto'
-                  }}>
-                    <div style={{ fontSize: 9, color: '#aaa', fontWeight: 'bold', marginBottom: 4 }}>{TRANSLATIONS[lang]?.myProperties || 'BENİM ARAZİLERİM'} ({myCompleteSets}/{gameState?.winSets || 3} {lang === 'en' ? 'sets' : 'set'})</div>
-                    <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+      {/* BARIŞÇIL TAKAS ONAY EKRANI (Hedef İçin) */}
+      {myPendingTrade && (
+        <div style={{ position: 'fixed', inset: 0, zIndex: 3000, background: 'rgba(0,0,0,0.85)', display: 'flex', alignItems: 'center', justifyContent: 'center', backdropFilter: 'blur(8px)' }}>
+          <div style={{ background: '#1a1a2e', padding: 24, borderRadius: 12, border: '2px solid #3498DB', maxWidth: 520, width: '90%', textAlign: 'center' }}>
+            <div style={{ fontSize: 40, marginBottom: 10 }}>🤝</div>
+            <h2 style={{ color: '#3498DB', marginBottom: 8 }}>{lang === 'en' ? `${myPendingTrade.sourceName} is Proposing a Trade!` : `${myPendingTrade.sourceName} Takas Teklif Ediyor!`}</h2>
+            <p style={{ color: '#aaa', fontSize: 13, marginBottom: 20 }}>
+              {lang === 'en' ? 'Do you approve the mutual trade of the following cards?' : 'Aşağıdaki kartların karşılıklı olarak takas edilmesini onaylıyor musunuz?'}
+            </p>
 
-                      {/* Banka Kasa Column */}
-                      <div
-                        ref={myBankRef}
-                        data-drop-target="bank"
-                        onClick={() => { setModal({ type: 'viewBankCards' }); sfxClick(); }}
-                        style={{
-                          display: 'flex',
-                          flexDirection: 'column',
-                          alignItems: 'center',
-                          gap: 4,
-                          flexShrink: 0,
-                          width: 64,
-                          minHeight: 88,
-                          background: dragOverTarget === 'bank' ? 'rgba(46,204,113,0.15)' : 'rgba(255,255,255,0.03)',
-                          border: dragOverTarget === 'bank' ? '2.5px dashed #2ECC71' : '1px solid rgba(255,255,255,0.08)',
-                          borderRadius: 8,
-                          padding: 4,
-                          boxSizing: 'border-box',
-                          transition: 'all 0.2s ease',
-                          cursor: 'pointer'
-                        }}
-                      >
-                        <span style={{ fontSize: 9, color: '#2ECC71', fontWeight: 'bold' }}>🏦 <BankTicker value={me.bankTotal} /></span>
-                        <div style={{ position: 'relative', width: 54, height: 72 }}>
-                          {me.bank?.slice(0, 5).map((c, i) => (
-                            <div
-                              key={c.id}
-                              className="mini-card-wrapper"
-                              style={{
-                                position: 'absolute',
-                                top: i * 4,
-                                left: i * 2,
-                                width: 48,
-                                height: 64,
-                                zIndex: i
-                              }}
-                            >
-                              <div style={{
-                                width: 48,
-                                height: 64,
-                                borderRadius: 4,
-                                background: 'linear-gradient(135deg, #2ECC71, #196F3D)',
-                                border: '1px solid rgba(255,255,255,0.2)',
-                                boxShadow: '0 2px 5px rgba(0,0,0,0.3)',
-                                display: 'flex',
-                                alignItems: 'center',
-                                justifyContent: 'center',
-                                fontWeight: 900,
-                                fontSize: 11,
-                                color: '#fff',
-                              }} className="mini-card-face">
-                                {c.value}M
-                              </div>
-                              <div className="mini-card-hover-view">
-                                <CardVisual card={c} small lang={lang} />
-                              </div>
-                            </div>
-                          ))}
-                          {(!me.bank || me.bank.length === 0) && (
-                            <div style={{ width: 48, height: 64, borderRadius: 4, border: '1.2px dashed rgba(255,255,255,0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 9, color: '#444' }}>{TRANSLATIONS[lang]?.empty || 'BOŞ'}</div>
-                          )}
-                        </div>
-                      </div>
-
-                      {/* Araziler (Mobil) */}
-                      {Object.entries(me.properties || {}).map(([color, cards]) => {
-                        if (cards.length === 0) return null;
-                        const info = COLOR_INFO[color] || { hex: '#aaa' };
-                        const isComplete = isSetComplete(cards, color);
-                        const setSize = SET_SIZES[color] || 2;
-                        return (
-                          <div
-                            key={color}
-                            style={{
-                              display: 'flex',
-                              flexDirection: 'column',
-                              alignItems: 'center',
-                              position: 'relative',
-                              width: 44,
-                              minHeight: 64,
-                              background: isComplete ? `${info.hex}15` : 'transparent',
-                              borderRadius: 4,
-                              padding: 2,
-                              border: isComplete ? `1px solid ${info.hex}` : 'none',
-                              boxSizing: 'border-box'
-                            }}
-                          >
-                            {cards.map((c, i) => (
-                              <div
-                                key={c.id}
-                                className="mini-card-wrapper"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  if (isMyTurn && (c.isWild || c.isDual)) {
-                                    handleFlip(c);
-                                  } else {
-                                    setModal({ type: 'viewCardDetails', card: c });
-                                  }
-                                }}
-                                style={{
-                                  marginTop: i > 0 ? -42 : 0,
-                                  zIndex: i,
-                                  position: 'relative',
-                                  width: 38,
-                                  height: 52
-                                }}
-                              >
-                                <div style={{
-                                  width: 38,
-                                  height: 52,
-                                  backgroundColor: '#FFFFFF',
-                                  border: isComplete ? `1.5px solid ${info.hex}` : '1px solid rgba(0,0,0,0.15)',
-                                  borderRadius: 4,
-                                  display: 'flex',
-                                  flexDirection: 'column',
-                                  alignItems: 'center',
-                                  overflow: 'hidden',
-                                  boxShadow: '0 2px 4px rgba(0,0,0,0.2)',
-                                  boxSizing: 'border-box',
-                                  transition: 'opacity 0.1s',
-                                  '--glow-color': info.hex
-                                }} className={`mini-card-face ${isComplete ? 'complete-set-glow' : ''}`}>
-                                  <div style={{ width: '100%', height: 8, background: c.isWild ? 'linear-gradient(90deg, #E74C3C, #F39C12, #2ECC71, #3498DB)' : (c.isDual && c.colors ? `linear-gradient(90deg, ${COLOR_INFO[c.colors[0]]?.hex} 0%, ${COLOR_INFO[c.colors[0]]?.hex} 50%, ${COLOR_INFO[c.colors[1]]?.hex} 50%, ${COLOR_INFO[c.colors[1]]?.hex} 100%)` : info.hex) }} />
-                                  <div style={{ fontSize: 8, fontWeight: 900, color: '#333', marginTop: 4, transform: 'scale(0.85)' }}>
-                                    {c.isWild ? '★' : (c.value || '')}
-                                  </div>
-                                </div>
-                                <div className="mini-card-hover-view">
-                                  <CardVisual card={c} small lang={lang} />
-                                </div>
-                              </div>
-                            ))}
-                            {/* Set ilerleme etiketi (Mobil) */}
-                            <div style={{
-                              fontSize: 8, fontWeight: 900,
-                              color: isComplete ? '#FFD700' : info.hex,
-                              background: isComplete ? 'rgba(255,215,0,0.15)' : 'rgba(0,0,0,0.45)',
-                              border: isComplete ? '1px solid rgba(255,215,0,0.4)' : `1px solid ${info.hex}55`,
-                              borderRadius: 3,
-                              padding: '1px 4px',
-                              marginTop: 3,
-                              lineHeight: 1.4,
-                              zIndex: 20,
-                              position: 'relative'
-                            }}>
-                              {isComplete ? `✓ ${cards.length}/${setSize}` : `${cards.length}/${setSize}`}
-                            </div>
-                            {/* Rent/Building Status Badge (Mobil) */}
-                            <div style={{
-                              fontSize: 7.5, fontWeight: 900,
-                              color: '#2ECC71',
-                              background: 'rgba(0,0,0,0.6)',
-                              border: '1px solid rgba(46,204,113,0.3)',
-                              borderRadius: 3,
-                              padding: '1px 3px',
-                              marginTop: 2,
-                              display: 'flex',
-                              alignItems: 'center',
-                              gap: 1.5,
-                              zIndex: 20,
-                              position: 'relative',
-                              justifyContent: 'center',
-                              width: '100%',
-                              boxSizing: 'border-box'
-                            }} title={lang === 'en' ? 'Current Rent Income and Buildings' : 'Güncel Kira Getirisi ve Binalar'}>
-                              <span>💵{calculateRentClient(me, color)}M</span>
-                              {isComplete && me.buildings?.[color] && (
-                                <>
-                                  {me.buildings[color].houses > 0 && <span>🏠</span>}
-                                  {me.buildings[color].hotel && <span>🏨</span>}
-                                </>
-                              )}
-                            </div>
-                          </div>
-                        );
-                      })}
-                      {Object.entries(me.properties || {}).every(([_, cards]) => cards.length === 0) && (
-                        <span style={{ color: '#555', fontSize: 10 }}>{TRANSLATIONS[lang]?.noPropertiesYet || 'Henüz arazi yok'}</span>
-                      )}
-                    </div>
-                  </div>
+            <div style={{ display: 'flex', gap: 14, marginBottom: 24, textAlign: 'left', flexDirection: 'row' }}>
+              {/* Sana Verilecek (Offered by source player) */}
+              <div style={{ flex: 1, background: 'rgba(46, 204, 113, 0.05)', border: '1px solid rgba(46, 204, 113, 0.15)', padding: 12, borderRadius: 10, display: 'flex', flexDirection: 'column' }}>
+                <div style={{ color: '#2ECC71', fontSize: 11, fontWeight: 900, marginBottom: 10, letterSpacing: 0.5 }}>{lang === 'en' ? '📤 TO BE GIVEN TO YOU' : '📤 SANA VERİLECEK'}</div>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, maxHeight: 160, overflowY: 'auto', padding: '2px 0' }}>
+                  {[...myPendingTrade.offerBankIds, ...myPendingTrade.offerPropIds].map(id => {
+                    const c = findCardInGame(id);
+                    return c ? <CardVisual key={id} card={c} small lang={lang} /> : null;
+                  })}
+                  {myPendingTrade.offerBankIds.length + myPendingTrade.offerPropIds.length === 0 && (
+                    <span style={{ color: '#64748b', fontSize: 11, fontStyle: 'italic' }}>{lang === 'en' ? 'No cards offered' : 'Hiç kart verilmiyor'}</span>
+                  )}
                 </div>
               </div>
-            ) : (
-              /* Masaüstü (Regular) Görünüm — Log artık log-col'da */
-              <div className="center-panel" style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'visible' }}>
 
-                {/* Ortak Masa Ortası Alanı (Central Play Area - Desktop) */}
-                <div className="central-play-arena">
-                  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6 }}>
-                    <span style={{ fontSize: 9, color: '#aaa', fontWeight: 'bold', letterSpacing: 0.5 }}>🎴 {lang === 'en' ? 'DECK' : 'DESTE'} ({gameState.deckCount})</span>
-                    <div className="play-arena-slot">
-                      {gameState.deckCount > 0 ? (
-                        <div style={{ width: '100%', height: '100%', borderRadius: 8, overflow: 'hidden' }} title={lang === 'en' ? 'Remaining Cards in Deck' : 'Destedeki Kalan Kart Sayısı'}>
-                          <CardBack theme={dbUser?.selectedCardBack || 'default'} />
+              {/* Senden İstenecek (Requested from me) */}
+              <div style={{ flex: 1, background: 'rgba(239, 68, 68, 0.05)', border: '1px solid rgba(239, 68, 68, 0.15)', padding: 12, borderRadius: 10, display: 'flex', flexDirection: 'column' }}>
+                <div style={{ color: '#F87171', fontSize: 11, fontWeight: 900, marginBottom: 10, letterSpacing: 0.5 }}>{lang === 'en' ? '📥 REQUESTED FROM YOU' : '📥 SENDEN İSTENEN'}</div>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, maxHeight: 160, overflowY: 'auto', padding: '2px 0' }}>
+                  {[...myPendingTrade.requestBankIds, ...myPendingTrade.requestPropIds].map(id => {
+                    const c = findCardInGame(id);
+                    return c ? <CardVisual key={id} card={c} small lang={lang} /> : null;
+                  })}
+                  {myPendingTrade.requestBankIds.length + myPendingTrade.requestPropIds.length === 0 && (
+                    <span style={{ color: '#64748b', fontSize: 11, fontStyle: 'italic' }}>{lang === 'en' ? 'No cards requested' : 'Hiç kart istenmiyor'}</span>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            <div style={{ display: 'flex', gap: 10 }}>
+              <button onClick={() => handleRespondTrade(myPendingTrade.id, true)} style={{ ...btnStyle('#2ECC71'), flex: 1, padding: 12, fontSize: 14 }}>{lang === 'en' ? '✅ Accept' : '✅ Kabul Et'}</button>
+              <button onClick={() => handleRespondTrade(myPendingTrade.id, false)} style={{ ...btnStyle('#E74C3C'), flex: 1, padding: 12, fontSize: 14 }}>{lang === 'en' ? '❌ Reject' : '❌ Reddet'}</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Desteden Uçan Kartlar (Çekme Animasyonu) */}
+      <AnimatePresence>
+        {flyingCards.map(fc => (
+          <div key={fc.id} className="card-draw-3d-wrapper">
+            <motion.div
+              initial={{ x: fc.startX, y: fc.startY, scale: 0.1, rotateY: 180, rotateZ: -30, opacity: 0 }}
+              animate={{
+                x: [fc.startX, window.innerWidth / 2, window.innerWidth / 2 - 60 + (Math.random() * 20 - 10)],
+                y: [fc.startY, window.innerHeight / 2 - 100, window.innerHeight - 150],
+                scale: [0.1, 1.8, 0.8],
+                rotateY: [180, 270, 360], /* 3D Hearthstone Çevirme Efekti */
+                rotateZ: [-30, 10, 360 + (Math.random() * 20 - 10)],
+                opacity: [0, 1, 1]
+              }}
+              exit={{ opacity: 0, scale: 0.5 }}
+              transition={{ duration: 0.85, delay: fc.delay, ease: "easeOut", times: [0, 0.4, 1] }}
+              style={{ position: 'relative' }}
+            >
+              <CardVisual card={fc.card} lang={lang} />
+            </motion.div>
+          </div>
+        ))}
+      </AnimatePresence>
+
+      {/* Büyük Aksiyon Duyurusu */}
+      {actionOverlay && (
+        <div className={`action-overlay-wrapper overlay-type-${actionOverlay.type || 'info'}`}>
+          <div className="action-overlay-card">
+            <div className="action-overlay-glow" />
+            <div className="action-overlay-icon">{actionOverlay.icon}</div>
+            <div className="action-overlay-text">{actionOverlay.text}</div>
+            {actionOverlay.subtext && (
+              <div className="action-overlay-subtext">
+                {formatSubtext(actionOverlay.subtext)}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Kart Önizleme Tooltip Kaldırıldı */}
+
+      {/* Ödeme Yaparken Uçan Kartlar */}
+      {payingFlyingCards.map(card => (
+        <div key={card.id} className="thrown-card-ghost" style={{ '--sx': '0px', '--sy': '400px' }}>
+          <CardVisual card={card} lang={lang} />
+        </div>
+      ))}
+
+      {/* Yönlü Uçan Ödeme Kartları (Flying Card Payments) */}
+      {directionalFlyingCards.map(fc => (
+        <div
+          key={fc.id}
+          className="flying-card-entity"
+          style={{
+            '--fsx': fc.sx + 'px',
+            '--fsy': fc.sy + 'px',
+            '--fdx': fc.dx + 'px',
+            '--fdy': fc.dy + 'px'
+          }}
+        >
+          <CardVisual card={fc.card} small lang={lang} />
+        </div>
+      ))}
+
+      {/* Iskarta Uçan Kartlar (Discarded / Played Flying Cards) */}
+      {discardFlyingCards.map(fc => (
+        <div
+          key={fc.id}
+          className="flying-card-entity discard-anim"
+          style={{
+            '--fsx': fc.sx + 'px',
+            '--fsy': fc.sy + 'px',
+            '--fdx': fc.dx + 'px',
+            '--fdy': fc.dy + 'px'
+          }}
+        >
+          <CardVisual card={fc.card} small lang={lang} />
+        </div>
+      ))}
+
+      {/* Kendi Uçan Emojilerimiz */}
+      {emotes.filter(e => e.senderId === playerId).map(emote => (
+        <div
+          key={emote.id}
+          className="floating-emote"
+          style={{
+            position: 'fixed',
+            bottom: '160px',
+            left: '50%',
+            transform: 'translateX(-50%)',
+            fontSize: '44px',
+            pointerEvents: 'none',
+            zIndex: 1050
+          }}
+        >
+          {emote.emoji}
+        </div>
+      ))}
+
+      {/* Toz Dumanı Efekti */}
+      {smokeParticles.map(p => (
+        <div key={p.id} className="smoke-particle" style={{ '--sdx': p.dx, '--sdy': p.dy }} />
+      ))}
+
+      {/* Para Parçacıkları */}
+      {moneyParticles.map(p => (
+        <div key={p.id} className="money-particle" style={{ '--sx': p.sx, '--sy': p.sy, '--dx': p.dx, '--dy': p.dy, '--dr': p.dr }}>
+          {p.icon}
+        </div>
+      ))}
+
+      {/* Şans Zarı Animasyon Overlay */}
+      {isDiceRolling && (
+        <div className={`dice-rolling-overlay dice-skin-${dbUser?.selectedDiceSkin || 'default'}`}>
+          <div className="dice-rolling-card">
+            <div className="dice-cube-wrapper">
+              <div className="dice-cube-3d">
+                <div className="dice-side face-front">⚀</div>
+                <div className="dice-side face-back">⚅</div>
+                <div className="dice-side face-right">⚂</div>
+                <div className="dice-side face-left">⚃</div>
+                <div className="dice-side face-top">⚄</div>
+                <div className="dice-side face-bottom">⚁</div>
+              </div>
+            </div>
+            <div className="dice-rolling-text">
+              {lang === 'en' ? 'ROLLING THE DIE...' : 'KUMARBAZIN ZARI ATILIYOR...'}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {gameState.winner && (
+        <VictoryOverlay
+          winnerName={gameState.winner.name}
+          myPlayerId={playerId}
+          players={gameState.players}
+          isHost={gameState.players?.[0]?.id === playerId}
+          onReturnToLobby={handleReturnToLobby}
+          onNewGame={handleNewGame}
+          onExit={handleExit}
+          history={gameState.history}
+          lang={lang}
+        />
+      )}
+
+      {/* Bekleyen itiraz/ödeme bildirimi (diğer oyuncular için) */}
+      {isBlocked && !gameState.myPendingChallenge && !gameState.myPendingPayment && (
+        <div style={{ background: 'rgba(255,215,0,0.15)', borderBottom: '1px solid rgba(255,215,0,0.3)', color: '#FFD700', textAlign: 'center', padding: 8, fontSize: 12 }}>
+          {gameState.pendingChallenges?.length > 0 && gameState.pendingChallenges.map(ch => (
+            <div key={ch.id}>
+              ⏳ {ch.action === 'birthday' ? (lang === 'en' ? `${ch.sourceName}'s Birthday gift` : `${ch.sourceName}'in Doğum Günü hediyesi`) : (lang === 'en' ? `${ch.sourceName} made a move` : `${ch.sourceName} bir hamle yaptı`)} — <b>{ch.responderName}</b> {lang === 'en' ? 'is responding...' : 'yanıt veriyor...'}
+            </div>
+          ))}
+          {gameState.pendingPayments?.length > 0 && gameState.pendingPayments.map(p => (
+            <div key={p.id}>
+              ⏳ {lang === 'en' ? <><b>{p.payerName}</b> is paying {p.amount}M to {p.collectorName}...</> : <><b>{p.payerName}</b>, {p.collectorName}'e {p.amount}M ödeme yapıyor...</>}
+            </div>
+          ))}
+        </div>
+      )}
+
+      <div className={`game-content ${rageQuit ? 'rage-quit-active' : ''} ${isTimeRunningOut ? 'time-running-out-glow' : ''}`}>
+
+        {/* ═══ SOL SÜTUN: OYUNCULAR ═══ */}
+        <div className="players-col player-avatar-strip">
+          {gameState.players.map(player => {
+            const pIdx = gameState.players.findIndex(x => x.id === player.id);
+            const playerColor = PLAYER_COLORS[pIdx % PLAYER_COLORS.length];
+            const isTargeted = gameState.pendingChallenges.some(ch =>
+              (ch.action === 'slydeal' || ch.action === 'dealbreaker' || ch.action === 'debtcollector') && ch.targetId === player.id
+            );
+            const isCurrent = player.id === gameState.currentPlayerId;
+            const propColors = Object.entries(player.properties || {})
+              .filter(([, cards]) => cards.length > 0)
+              .map(([color, cards]) => ({ color, isComplete: isSetComplete(cards, color) }));
+            const completeSets = propColors.filter(p => p.isComplete).length;
+
+            return (
+              <div
+                key={player.id}
+                ref={el => (playerPanelRefs.current[player.id] = el)}
+                onClick={() => setViewingPlayerId(player.id)}
+                className={isCurrent ? 'player-strip-card ref-style spotlight-glow turn-pulsate' : 'player-strip-card ref-style'}
+                style={{
+                  flexShrink: 0,
+                  width: isMobile ? 120 : '100%',
+                  borderRadius: 14,
+                  padding: isMobile ? '8px 8px' : '10px 10px',
+                  background: isCurrent
+                    ? `linear-gradient(160deg, ${playerColor}35 0%, rgba(10,8,22,0.95) 100%)`
+                    : `linear-gradient(160deg, ${playerColor}15 0%, rgba(10,8,22,0.85) 100%)`,
+                  border: isCurrent ? `2px solid ${playerColor}` : `1px solid ${playerColor}45`,
+                  boxShadow: isCurrent ? `0 0 20px ${playerColor}50, inset 0 0 12px ${playerColor}10` : '0 3px 12px rgba(0,0,0,0.4)',
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: 6,
+                  cursor: 'pointer',
+                  position: 'relative',
+                  transition: 'all 0.3s ease',
+                  overflow: 'hidden',
+                  boxSizing: 'border-box',
+                }}
+              >
+                {/* Hedef çarpı */}
+                {isTargeted && <div className="target-crosshair" />}
+
+                {/* Aktif sıra göstergesi — üst çizgi */}
+                {isCurrent && (
+                  <div style={{
+                    position: 'absolute', top: 0, left: 0, right: 0, height: 3,
+                    background: `linear-gradient(90deg, transparent, ${playerColor}, transparent)`,
+                    borderRadius: '14px 14px 0 0',
+                    animation: 'active-player-pulse 1.5s ease-in-out infinite',
+                  }} />
+                )}
+
+                {/* ── ÜSTE: Avatar yuvarlak + İsim + Para ── */}
+                <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
+                  {/* Avatar */}
+                  <div
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setProfilePlayer(player);
+                      socket?.emit('sendEmote', { targetId: player.id, emoji: '👋' });
+                    }}
+                    className={`avatar-container border-style-${player.selectedBorder || 'default'}${isCurrent ? ' turn-glow-active' : ''}`}
+                    style={{
+                      width: 34, height: 34, flexShrink: 0,
+                      cursor: 'pointer',
+                      '--turn-color': playerColor,
+                      boxShadow: isCurrent ? `0 0 12px ${playerColor}` : `0 0 4px ${playerColor}44`,
+                    }}
+                  >
+                    <img
+                      src={`https://api.dicebear.com/7.x/${player.avatar || 'bottts'}/svg?seed=${player.name}`}
+                      alt={player.name}
+                      onError={e => { e.target.style.display = 'none'; }}
+                    />
+                  </div>
+                  {/* İsim + Durum */}
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{
+                      color: '#fff', fontWeight: 800, fontSize: isMobile ? 10 : 12,
+                      whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+                      textShadow: `0 0 10px ${playerColor}88`,
+                      letterSpacing: 0.3,
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 3
+                    }}>
+                      <span>{player.name}</span>
+                      {player.id === playerId && <span style={{ fontSize: 8, background: '#FFD700', color: '#000', padding: '0 4px', borderRadius: 4, fontWeight: 900 }}>{lang === 'en' ? 'YOU' : 'SEN'}</span>}
+                      {player.selectedBadge && player.selectedBadge !== 'default' && (
+                        <span className={`player-badge badge-${player.selectedBadge}`}>
+                          {{ rookie: '🌱', veteran: '⚔️', ghost: '👻', legend: '🦁', king: '🫅' }[player.selectedBadge]}
+                        </span>
+                      )}
+                      {player.isAFK && ' 💤'}
+                      {player.connected === false && <span style={{ color: '#f44', fontSize: 8 }}> ●</span>}
+                    </div>
+                    {/* Active customization title */}
+                    <div className={`title-style-${player.selectedTitle || 'default'}`} style={{ fontSize: 8.5, fontWeight: 'bold', marginTop: 1 }}>
+                      {
+                        player.selectedTitle && player.selectedTitle !== 'default'
+                          ? {
+                            gold: { tr: '💰 Para Babası', en: '💰 Money Bag' },
+                            flame: { tr: '🔥 Sinsi Hırsız', en: '🔥 Sly Thief' },
+                            cyber: { tr: '⚡ Siber Kartal', en: '⚡ Cyber Falcon' },
+                            kral: { tr: '👑 Oyunun Kralı', en: '👑 Game King' },
+                            cosmic: { tr: '🌌 Kozmik Efendi', en: '🌌 Cosmic Lord' }
+                          }[player.selectedTitle]?.[lang] || player.selectedTitle
+                          : (lang === 'en' ? 'Classic' : 'Klasik')
+                      }
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 4, marginTop: 1 }}>
+                      {/* Monopoly M rozeti */}
+                      <div style={{
+                        width: 14, height: 14, borderRadius: '50%', background: '#e63946',
+                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        fontSize: 7, fontWeight: 900, color: '#fff', flexShrink: 0,
+                      }}>M</div>
+                      <span style={{ fontSize: 10, color: '#2ECC71', fontWeight: 800 }}>
+                        {player.bankTotal}M
+                      </span>
+                      {isCurrent && (
+                        <div style={{ display: 'inline-flex', alignItems: 'center', gap: 2 }}>
+                          <span style={{
+                            fontSize: 7, color: '#FFD700', fontWeight: 900, letterSpacing: 0.5,
+                            background: 'rgba(255,215,0,0.15)', padding: '1px 4px', borderRadius: 4,
+                            border: '1px solid rgba(255,215,0,0.35)',
+                            animation: 'active-player-pulse 1s ease-in-out infinite',
+                          }}>{lang === 'en' ? '▶ TURN' : '▶ SIRADA'}</span>
+                          {renderActionPoints(gameState.actionsLeft)}
                         </div>
-                      ) : (
-                        <span style={{ fontSize: 10, color: '#444' }}>{TRANSLATIONS[lang]?.empty || 'BOŞ'}</span>
                       )}
                     </div>
                   </div>
+                </div>
 
-                  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6 }}>
-                    <span style={{ fontSize: 9, color: '#aaa', fontWeight: 'bold', letterSpacing: 0.5 }}>📤 {lang === 'en' ? 'LAST MOVEMENT' : 'SON OYNANAN'}</span>
-                    <div className="play-arena-slot">
+                {/* ── ORTA: El Kartları (arka yüz stacked mini) ── */}
+                {player.handCount > 0 && (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+                    {/* Stacked kart görseli */}
+                    <div style={{ position: 'relative', flexShrink: 0 }}>
+                      {/* Arka kart gölgesi (derinlik) */}
+                      {player.handCount > 2 && (
+                        <div style={{
+                          position: 'absolute', top: -2, left: 2,
+                          width: 22, height: 30, borderRadius: 4,
+                          background: 'linear-gradient(135deg, #1a2a4a, #0d1520)',
+                          border: '1px solid rgba(255,255,255,0.12)',
+                        }} />
+                      )}
+                      {player.handCount > 1 && (
+                        <div style={{
+                          position: 'absolute', top: -1, left: 1,
+                          width: 22, height: 30, borderRadius: 4,
+                          background: 'linear-gradient(135deg, #1e3158, #0f1c30)',
+                          border: '1px solid rgba(255,255,255,0.15)',
+                        }} />
+                      )}
+                      {/* Öne kart */}
+                      <div style={{
+                        width: 22, height: 30, borderRadius: 4,
+                        position: 'relative', zIndex: 2,
+                        overflow: 'hidden',
+                        boxShadow: `0 2px 6px rgba(0,0,0,0.5), 0 0 4px ${playerColor}33`,
+                      }}>
+                        <CardBack theme={player.selectedCardBack || 'default'} small />
+                      </div>
+                    </div>
+                    {/* Kart sayısı etiketi */}
+                    <div style={{ display: 'flex', flexDirection: 'column' }}>
+                      <span style={{
+                        fontSize: 13, fontWeight: 900, color: '#fff',
+                        textShadow: '0 1px 4px rgba(0,0,0,0.8)',
+                        lineHeight: 1,
+                      }}>×{player.handCount}</span>
+                      <span style={{ fontSize: 8, color: '#aaa', marginTop: 1 }}>{lang === 'en' ? 'cards' : 'kart'}</span>
+                    </div>
+                  </div>
+                )}
+
+                {/* ── ALT: Arazi mini kartları (renk şeritli) ── */}
+                {propColors.length > 0 && (
+                  <div style={{
+                    display: 'flex',
+                    flexWrap: 'wrap',
+                    gap: 3,
+                    paddingTop: 5,
+                    borderTop: '1px solid rgba(255,255,255,0.06)',
+                  }}>
+                    {propColors.map(({ color, isComplete }) => {
+                      const info = COLOR_INFO[color] || { hex: '#aaa' };
+                      const setSize = SET_SIZES[color] || 2;
+                      const owned = Object.entries(player.properties || {}).find(([c]) => c === color)?.[1]?.length || 0;
+                      return (
+                        <div
+                          key={color}
+                          title={`${color}${isComplete ? ' (TAM SET)' : ` (${owned}/${setSize})`}`}
+                          style={{
+                            width: 20, height: 28, borderRadius: 3,
+                            background: '#fff',
+                            border: isComplete ? `1.5px solid ${info.hex}` : '1px solid rgba(0,0,0,0.2)',
+                            display: 'flex', flexDirection: 'column', alignItems: 'center',
+                            overflow: 'hidden', position: 'relative',
+                            boxShadow: isComplete
+                              ? `0 0 6px ${info.hex}88, 0 1px 3px rgba(0,0,0,0.4)`
+                              : '0 1px 3px rgba(0,0,0,0.4)',
+                            transition: 'all 0.2s',
+                          }}
+                        >
+                          {/* Renk şeridi */}
+                          <div style={{
+                            width: '100%', height: 6,
+                            background: info.hex,
+                            flexShrink: 0,
+                          }} />
+                          {/* Değer */}
+                          <div style={{
+                            fontSize: 7, fontWeight: 900, color: '#222',
+                            marginTop: 2, lineHeight: 1,
+                          }}>{owned}/{setSize}</div>
+                          {/* Tam set yıldız */}
+                          {isComplete && (
+                            <div style={{
+                              position: 'absolute', bottom: 0, right: 0,
+                              fontSize: 7, color: '#FFD700',
+                            }}>★</div>
+                          )}
+                        </div>
+                      );
+                    })}
+                    {completeSets > 0 && (
+                      <div style={{
+                        fontSize: 8, color: '#FFD700', fontWeight: 900,
+                        alignSelf: 'center',
+                        background: 'rgba(255,215,0,0.12)',
+                        padding: '2px 4px', borderRadius: 4,
+                        border: '1px solid rgba(255,215,0,0.3)',
+                      }}>⭐{completeSets}</div>
+                    )}
+                  </div>
+                )}
+                {propColors.length === 0 && (
+                  <div style={{
+                    fontSize: 8, color: '#333', fontStyle: 'italic',
+                    textAlign: 'center', paddingTop: 3,
+                    borderTop: '1px solid rgba(255,255,255,0.04)',
+                  }}>{TRANSLATIONS[lang]?.noPropertiesYet || 'henüz arazi yok'}</div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+
+
+        {/* ═══ ORTA SÜTUN: MASA / ARAZİLER ═══ */}
+        <div className="board-col">
+
+          {/* Orta Panel (Responsive Masa / Log Görünümü) */}
+          {isMobile ? (
+            <div className="center-panel" style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'visible' }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 8, padding: 8, flex: 1, overflow: 'hidden' }}>
+                {/* Yeni Yatay Deste ve Son Oynanan (Mobil - Hologram Temalı) */}
+                <div style={{
+                  position: 'relative',
+                  height: '100px',
+                  background: 'rgba(17, 12, 38, 0.45)',
+                  border: '1px solid rgba(255, 255, 255, 0.08)',
+                  borderRadius: 14,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-around',
+                  padding: '8px 16px',
+                  boxShadow: '0 8px 32px 0 rgba(0,0,0,0.3)',
+                  overflow: 'hidden',
+                  flexShrink: 0
+                }}>
+                  {/* Glowing holo ring in background */}
+                  <div className="holo-board-ring" style={{ width: 84, height: 84 }} />
+
+                  {/* Deste */}
+                  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4, zIndex: 1 }}>
+                    <div style={{
+                      width: 44,
+                      height: 60,
+                      borderRadius: 8,
+                      boxShadow: '0 4px 15px rgba(255,215,0,0.25)',
+                      cursor: 'default',
+                      position: 'relative',
+                      overflow: 'hidden'
+                    }}>
+                      <CardBack theme={dbUser?.selectedCardBack || 'default'} small />
+                      <div style={{
+                        position: 'absolute', bottom: -4, right: -4,
+                        background: '#FFD700', color: '#000',
+                        fontSize: 9, fontWeight: 900, borderRadius: '50%',
+                        width: 18, height: 18, display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        boxShadow: '0 2px 5px rgba(0,0,0,0.3)'
+                      }}>{gameState.deckCount}</div>
+                    </div>
+                    <span style={{ fontSize: 9, color: '#aaa', fontWeight: 'bold', letterSpacing: 0.5 }}>{lang === 'en' ? 'DECK' : 'DESTE'}</span>
+                  </div>
+
+                  {/* Son Oynanan / Discard */}
+                  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4, zIndex: 1 }}>
+                    <div style={{
+                      width: 44,
+                      height: 60,
+                      borderRadius: 8,
+                      background: 'rgba(0,0,0,0.4)',
+                      border: '1px dashed rgba(255,255,255,0.2)',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      position: 'relative',
+                      boxShadow: '0 4px 10px rgba(0,0,0,0.3)',
+                    }}>
                       {gameState.discard?.length > 0 ? (
-                        <div style={{ transform: 'scale(0.85)', cursor: 'pointer' }}
+                        <div style={{ transform: 'scale(0.5)', cursor: 'pointer', position: 'absolute' }}
                           onClick={() => { setPreviewCard(gameState.discard[gameState.discard.length - 1]); setPreviewLocked(true); }}>
                           <CardVisual card={gameState.discard[gameState.discard.length - 1]} small lang={lang} />
                         </div>
                       ) : (
-                        <span style={{ fontSize: 10, color: '#444' }}>{TRANSLATIONS[lang]?.none || 'YOK'}</span>
+                        <span style={{ fontSize: 8, color: '#666' }}>{TRANSLATIONS[lang]?.empty || 'BOŞ'}</span>
                       )}
                     </div>
+                    <span style={{ fontSize: 9, color: '#aaa', fontWeight: 'bold', letterSpacing: 0.5 }}>{lang === 'en' ? 'LAST MOVE' : 'SON HAMLE'}</span>
                   </div>
                 </div>
 
-                {/* Benim arazilerim (Desktop) */}
+                {/* Benim Bankam ve Arazilerim (Mobil) */}
                 <div data-drop-target="properties" style={{
-                  padding: 10, borderTop: '1px solid rgba(255,255,255,0.1)', minHeight: 260,
-                  background: dragOverTarget === 'properties' ? 'linear-gradient(to bottom, rgba(255,215,0,0.1), rgba(0,0,0,0.2))' : 'rgba(255,255,255,0.02)',
-                  transition: 'background 0.3s ease'
+                  flex: 1, padding: 8, background: dragOverTarget === 'properties' ? 'rgba(255,215,0,0.08)' : 'rgba(255,255,255,0.02)',
+                  borderRadius: 8, display: 'flex', flexDirection: 'column', overflowY: 'auto'
                 }}>
-                  <div style={{ fontSize: 11, color: dragOverTarget === 'properties' ? '#FFD700' : '#666', fontWeight: 'bold', marginBottom: 6, transition: 'color 0.2s' }}>{TRANSLATIONS[lang]?.myProperties || 'BENİM ARAZİLERİM'} ({myCompleteSets}/{gameState?.winSets || 3} {lang === 'en' ? 'sets' : 'set'})</div>
+                  <div style={{ fontSize: 9, color: '#aaa', fontWeight: 'bold', marginBottom: 4 }}>{TRANSLATIONS[lang]?.myProperties || 'BENİM ARAZİLERİM'} ({myCompleteSets}/{gameState?.winSets || 3} {lang === 'en' ? 'sets' : 'set'})</div>
                   <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
 
-                    {/* Banka Kasa Column (Desktop) */}
+                    {/* Banka Kasa Column */}
                     <div
                       ref={myBankRef}
                       data-drop-target="bank"
@@ -7760,7 +8326,7 @@ export default function App() {
                       </div>
                     </div>
 
-                    {/* Araziler (Desktop) */}
+                    {/* Araziler (Mobil) */}
                     {Object.entries(me.properties || {}).map(([color, cards]) => {
                       if (cards.length === 0) return null;
                       const info = COLOR_INFO[color] || { hex: '#aaa' };
@@ -7828,7 +8394,7 @@ export default function App() {
                               </div>
                             </div>
                           ))}
-                          {/* Set ilerleme etiketi */}
+                          {/* Set ilerleme etiketi (Mobil) */}
                           <div style={{
                             fontSize: 8, fontWeight: 900,
                             color: isComplete ? '#FFD700' : info.hex,
@@ -7837,15 +8403,13 @@ export default function App() {
                             borderRadius: 3,
                             padding: '1px 4px',
                             marginTop: 3,
-                            letterSpacing: 0.3,
-                            textShadow: 'none',
                             lineHeight: 1.4,
                             zIndex: 20,
                             position: 'relative'
                           }}>
                             {isComplete ? `✓ ${cards.length}/${setSize}` : `${cards.length}/${setSize}`}
                           </div>
-                          {/* Rent/Building Status Badge (Desktop) */}
+                          {/* Rent/Building Status Badge (Mobil) */}
                           <div style={{
                             fontSize: 7.5, fontWeight: 900,
                             color: '#2ECC71',
@@ -7871,531 +8435,814 @@ export default function App() {
                               </>
                             )}
                           </div>
-                        </div>
-                      );
-                    })}
-                    {Object.entries(me.properties || {}).every(([_, cards]) => cards.length === 0) && (
-                      <span style={{ color: '#555', fontSize: 11 }}>{TRANSLATIONS[lang]?.noPropertiesYet || 'Henüz arazi yok'}</span>
-                    )}
-                  </div>
-                </div>
-              </div>
-            )}
-
-            {!isMobile && (
-              <div
-                className="log-col"
-                style={{
-                  width: isLogOpen ? 260 : 50,
-                  transition: 'width 0.3s cubic-bezier(0.165, 0.84, 0.44, 1)',
-                  display: 'flex',
-                  flexDirection: 'column',
-                  overflow: 'hidden',
-                  padding: isLogOpen ? 12 : '12px 6px',
-                  background: isLogOpen ? 'rgba(0, 0, 0, 0.25)' : 'rgba(0, 0, 0, 0.15)',
-                  borderLeft: '1px solid rgba(255, 255, 255, 0.08)',
-                  height: '100%',
-                  boxSizing: 'border-box'
-                }}
-              >
-                <div style={{
-                  display: 'flex',
-                  flexDirection: isLogOpen ? 'row' : 'column',
-                  justifyContent: 'space-between',
-                  alignItems: 'center',
-                  marginBottom: isLogOpen ? 10 : 0,
-                  paddingBottom: isLogOpen ? 8 : 0,
-                  borderBottom: isLogOpen ? '1px solid rgba(255,255,255,0.07)' : 'none',
-                  gap: 8,
-                  width: '100%'
-                }}>
-                  {isLogOpen ? (
-                    <>
-                      <span style={{ fontSize: 10, color: '#aaa', fontWeight: 'bold', letterSpacing: 1 }}>📜 OYUN GEÇMİŞİ</span>
-                      <button
-                        onClick={() => { setIsLogOpen(false); sfxClick(); }}
-                        style={{
-                          background: 'rgba(255,255,255,0.08)',
-                          border: '1px solid rgba(255,255,255,0.15)',
-                          borderRadius: 6,
-                          color: '#fff',
-                          cursor: 'pointer',
-                          fontSize: 9,
-                          padding: '3px 8px',
-                          fontWeight: 'bold',
-                          margin: 0
-                        }}
-                      >
-                        ✕
-                      </button>
-                    </>
-                  ) : (
-                    <button
-                      onClick={() => { setIsLogOpen(true); sfxClick(); }}
-                      title="Log Geçmişini Aç"
-                      style={{
-                        background: 'rgba(255,215,0,0.1)',
-                        border: '1px solid rgba(255,215,0,0.25)',
-                        borderRadius: 8,
-                        color: '#FFD700',
-                        cursor: 'pointer',
-                        fontSize: 14,
-                        width: 36,
-                        height: 36,
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        fontWeight: 'bold',
-                        margin: '0 auto',
-                        boxShadow: '0 2px 8px rgba(0,0,0,0.3)'
-                      }}
-                    >
-                      📜
-                    </button>
-                  )}
-                </div>
-                {isLogOpen && (
-                  <div ref={logRef} className="game-log" style={{ overflowY: 'auto', flex: 1, display: 'flex', flexDirection: 'column', gap: 5, width: '100%' }}>
-                    {[...(gameState.log || [])].slice(-30).reverse().map((entry, i) => {
-                      const isSystem = entry.type === 'system';
-                      const isImportant = entry.type === 'payment' || entry.type === 'property' || entry.type === 'action';
-                      return (
-                        <div key={i} style={{
-                          width: '100%',
-                          boxSizing: 'border-box',
-                          fontSize: 10, color: isSystem ? '#FFD700' : '#ccc', padding: '6px 8px',
-                          background: isSystem ? 'rgba(255,215,0,0.1)' : isImportant ? 'rgba(255,255,255,0.04)' : 'transparent',
-                          borderRadius: 6, borderLeft: isSystem ? '2px solid #FFD700' : isImportant ? '2px solid rgba(255,255,255,0.2)' : '2px solid transparent',
-                          animation: 'fw-fade-in 0.3s ease-out'
-                        }}>
-                          <div className={isSystem ? 'system-log-blink' : ''} style={{ lineHeight: 1.4, wordBreak: 'break-word' }}>{renderLogMsg(entry)}</div>
-                          <div style={{ fontSize: 8, color: '#555', marginTop: 3, textAlign: 'right' }}>
-                            {new Date(entry.time).toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' })}
+                          
+                          {/* Set Yönetimi Butonu (Mobil) */}
+                          <div
+                            onClick={() => { setModal({ type: 'manageSet', color, cards }); sfxClick(); }}
+                            style={{
+                              fontSize: 7.5, fontWeight: 900,
+                              color: '#FFD700',
+                              background: 'rgba(255,215,0,0.12)',
+                              border: '1.2px solid rgba(255,215,0,0.4)',
+                              borderRadius: 3,
+                              padding: '2px 4px',
+                              marginTop: 3,
+                              cursor: 'pointer',
+                              zIndex: 25,
+                              position: 'relative',
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: 2,
+                              justifyContent: 'center',
+                              width: '100%',
+                              boxSizing: 'border-box'
+                            }}
+                            title={lang === 'en' ? 'Manage Set / Change Colors' : 'Seti Yönet / Renk Değiştir'}
+                          >
+                            ⚙️ {lang === 'en' ? 'MANAGE' : 'YÖNET'}
                           </div>
                         </div>
                       );
                     })}
+                    {Object.entries(me.properties || {}).every(([_, cards]) => cards.length === 0) && (
+                      <span style={{ color: '#555', fontSize: 10 }}>{TRANSLATIONS[lang]?.noPropertiesYet || 'Henüz arazi yok'}</span>
+                    )}
                   </div>
-                )}
+                </div>
               </div>
-            )}
-          </div>
-        </div>
+            </div>
+          ) : (
+            /* Masaüstü (Regular) Görünüm — Log artık log-col'da */
+            <div className="center-panel" style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'visible' }}>
 
-
-        {/* ALT: El kartları */}
-        {(() => {
-          const numCards = handToRender.length;
-          const listJustifyContent = numCards > (isMobile ? 4 : 5) ? 'flex-start' : 'center';
-          const smartHighlightIds = getSmartHighlightIds(handToRender, me, gameState.players);
-
-          return (
-            <div
-              className="hand-dock"
-              style={{
-                transform: handHidden ? 'translateY(calc(100% - 38px))' : 'translateY(0)',
-                transition: 'transform 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275)',
-              }}
-            >
-              {/* El kartları başlığı, butonlar ve emoji çubuğu (tek satır) */}
-              {selectedCard && isMyTurn && !isBlocked && !discardMode && isMobile ? (
-                <div style={{
-                  display: 'flex',
-                  justifyContent: 'space-between',
-                  alignItems: 'center',
-                  width: '100%',
-                  marginBottom: '8px',
-                  borderBottom: '1px solid rgba(255, 255, 255, 0.05)',
-                  paddingBottom: '6px',
-                  animation: 'toast-in 0.2s ease',
-                  pointerEvents: 'auto'
-                }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-                    <span style={{ fontSize: 13, fontWeight: 900, color: '#FFD700' }}>
-                      {translateCard(selectedCard, lang).name}
-                    </span>
-                    <span style={{ fontSize: 10, color: '#aaa' }}>
-                      ({selectedCard.value}M)
-                    </span>
+              {/* Ortak Masa Ortası Alanı (Central Play Area - Desktop) */}
+              <div className="central-play-arena">
+                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6 }}>
+                  <span style={{ fontSize: 9, color: '#aaa', fontWeight: 'bold', letterSpacing: 0.5 }}>🎴 {lang === 'en' ? 'DECK' : 'DESTE'} ({gameState.deckCount})</span>
+                  <div className="play-arena-slot">
+                    {gameState.deckCount > 0 ? (
+                      <div style={{ width: '100%', height: '100%', borderRadius: 8, overflow: 'hidden' }} title={lang === 'en' ? 'Remaining Cards in Deck' : 'Destedeki Kalan Kart Sayısı'}>
+                        <CardBack theme={dbUser?.selectedCardBack || 'default'} />
+                      </div>
+                    ) : (
+                      <span style={{ fontSize: 10, color: '#444' }}>{TRANSLATIONS[lang]?.empty || 'BOŞ'}</span>
+                    )}
                   </div>
-                  <div style={{ display: 'flex', gap: 8 }}>
-                    <button
-                      onClick={() => handleCardAction(selectedCard)}
-                      style={{
-                        ...btnStyle('linear-gradient(135deg, #E67E22, #D35400)'),
-                        padding: '8px 16px',
-                        fontSize: 12,
-                        fontWeight: 'bold',
-                        borderRadius: 6,
-                        margin: 0
-                      }}
-                    >
-                      {lang === 'en' ? '🚀 Play' : '🚀 Oyna'}
-                    </button>
-                    {selectedCard.type !== 'property' && (
-                      <button
-                        onClick={() => handlePlayCard(selectedCard, { asBankMoney: true })}
+                </div>
+
+                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6 }}>
+                  <span style={{ fontSize: 9, color: '#aaa', fontWeight: 'bold', letterSpacing: 0.5 }}>📤 {lang === 'en' ? 'LAST MOVEMENT' : 'SON OYNANAN'}</span>
+                  <div className="play-arena-slot">
+                    {gameState.discard?.length > 0 ? (
+                      <div style={{ transform: 'scale(0.85)', cursor: 'pointer' }}
+                        onClick={() => { setPreviewCard(gameState.discard[gameState.discard.length - 1]); setPreviewLocked(true); }}>
+                        <CardVisual card={gameState.discard[gameState.discard.length - 1]} small lang={lang} />
+                      </div>
+                    ) : (
+                      <span style={{ fontSize: 10, color: '#444' }}>{TRANSLATIONS[lang]?.none || 'YOK'}</span>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              {/* Benim arazilerim (Desktop) */}
+              <div data-drop-target="properties" style={{
+                padding: 10, borderTop: '1px solid rgba(255,255,255,0.1)', minHeight: 260,
+                background: dragOverTarget === 'properties' ? 'linear-gradient(to bottom, rgba(255,215,0,0.1), rgba(0,0,0,0.2))' : 'rgba(255,255,255,0.02)',
+                transition: 'background 0.3s ease'
+              }}>
+                <div style={{ fontSize: 11, color: dragOverTarget === 'properties' ? '#FFD700' : '#666', fontWeight: 'bold', marginBottom: 6, transition: 'color 0.2s' }}>{TRANSLATIONS[lang]?.myProperties || 'BENİM ARAZİLERİM'} ({myCompleteSets}/{gameState?.winSets || 3} {lang === 'en' ? 'sets' : 'set'})</div>
+                <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+
+                  {/* Banka Kasa Column (Desktop) */}
+                  <div
+                    ref={myBankRef}
+                    data-drop-target="bank"
+                    onClick={() => { setModal({ type: 'viewBankCards' }); sfxClick(); }}
+                    style={{
+                      display: 'flex',
+                      flexDirection: 'column',
+                      alignItems: 'center',
+                      gap: 4,
+                      flexShrink: 0,
+                      width: 64,
+                      minHeight: 88,
+                      background: dragOverTarget === 'bank' ? 'rgba(46,204,113,0.15)' : 'rgba(255,255,255,0.03)',
+                      border: dragOverTarget === 'bank' ? '2.5px dashed #2ECC71' : '1px solid rgba(255,255,255,0.08)',
+                      borderRadius: 8,
+                      padding: 4,
+                      boxSizing: 'border-box',
+                      transition: 'all 0.2s ease',
+                      cursor: 'pointer'
+                    }}
+                  >
+                    <span style={{ fontSize: 9, color: '#2ECC71', fontWeight: 'bold' }}>🏦 <BankTicker value={me.bankTotal} /></span>
+                    <div style={{ position: 'relative', width: 54, height: 72 }}>
+                      {me.bank?.slice(0, 5).map((c, i) => (
+                        <div
+                          key={c.id}
+                          className="mini-card-wrapper"
+                          style={{
+                            position: 'absolute',
+                            top: i * 4,
+                            left: i * 2,
+                            width: 48,
+                            height: 64,
+                            zIndex: i
+                          }}
+                        >
+                          <div style={{
+                            width: 48,
+                            height: 64,
+                            borderRadius: 4,
+                            background: 'linear-gradient(135deg, #2ECC71, #196F3D)',
+                            border: '1px solid rgba(255,255,255,0.2)',
+                            boxShadow: '0 2px 5px rgba(0,0,0,0.3)',
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            fontWeight: 900,
+                            fontSize: 11,
+                            color: '#fff',
+                          }} className="mini-card-face">
+                            {c.value}M
+                          </div>
+                          <div className="mini-card-hover-view">
+                            <CardVisual card={c} small lang={lang} />
+                          </div>
+                        </div>
+                      ))}
+                      {(!me.bank || me.bank.length === 0) && (
+                        <div style={{ width: 48, height: 64, borderRadius: 4, border: '1.2px dashed rgba(255,255,255,0.15)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 9, color: '#444' }}>{TRANSLATIONS[lang]?.empty || 'BOŞ'}</div>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Araziler (Desktop) */}
+                  {Object.entries(me.properties || {}).map(([color, cards]) => {
+                    if (cards.length === 0) return null;
+                    const info = COLOR_INFO[color] || { hex: '#aaa' };
+                    const isComplete = isSetComplete(cards, color);
+                    const setSize = SET_SIZES[color] || 2;
+                    return (
+                      <div
+                        key={color}
                         style={{
-                          ...btnStyle('linear-gradient(135deg, #27AE60, #1E8449)'),
-                          padding: '8px 16px',
-                          fontSize: 12,
-                          fontWeight: 'bold',
-                          borderRadius: 6,
-                          margin: 0
+                          display: 'flex',
+                          flexDirection: 'column',
+                          alignItems: 'center',
+                          position: 'relative',
+                          width: 44,
+                          minHeight: 64,
+                          background: isComplete ? `${info.hex}15` : 'transparent',
+                          borderRadius: 4,
+                          padding: 2,
+                          border: isComplete ? `1px solid ${info.hex}` : 'none',
+                          boxSizing: 'border-box'
                         }}
                       >
-                        {lang === 'en' ? '💰 Bank' : '💰 Banka'}
-                      </button>
-                    )}
+                        {cards.map((c, i) => (
+                          <div
+                            key={c.id}
+                            className="mini-card-wrapper"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              if (isMyTurn && (c.isWild || c.isDual)) {
+                                handleFlip(c);
+                              } else {
+                                setModal({ type: 'viewCardDetails', card: c });
+                              }
+                            }}
+                            style={{
+                              marginTop: i > 0 ? -42 : 0,
+                              zIndex: i,
+                              position: 'relative',
+                              width: 38,
+                              height: 52
+                            }}
+                          >
+                            <div style={{
+                              width: 38,
+                              height: 52,
+                              backgroundColor: '#FFFFFF',
+                              border: isComplete ? `1.5px solid ${info.hex}` : '1px solid rgba(0,0,0,0.15)',
+                              borderRadius: 4,
+                              display: 'flex',
+                              flexDirection: 'column',
+                              alignItems: 'center',
+                              overflow: 'hidden',
+                              boxShadow: '0 2px 4px rgba(0,0,0,0.2)',
+                              boxSizing: 'border-box',
+                              transition: 'opacity 0.1s',
+                              '--glow-color': info.hex
+                            }} className={`mini-card-face ${isComplete ? 'complete-set-glow' : ''}`}>
+                              <div style={{ width: '100%', height: 8, background: c.isWild ? 'linear-gradient(90deg, #E74C3C, #F39C12, #2ECC71, #3498DB)' : (c.isDual && c.colors ? `linear-gradient(90deg, ${COLOR_INFO[c.colors[0]]?.hex} 0%, ${COLOR_INFO[c.colors[0]]?.hex} 50%, ${COLOR_INFO[c.colors[1]]?.hex} 50%, ${COLOR_INFO[c.colors[1]]?.hex} 100%)` : info.hex) }} />
+                              <div style={{ fontSize: 8, fontWeight: 900, color: '#333', marginTop: 4, transform: 'scale(0.85)' }}>
+                                {c.isWild ? '★' : (c.value || '')}
+                              </div>
+                            </div>
+                            <div className="mini-card-hover-view">
+                              <CardVisual card={c} small lang={lang} />
+                            </div>
+                          </div>
+                        ))}
+                        {/* Set ilerleme etiketi */}
+                        <div style={{
+                          fontSize: 8, fontWeight: 900,
+                          color: isComplete ? '#FFD700' : info.hex,
+                          background: isComplete ? 'rgba(255,215,0,0.15)' : 'rgba(0,0,0,0.45)',
+                          border: isComplete ? '1px solid rgba(255,215,0,0.4)' : `1px solid ${info.hex}55`,
+                          borderRadius: 3,
+                          padding: '1px 4px',
+                          marginTop: 3,
+                          letterSpacing: 0.3,
+                          textShadow: 'none',
+                          lineHeight: 1.4,
+                          zIndex: 20,
+                          position: 'relative'
+                        }}>
+                          {isComplete ? `✓ ${cards.length}/${setSize}` : `${cards.length}/${setSize}`}
+                        </div>
+                        {/* Rent/Building Status Badge (Desktop) */}
+                        <div style={{
+                          fontSize: 7.5, fontWeight: 900,
+                          color: '#2ECC71',
+                          background: 'rgba(0,0,0,0.6)',
+                          border: '1px solid rgba(46,204,113,0.3)',
+                          borderRadius: 3,
+                          padding: '1px 3px',
+                          marginTop: 2,
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: 1.5,
+                          zIndex: 20,
+                          position: 'relative',
+                          justifyContent: 'center',
+                          width: '100%',
+                          boxSizing: 'border-box'
+                        }} title={lang === 'en' ? 'Current Rent Income and Buildings' : 'Güncel Kira Getirisi ve Binalar'}>
+                          <span>💵{calculateRentClient(me, color)}M</span>
+                          {isComplete && me.buildings?.[color] && (
+                            <>
+                              {me.buildings[color].houses > 0 && <span>🏠</span>}
+                              {me.buildings[color].hotel && <span>🏨</span>}
+                            </>
+                          )}
+                        </div>
+                        
+                        {/* Set Yönetimi Butonu (Desktop) */}
+                        <div
+                          onClick={() => { setModal({ type: 'manageSet', color, cards }); sfxClick(); }}
+                          style={{
+                            fontSize: 7.5, fontWeight: 900,
+                            color: '#FFD700',
+                            background: 'rgba(255,215,0,0.12)',
+                            border: '1.2px solid rgba(255,215,0,0.4)',
+                            borderRadius: 3,
+                            padding: '2px 4px',
+                            marginTop: 3,
+                            cursor: 'pointer',
+                            zIndex: 25,
+                            position: 'relative',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: 2,
+                            justifyContent: 'center',
+                            width: '100%',
+                            boxSizing: 'border-box',
+                            transition: 'all 0.15s ease'
+                          }}
+                          onMouseEnter={e => { e.currentTarget.style.background = 'rgba(255,215,0,0.25)'; }}
+                          onMouseLeave={e => { e.currentTarget.style.background = 'rgba(255,215,0,0.12)'; }}
+                          title={lang === 'en' ? 'Manage Set / Change Colors' : 'Seti Yönet / Renk Değiştir'}
+                        >
+                          ⚙️ {lang === 'en' ? 'MANAGE' : 'YÖNET'}
+                        </div>
+                      </div>
+                    );
+                  })}
+                  {Object.entries(me.properties || {}).every(([_, cards]) => cards.length === 0) && (
+                    <span style={{ color: '#555', fontSize: 11 }}>{TRANSLATIONS[lang]?.noPropertiesYet || 'Henüz arazi yok'}</span>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {!isMobile && (
+            <div
+              className="log-col"
+              style={{
+                width: isLogOpen ? 260 : 50,
+                transition: 'width 0.3s cubic-bezier(0.165, 0.84, 0.44, 1)',
+                display: 'flex',
+                flexDirection: 'column',
+                overflow: 'hidden',
+                padding: isLogOpen ? 12 : '12px 6px',
+                background: isLogOpen ? 'rgba(0, 0, 0, 0.25)' : 'rgba(0, 0, 0, 0.15)',
+                borderLeft: '1px solid rgba(255, 255, 255, 0.08)',
+                height: '100%',
+                boxSizing: 'border-box'
+              }}
+            >
+              <div style={{
+                display: 'flex',
+                flexDirection: isLogOpen ? 'row' : 'column',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+                marginBottom: isLogOpen ? 10 : 0,
+                paddingBottom: isLogOpen ? 8 : 0,
+                borderBottom: isLogOpen ? '1px solid rgba(255,255,255,0.07)' : 'none',
+                gap: 8,
+                width: '100%'
+              }}>
+                {isLogOpen ? (
+                  <>
+                    <span style={{ fontSize: 10, color: '#aaa', fontWeight: 'bold', letterSpacing: 1 }}>📜 OYUN GEÇMİŞİ</span>
                     <button
-                      onClick={() => setSelectedCard(null)}
+                      onClick={() => { setIsLogOpen(false); sfxClick(); }}
                       style={{
-                        ...btnStyle('rgba(255,255,255,0.15)'),
-                        padding: '8px 16px',
-                        fontSize: 12,
-                        fontWeight: 'bold',
+                        background: 'rgba(255,255,255,0.08)',
+                        border: '1px solid rgba(255,255,255,0.15)',
                         borderRadius: 6,
+                        color: '#fff',
+                        cursor: 'pointer',
+                        fontSize: 9,
+                        padding: '3px 8px',
+                        fontWeight: 'bold',
                         margin: 0
                       }}
                     >
                       ✕
                     </button>
-                  </div>
-                </div>
-              ) : (
-                <div style={{
-                  display: 'flex',
-                  justifyContent: 'space-between',
-                  alignItems: 'center',
-                  marginBottom: '8px',
-                  borderBottom: '1px solid rgba(255, 255, 255, 0.05)',
-                  paddingBottom: '6px',
-                  userSelect: 'none',
-                  pointerEvents: 'auto'
-                }}>
-                  {/* Toggle butonu */}
-                  <div
-                    onClick={() => { sfxClick(); setHandHidden(!handHidden); }}
+                  </>
+                ) : (
+                  <button
+                    onClick={() => { setIsLogOpen(true); sfxClick(); }}
+                    title="Log Geçmişini Aç"
                     style={{
+                      background: 'rgba(255,215,0,0.1)',
+                      border: '1px solid rgba(255,215,0,0.25)',
+                      borderRadius: 8,
+                      color: '#FFD700',
+                      cursor: 'pointer',
+                      fontSize: 14,
+                      width: 36,
+                      height: 36,
                       display: 'flex',
                       alignItems: 'center',
-                      gap: '6px',
-                      cursor: 'pointer',
-                      background: 'rgba(255, 255, 255, 0.05)',
-                      padding: '3px 10px',
-                      borderRadius: '12px',
-                      border: '1px solid rgba(255, 255, 255, 0.05)',
-                      transition: 'background 0.2s',
-                      flexShrink: 0
+                      justifyContent: 'center',
+                      fontWeight: 'bold',
+                      margin: '0 auto',
+                      boxShadow: '0 2px 8px rgba(0,0,0,0.3)'
                     }}
-                    onMouseEnter={e => e.currentTarget.style.background = 'rgba(255, 255, 255, 0.12)'}
-                    onMouseLeave={e => e.currentTarget.style.background = 'rgba(255, 255, 255, 0.05)'}
                   >
-                    <span style={{ fontSize: '11px', color: '#FFD700', fontWeight: '900', letterSpacing: '0.5px' }}>
-                      {handHidden ? (lang === 'en' ? '👁️ SHOW HAND' : '👁️ ELİ GÖSTER') : (lang === 'en' ? '🃏 MY CARDS' : '🃏 KARTLARIM')} ({handToRender.length})
-                    </span>
-                    <span style={{ fontSize: '9px', color: '#aaa', display: 'inline-block', transform: handHidden ? 'rotate(180deg)' : 'rotate(0deg)', transition: 'transform 0.3s' }}>
-                      ▼
-                    </span>
-                  </div>
-
-                  {/* Sağ: Eylem butonları */}
-                  <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
-                    {isMyTurn && !discardMode && !isBlocked && gameState.canUndo && (
-                      <button
-                        onClick={() => { sfxClick(); handleUndoMove(); }}
-                        style={{
-                          background: 'rgba(230, 126, 34, 0.15)',
-                          border: '1px solid rgba(230, 126, 34, 0.4)',
-                          color: '#E67E22',
-                          padding: '4px 10px',
-                          borderRadius: '8px',
-                          fontSize: '10px',
-                          cursor: 'pointer',
-                          fontWeight: 'bold',
-                          transition: 'all 0.2s'
-                        }}
-                        onMouseEnter={e => e.currentTarget.style.background = 'rgba(230, 126, 34, 0.25)'}
-                        onMouseLeave={e => e.currentTarget.style.background = 'rgba(230, 126, 34, 0.15)'}
-                      >
-                        {lang === 'en' ? '↩️ Undo' : '↩️ Geri Al'}
-                      </button>
-                    )}
-                    {isMyTurn && !discardMode && !isBlocked && (
-                      <button
-                        onClick={() => { sfxClick(); handleEndTurn(); }}
-                        style={{
-                          background: 'linear-gradient(135deg, #9b59b6, #8e44ad)',
-                          border: 'none',
-                          color: '#fff',
-                          padding: '4px 12px',
-                          borderRadius: '8px',
-                          fontSize: '10px',
-                          cursor: 'pointer',
-                          fontWeight: '900',
-                          boxShadow: '0 4px 12px rgba(155,89,182,0.3)',
-                          transition: 'all 0.2s'
-                        }}
-                        onMouseEnter={e => { e.currentTarget.style.transform = 'translateY(-1px)'; e.currentTarget.style.boxShadow = '0 6px 15px rgba(155,89,182,0.4)'; }}
-                        onMouseLeave={e => { e.currentTarget.style.transform = 'translateY(0)'; e.currentTarget.style.boxShadow = '0 4px 12px rgba(155,89,182,0.3)'; }}
-                      >
-                        {lang === 'en' ? '🏁 End Turn' : '🏁 Turu Bitir'}
-                      </button>
-                    )}
-                  </div>
-                </div>
-              )}
-              <div className="hand-blurred-container" style={{ overflow: 'visible', pointerEvents: handHidden ? 'none' : 'auto' }}>
-                <div
-                  className={handHidden ? 'hand-blurred' : ''}
-                  style={{
-                    display: 'flex',
-                    overflowX: 'auto',
-                    overflowY: 'visible',
-                    paddingBottom: '14px',
-                    paddingTop: '14px',
-                    paddingLeft: '16px',
-                    paddingRight: '16px',
-                    alignItems: 'flex-end',
-                    listStyle: 'none',
-                    margin: 0,
-                    justifyContent: listJustifyContent,
-                    scrollbarWidth: 'none',
-                    msOverflowStyle: 'none',
-                    gap: isMobile ? 10 : 0
-                  }}
-                >
-                  {handToRender.map((card, idx) => {
-                    const isJSNActive = card.action === 'justsayno' && !!gameState?.myPendingChallenge;
-                    const cardComboClass = isJSNActive ? 'shield-glow' : getCardComboClass(card, handToRender);
-                    const isCardDimmed = (!isMyTurn || isBlocked) && !discardMode && !isJSNActive;
-                    const isSelected = selectedCard?.id === card.id;
-                    const overlapOffset = isMobile ? 0 : -36;
-
-                    const cardScale = isMobile ? 0.85 : 1.5;
-                    const visualScale = isMobile ? 0.8 : 0.85;
-                    const cardW = 132 * cardScale;
-                    const cardH = 192 * cardScale;
-                    const wrapperW = cardW * visualScale;
-                    const wrapperH = cardH * visualScale;
-
+                    📜
+                  </button>
+                )}
+              </div>
+              {isLogOpen && (
+                <div ref={logRef} className="game-log" style={{ overflowY: 'auto', flex: 1, display: 'flex', flexDirection: 'column', gap: 5, width: '100%' }}>
+                  {[...(gameState.log || [])].slice(-30).reverse().map((entry, i) => {
+                    const isSystem = entry.type === 'system';
+                    const isImportant = entry.type === 'payment' || entry.type === 'property' || entry.type === 'action';
                     return (
-                      <motion.div
-                        key={card.id}
-                        className={`stacked-card-wrapper ${isSelected ? 'selected-card' : ''} ${smartHighlightIds.includes(card.id) ? 'smart-glow' : ''}`}
-                        drag={isMyTurn && !isBlocked && !discardMode ? 'y' : false}
-                        dragElastic={0.2}
-                        dragSnapToOrigin={true}
-                        dragTransition={{ bounceStiffness: 600, bounceDamping: 20 }}
-                        onDragStart={handleDragStart}
-                        onDrag={handleDrag}
-                        onDragEnd={(e, info) => handleDragEnd(e, info, card)}
-                        whileDrag={{ scale: 1.15, zIndex: 1000, cursor: 'grabbing' }}
-                        style={{
-                          width: wrapperW,
-                          height: wrapperH,
-                          zIndex: isSelected ? 1000 : idx,
-                          position: 'relative',
-                          cursor: isMyTurn && !isBlocked && !discardMode ? 'grab' : 'default',
-                          transformOrigin: 'bottom center',
-                          flexShrink: 0,
-                          marginLeft: idx === 0 ? 0 : overlapOffset,
-                          transition: 'transform 0.2s ease, z-index 0s',
-                        }}
-                        onMouseEnter={e => {
-                          if (!isSelected) {
-                            e.currentTarget.style.transform = 'translateY(-18px)';
-                            e.currentTarget.style.zIndex = 900;
-                          }
-                        }}
-                        onMouseLeave={e => {
-                          if (!isSelected) {
-                            e.currentTarget.style.transform = 'translateY(0)';
-                            e.currentTarget.style.zIndex = idx;
-                          }
-                        }}
-                        onDoubleClick={() => {
-                          setZoomedCard(card);
-                          sfxClick();
-                        }}
-                        onClick={() => {
-                          if (draggedRef.current) return;
-
-                          // Mobile Double-Tap check:
-                          const now = Date.now();
-                          if (window.__lastCardTap && window.__lastCardTap.cardId === card.id && (now - window.__lastCardTap.time < 300)) {
-                            setZoomedCard(card);
-                            sfxClick();
-                            return;
-                          }
-                          window.__lastCardTap = { cardId: card.id, time: now };
-
-                          if (discardMode) {
-                            setDiscardSelected(prev =>
-                              prev.includes(card.id) ? prev.filter(id => id !== card.id) : [...prev, card.id]
-                            );
-                          } else {
-                            openCardModal(card);
-                          }
-                        }}
-                      >
-                        <div style={{
-                          width: cardW,
-                          height: cardH,
-                          transform: `scale(${visualScale})`,
-                          transformOrigin: 'bottom center',
-                          position: 'absolute',
-                          bottom: 0,
-                          left: '50%',
-                          marginLeft: -cardW / 2
-                        }}>
-                          <CardVisual
-                            card={card}
-                            selected={discardMode ? discardSelected.includes(card.id) : selectedCard?.id === card.id}
-                            dimmed={isCardDimmed}
-                            usable={!discardMode && (isCardUsable(card) || isJSNActive)}
-                            comboClass={cardComboClass}
-                          />
+                      <div key={i} style={{
+                        width: '100%',
+                        boxSizing: 'border-box',
+                        fontSize: 10, color: isSystem ? '#FFD700' : '#ccc', padding: '6px 8px',
+                        background: isSystem ? 'rgba(255,215,0,0.1)' : isImportant ? 'rgba(255,255,255,0.04)' : 'transparent',
+                        borderRadius: 6, borderLeft: isSystem ? '2px solid #FFD700' : isImportant ? '2px solid rgba(255,255,255,0.2)' : '2px solid transparent',
+                        animation: 'fw-fade-in 0.3s ease-out'
+                      }}>
+                        <div className={isSystem ? 'system-log-blink' : ''} style={{ lineHeight: 1.4, wordBreak: 'break-word' }}>{renderLogMsg(entry)}</div>
+                        <div style={{ fontSize: 8, color: '#555', marginTop: 3, textAlign: 'right' }}>
+                          {new Date(entry.time).toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' })}
                         </div>
-
-                        <AnimatePresence>
-                          {selectedCard?.id === card.id && isMyTurn && !isBlocked && !discardMode && !isMobile && (
-                            <motion.div
-                              initial={{ opacity: 0 }}
-                              animate={{ opacity: 1 }}
-                              exit={{ opacity: 0 }}
-                              style={{
-                                position: 'absolute',
-                                inset: 0,
-                                background: 'rgba(10, 10, 20, 0.95)',
-                                borderRadius: 8,
-                                display: 'flex',
-                                flexDirection: 'column',
-                                justifyContent: 'center',
-                                alignItems: 'center',
-                                gap: 6,
-                                zIndex: 10,
-                                padding: 4
-                              }}
-                            >
-                              <button onClick={(e) => { e.stopPropagation(); handleCardAction(card); }} style={{ ...btnStyle('linear-gradient(135deg, #E67E22, #D35400)'), fontSize: 10, padding: '12px 22px', borderRadius: 4 }}>{lang === 'en' ? '🚀 Play' : '🚀 Oyna'}</button>
-                              {card.type !== 'property' && (
-                                <button onClick={(e) => { e.stopPropagation(); handlePlayCard(card, { asBankMoney: true }); }} style={{ ...btnStyle('linear-gradient(135deg, #27AE60, #1E8449)'), fontSize: 8, padding: '12px 22px', borderRadius: 4 }}>{lang === 'en' ? '💰 Bank' : '💰 Banka'}</button>
-                              )}
-                              <button onClick={(e) => { e.stopPropagation(); setSelectedCard(null); }} style={{ ...btnStyle('rgba(255,255,255,0.15)'), fontSize: 10, padding: '12px 22px', borderRadius: 4 }}>{lang === 'en' ? 'Close✕' : 'Kapat✕'}</button>
-                            </motion.div>
-                          )}
-                        </AnimatePresence>
-                      </motion.div>
+                      </div>
                     );
                   })}
                 </div>
-              </div>
-              {(discardMode || (isMyTurn && !discardMode && !isBlocked && gameState.gambleZari && !me.hasGambledThisTurn && gameState.actionsLeft > 0)) && (
-                <div style={{ display: 'flex', gap: 10, marginTop: 8, flexWrap: 'wrap', alignItems: 'center' }}>
-                  {isMyTurn && !discardMode && !isBlocked && gameState.gambleZari && !me.hasGambledThisTurn && gameState.actionsLeft > 0 && (
-                    <button onClick={handleRollGambleDice} style={{ ...btnStyle('linear-gradient(135deg, #16A085, #117864)'), padding: '10px 20px', boxShadow: '0 4px 10px rgba(22,160,133,0.4)', fontSize: 13, marginLeft: 'auto' }}>
-                      🎲 Zar At
-                    </button>
-                  )}
-                  {discardMode && (
-                    <>
-                      <div style={{ color: '#FFD700', fontSize: 12, alignSelf: 'center' }}>
-                        {over} kart at ({discardSelected.length} seçildi)
-                      </div>
-                      <button onClick={() => { sfxClick(); handleDiscard(); }} disabled={discardSelected.length !== over}
-                        style={{ ...btnStyle('#E74C3C'), opacity: discardSelected.length === over ? 1 : 0.5, marginLeft: 'auto' }}>
-                        🗑️ Kartları At
-                      </button>
-                    </>
-                  )}
-                </div>
               )}
-              {error && <div style={{ color: '#f44', fontSize: 13, textAlign: 'center', marginTop: 8, fontWeight: 'bold' }}>{error}</div>}
             </div>
-          );
-        })()}
+          )}
+        </div>
+      </div>
 
 
+      {/* ALT: El kartları */}
+      {(() => {
+        const numCards = handToRender.length;
+        const listJustifyContent = numCards > (isMobile ? 4 : 5) ? 'flex-start' : 'center';
+        const smartHighlightIds = getSmartHighlightIds(handToRender, me, gameState.players);
 
-
-
-        {/* Profile Card Modal */}
-        {profilePlayer && (
-          <Modal title={lang === 'en' ? `👤 ${profilePlayer.name}'s Profile` : `👤 ${profilePlayer.name} Profili`} onClose={() => setProfilePlayer(null)}>
-            <div style={{ textAlign: 'center', padding: '10px 0', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 16 }}>
-              <div style={{ position: 'relative' }}>
-                <img
-                  src={`https://api.dicebear.com/7.x/${profilePlayer.avatar || profilePlayer.avatarStyle || 'avataaars'}/svg?seed=${profilePlayer.name}`}
-                  alt="avatar"
-                  style={{ width: 80, height: 80, borderRadius: '50%', background: 'rgba(0,0,0,0.2)', border: '3px solid #FFD700', boxShadow: '0 0 20px rgba(255,215,0,0.2)' }}
-                />
-                {profilePlayer.isReady && <span style={{ position: 'absolute', bottom: 0, right: 0, fontSize: 16 }}>✅</span>}
-              </div>
-              <div>
-                <h3 style={{ margin: 0, fontSize: 18, color: '#FFD700' }}>{profilePlayer.name}</h3>
-                <p style={{ color: '#aaa', fontSize: 11, margin: '4px 0 0 0' }}>
-                  {lang === 'en' ? 'Player Level: Gold Member' : 'Oyuncu Seviyesi: Altın Üye'}
-                </p>
-              </div>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, width: '100%', marginTop: 8 }}>
-                <div style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)', borderRadius: 10, padding: 10 }}>
-                  <div style={{ fontSize: 9, color: '#aaa' }}>{lang === 'en' ? 'TOTAL MATCHES' : 'TOPLAM MAÇ'}</div>
-                  <div style={{ fontSize: 16, fontWeight: 900, color: '#fff', marginTop: 4 }}>14</div>
-                </div>
-                <div style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)', borderRadius: 10, padding: 10 }}>
-                  <div style={{ fontSize: 9, color: '#aaa' }}>{lang === 'en' ? 'TOTAL WINS' : 'TOPLAM ZAFER'}</div>
-                  <div style={{ fontSize: 16, fontWeight: 900, color: '#FFD700', marginTop: 4 }}>{profilePlayer.isBot ? 4 : 10}</div>
-                </div>
-                <div style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)', borderRadius: 10, padding: 10 }}>
-                  <div style={{ fontSize: 9, color: '#aaa' }}>{lang === 'en' ? 'WIN RATE' : 'KAZANMA ORANI'}</div>
-                  <div style={{ fontSize: 16, fontWeight: 900, color: '#2ECC71', marginTop: 4 }}>71.4%</div>
-                </div>
-                <div style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)', borderRadius: 10, padding: 10 }}>
-                  <div style={{ fontSize: 9, color: '#aaa' }}>{lang === 'en' ? 'FAVORITE CARD' : 'EN SEVİLEN KART'}</div>
-                  <div style={{ fontSize: 12, fontWeight: 900, color: '#3498DB', marginTop: 4, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                    {lang === 'en' ? 'Rent Card 🔵' : 'Haciz Kartı 🔵'}
-                  </div>
-                </div>
-              </div>
-              <button
-                onClick={() => {
-                  socket?.emit('sendEmote', { targetId: profilePlayer.id, emoji: '👋' });
-                  showToast(lang === 'en' ? `You waved at ${profilePlayer.name}! 👋` : `${profilePlayer.name} oyuncusuna el salladınız! 👋`, 'success');
-                  sfxClick();
-                }}
-                style={{ ...btnStyle('linear-gradient(135deg, #3498db, #2980b9)'), width: '100%', padding: '10px', fontSize: 12, borderRadius: 8, marginTop: 8 }}
-              >
-                {lang === 'en' ? '👋 Send Wave' : '👋 Selam Gönder'}
-              </button>
-            </div>
-          </Modal>
-        )}
-
-        {/* Zoom Card Modal */}
-        {zoomedCard && (
+        return (
           <div
-            onClick={() => setZoomedCard(null)}
+            className="hand-dock"
             style={{
-              position: 'fixed', inset: 0, zIndex: 100000,
-              background: 'rgba(5, 7, 12, 0.93)',
-              display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
-              backdropFilter: 'blur(20px)',
-              animation: 'fw-fade-in 0.25s ease-out'
+              transform: handHidden ? 'translateY(calc(100% - 38px))' : 'translateY(0)',
+              transition: 'transform 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275)',
             }}
           >
-            <div style={{ transform: 'scale(1.6)' }} onClick={e => e.stopPropagation()}>
-              <CardVisual card={zoomedCard} lang={lang} />
-            </div>
-            <div style={{ marginTop: 40, color: '#aaa', fontSize: 12, fontWeight: 'bold', letterSpacing: 0.5 }}>
-              {lang === 'en' ? 'Tap anywhere to close' : 'Kapatmak için herhangi bir yere dokunun'}
-            </div>
-          </div>
-        )}
+            {/* El kartları başlığı, butonlar ve emoji çubuğu (tek satır) */}
+            {selectedCard && isMyTurn && !isBlocked && !discardMode && isMobile ? (
+              <div style={{
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+                width: '100%',
+                marginBottom: '8px',
+                borderBottom: '1px solid rgba(255, 255, 255, 0.05)',
+                paddingBottom: '6px',
+                animation: 'toast-in 0.2s ease',
+                pointerEvents: 'auto'
+              }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                  <span style={{ fontSize: 13, fontWeight: 900, color: '#FFD700' }}>
+                    {translateCard(selectedCard, lang).name}
+                  </span>
+                  <span style={{ fontSize: 10, color: '#aaa' }}>
+                    ({selectedCard.value}M)
+                  </span>
+                </div>
+                <div style={{ display: 'flex', gap: 8 }}>
+                  <button
+                    onClick={() => handleCardAction(selectedCard)}
+                    style={{
+                      ...btnStyle('linear-gradient(135deg, #E67E22, #D35400)'),
+                      padding: '8px 16px',
+                      fontSize: 12,
+                      fontWeight: 'bold',
+                      borderRadius: 6,
+                      margin: 0
+                    }}
+                  >
+                    {lang === 'en' ? '🚀 Play' : '🚀 Oyna'}
+                  </button>
+                  {selectedCard.type !== 'property' && (
+                    <button
+                      onClick={() => handlePlayCard(selectedCard, { asBankMoney: true })}
+                      style={{
+                        ...btnStyle('linear-gradient(135deg, #27AE60, #1E8449)'),
+                        padding: '8px 16px',
+                        fontSize: 12,
+                        fontWeight: 'bold',
+                        borderRadius: 6,
+                        margin: 0
+                      }}
+                    >
+                      {lang === 'en' ? '💰 Bank' : '💰 Banka'}
+                    </button>
+                  )}
+                  <button
+                    onClick={() => setSelectedCard(null)}
+                    style={{
+                      ...btnStyle('rgba(255,255,255,0.15)'),
+                      padding: '8px 16px',
+                      fontSize: 12,
+                      fontWeight: 'bold',
+                      borderRadius: 6,
+                      margin: 0
+                    }}
+                  >
+                    ✕
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <div style={{
+                display: 'flex',
+                justifyContent: 'space-between',
+                alignItems: 'center',
+                marginBottom: '8px',
+                borderBottom: '1px solid rgba(255, 255, 255, 0.05)',
+                paddingBottom: '6px',
+                userSelect: 'none',
+                pointerEvents: 'auto'
+              }}>
+                {/* Toggle butonu */}
+                <div
+                  onClick={() => { sfxClick(); setHandHidden(!handHidden); }}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '6px',
+                    cursor: 'pointer',
+                    background: 'rgba(255, 255, 255, 0.05)',
+                    padding: '3px 10px',
+                    borderRadius: '12px',
+                    border: '1px solid rgba(255, 255, 255, 0.05)',
+                    transition: 'background 0.2s',
+                    flexShrink: 0
+                  }}
+                  onMouseEnter={e => e.currentTarget.style.background = 'rgba(255, 255, 255, 0.12)'}
+                  onMouseLeave={e => e.currentTarget.style.background = 'rgba(255, 255, 255, 0.05)'}
+                >
+                  <span style={{ fontSize: '11px', color: '#FFD700', fontWeight: '900', letterSpacing: '0.5px' }}>
+                    {handHidden ? (lang === 'en' ? '👁️ SHOW HAND' : '👁️ ELİ GÖSTER') : (lang === 'en' ? '🃏 MY CARDS' : '🃏 KARTLARIM')} ({handToRender.length})
+                  </span>
+                  <span style={{ fontSize: '9px', color: '#aaa', display: 'inline-block', transform: handHidden ? 'rotate(180deg)' : 'rotate(0deg)', transition: 'transform 0.3s' }}>
+                    ▼
+                  </span>
+                </div>
 
-      </div>
-    </ThemeContext.Provider>
-  );
+                {/* Sağ: Eylem butonları */}
+                <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
+                  {isMyTurn && !discardMode && !isBlocked && gameState.canUndo && (
+                    <button
+                      onClick={() => { sfxClick(); handleUndoMove(); }}
+                      style={{
+                        background: 'rgba(230, 126, 34, 0.15)',
+                        border: '1px solid rgba(230, 126, 34, 0.4)',
+                        color: '#E67E22',
+                        padding: '4px 10px',
+                        borderRadius: '8px',
+                        fontSize: '10px',
+                        cursor: 'pointer',
+                        fontWeight: 'bold',
+                        transition: 'all 0.2s'
+                      }}
+                      onMouseEnter={e => e.currentTarget.style.background = 'rgba(230, 126, 34, 0.25)'}
+                      onMouseLeave={e => e.currentTarget.style.background = 'rgba(230, 126, 34, 0.15)'}
+                    >
+                      {lang === 'en' ? '↩️ Undo' : '↩️ Geri Al'}
+                    </button>
+                  )}
+                  {isMyTurn && !discardMode && !isBlocked && (
+                    <button
+                      onClick={() => { sfxClick(); handleEndTurn(); }}
+                      style={{
+                        background: 'linear-gradient(135deg, #9b59b6, #8e44ad)',
+                        border: 'none',
+                        color: '#fff',
+                        padding: '4px 12px',
+                        borderRadius: '8px',
+                        fontSize: '10px',
+                        cursor: 'pointer',
+                        fontWeight: '900',
+                        boxShadow: '0 4px 12px rgba(155,89,182,0.3)',
+                        transition: 'all 0.2s'
+                      }}
+                      onMouseEnter={e => { e.currentTarget.style.transform = 'translateY(-1px)'; e.currentTarget.style.boxShadow = '0 6px 15px rgba(155,89,182,0.4)'; }}
+                      onMouseLeave={e => { e.currentTarget.style.transform = 'translateY(0)'; e.currentTarget.style.boxShadow = '0 4px 12px rgba(155,89,182,0.3)'; }}
+                    >
+                      {lang === 'en' ? '🏁 End Turn' : '🏁 Turu Bitir'}
+                    </button>
+                  )}
+                </div>
+              </div>
+            )}
+            <div className="hand-blurred-container" style={{ overflow: 'visible', pointerEvents: handHidden ? 'none' : 'auto' }}>
+              <div
+                className={handHidden ? 'hand-blurred' : ''}
+                style={{
+                  display: 'flex',
+                  overflowX: 'auto',
+                  overflowY: 'visible',
+                  paddingBottom: '14px',
+                  paddingTop: '14px',
+                  paddingLeft: '16px',
+                  paddingRight: '16px',
+                  alignItems: 'flex-end',
+                  listStyle: 'none',
+                  margin: 0,
+                  justifyContent: listJustifyContent,
+                  scrollbarWidth: 'none',
+                  msOverflowStyle: 'none',
+                  gap: isMobile ? 10 : 0
+                }}
+              >
+                {handToRender.map((card, idx) => {
+                  const isJSNActive = card.action === 'justsayno' && !!gameState?.myPendingChallenge;
+                  const cardComboClass = isJSNActive ? 'shield-glow' : getCardComboClass(card, handToRender);
+                  const isCardDimmed = (!isMyTurn || isBlocked) && !discardMode && !isJSNActive;
+                  const isSelected = selectedCard?.id === card.id;
+                  const overlapOffset = isMobile ? 0 : -36;
+
+                  const cardScale = isMobile ? 0.85 : 1.5;
+                  const visualScale = isMobile ? 0.8 : 0.85;
+                  const cardW = 132 * cardScale;
+                  const cardH = 192 * cardScale;
+                  const wrapperW = cardW * visualScale;
+                  const wrapperH = cardH * visualScale;
+
+                  return (
+                    <motion.div
+                      key={card.id}
+                      className={`stacked-card-wrapper ${isSelected ? 'selected-card' : ''} ${smartHighlightIds.includes(card.id) ? 'smart-glow' : ''}`}
+                      drag={isMyTurn && !isBlocked && !discardMode ? 'y' : false}
+                      dragElastic={0.2}
+                      dragSnapToOrigin={true}
+                      dragTransition={{ bounceStiffness: 600, bounceDamping: 20 }}
+                      onDragStart={handleDragStart}
+                      onDrag={handleDrag}
+                      onDragEnd={(e, info) => handleDragEnd(e, info, card)}
+                      whileDrag={{ scale: 1.15, zIndex: 1000, cursor: 'grabbing' }}
+                      style={{
+                        width: wrapperW,
+                        height: wrapperH,
+                        zIndex: isSelected ? 1000 : idx,
+                        position: 'relative',
+                        cursor: isMyTurn && !isBlocked && !discardMode ? 'grab' : 'default',
+                        transformOrigin: 'bottom center',
+                        flexShrink: 0,
+                        marginLeft: idx === 0 ? 0 : overlapOffset,
+                        transition: 'transform 0.2s ease, z-index 0s',
+                      }}
+                      onMouseEnter={e => {
+                        if (!isSelected) {
+                          e.currentTarget.style.transform = 'translateY(-18px)';
+                          e.currentTarget.style.zIndex = 900;
+                        }
+                      }}
+                      onMouseLeave={e => {
+                        if (!isSelected) {
+                          e.currentTarget.style.transform = 'translateY(0)';
+                          e.currentTarget.style.zIndex = idx;
+                        }
+                      }}
+                      onDoubleClick={() => {
+                        setZoomedCard(card);
+                        sfxClick();
+                      }}
+                      onClick={() => {
+                        if (draggedRef.current) return;
+
+                        // Mobile Double-Tap check:
+                        const now = Date.now();
+                        if (window.__lastCardTap && window.__lastCardTap.cardId === card.id && (now - window.__lastCardTap.time < 300)) {
+                          setZoomedCard(card);
+                          sfxClick();
+                          return;
+                        }
+                        window.__lastCardTap = { cardId: card.id, time: now };
+
+                        if (discardMode) {
+                          setDiscardSelected(prev =>
+                            prev.includes(card.id) ? prev.filter(id => id !== card.id) : [...prev, card.id]
+                          );
+                        } else {
+                          openCardModal(card);
+                        }
+                      }}
+                    >
+                      <div style={{
+                        width: cardW,
+                        height: cardH,
+                        transform: `scale(${visualScale})`,
+                        transformOrigin: 'bottom center',
+                        position: 'absolute',
+                        bottom: 0,
+                        left: '50%',
+                        marginLeft: -cardW / 2
+                      }}>
+                        <CardVisual
+                          card={card}
+                          selected={discardMode ? discardSelected.includes(card.id) : selectedCard?.id === card.id}
+                          dimmed={isCardDimmed}
+                          usable={!discardMode && (isCardUsable(card) || isJSNActive)}
+                          comboClass={cardComboClass}
+                        />
+                      </div>
+
+                      <AnimatePresence>
+                        {selectedCard?.id === card.id && isMyTurn && !isBlocked && !discardMode && !isMobile && (
+                          <motion.div
+                            initial={{ opacity: 0 }}
+                            animate={{ opacity: 1 }}
+                            exit={{ opacity: 0 }}
+                            style={{
+                              position: 'absolute',
+                              inset: 0,
+                              background: 'rgba(10, 10, 20, 0.95)',
+                              borderRadius: 8,
+                              display: 'flex',
+                              flexDirection: 'column',
+                              justifyContent: 'center',
+                              alignItems: 'center',
+                              gap: 6,
+                              zIndex: 10,
+                              padding: 4
+                            }}
+                          >
+                            <button onClick={(e) => { e.stopPropagation(); handleCardAction(card); }} style={{ ...btnStyle('linear-gradient(135deg, #E67E22, #D35400)'), fontSize: 10, padding: '12px 22px', borderRadius: 4 }}>{lang === 'en' ? '🚀 Play' : '🚀 Oyna'}</button>
+                            {card.type !== 'property' && (
+                              <button onClick={(e) => { e.stopPropagation(); handlePlayCard(card, { asBankMoney: true }); }} style={{ ...btnStyle('linear-gradient(135deg, #27AE60, #1E8449)'), fontSize: 8, padding: '12px 22px', borderRadius: 4 }}>{lang === 'en' ? '💰 Bank' : '💰 Banka'}</button>
+                            )}
+                            <button onClick={(e) => { e.stopPropagation(); setSelectedCard(null); }} style={{ ...btnStyle('rgba(255,255,255,0.15)'), fontSize: 10, padding: '12px 22px', borderRadius: 4 }}>{lang === 'en' ? 'Close✕' : 'Kapat✕'}</button>
+                          </motion.div>
+                        )}
+                      </AnimatePresence>
+                    </motion.div>
+                  );
+                })}
+              </div>
+            </div>
+            {(discardMode || (isMyTurn && !discardMode && !isBlocked && gameState.gambleZari && !me.hasGambledThisTurn && gameState.actionsLeft > 0)) && (
+              <div style={{ display: 'flex', gap: 10, marginTop: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+                {isMyTurn && !discardMode && !isBlocked && gameState.gambleZari && !me.hasGambledThisTurn && gameState.actionsLeft > 0 && (
+                  <button onClick={handleRollGambleDice} style={{ ...btnStyle('linear-gradient(135deg, #16A085, #117864)'), padding: '10px 20px', boxShadow: '0 4px 10px rgba(22,160,133,0.4)', fontSize: 13, marginLeft: 'auto' }}>
+                    🎲 Zar At
+                  </button>
+                )}
+                {discardMode && (
+                  <>
+                    <div style={{ color: '#FFD700', fontSize: 12, alignSelf: 'center' }}>
+                      {over} kart at ({discardSelected.length} seçildi)
+                    </div>
+                    <button onClick={() => { sfxClick(); handleDiscard(); }} disabled={discardSelected.length !== over}
+                      style={{ ...btnStyle('#E74C3C'), opacity: discardSelected.length === over ? 1 : 0.5, marginLeft: 'auto' }}>
+                      🗑️ Kartları At
+                    </button>
+                  </>
+                )}
+              </div>
+            )}
+            {error && <div style={{ color: '#f44', fontSize: 13, textAlign: 'center', marginTop: 8, fontWeight: 'bold' }}>{error}</div>}
+          </div>
+        );
+      })()}
+
+
+
+
+
+      {/* Profile Card Modal */}
+      {profilePlayer && (
+        <Modal title={lang === 'en' ? `👤 ${profilePlayer.name}'s Profile` : `👤 ${profilePlayer.name} Profili`} onClose={() => setProfilePlayer(null)}>
+          <div style={{ textAlign: 'center', padding: '10px 0', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 16 }}>
+            <div style={{ position: 'relative' }}>
+              <img
+                src={`https://api.dicebear.com/7.x/${profilePlayer.avatar || profilePlayer.avatarStyle || 'avataaars'}/svg?seed=${profilePlayer.name}`}
+                alt="avatar"
+                style={{ width: 80, height: 80, borderRadius: '50%', background: 'rgba(0,0,0,0.2)', border: '3px solid #FFD700', boxShadow: '0 0 20px rgba(255,215,0,0.2)' }}
+              />
+              {profilePlayer.isReady && <span style={{ position: 'absolute', bottom: 0, right: 0, fontSize: 16 }}>✅</span>}
+            </div>
+            <div>
+              <h3 style={{ margin: 0, fontSize: 18, color: '#FFD700' }}>{profilePlayer.name}</h3>
+              <p style={{ color: '#aaa', fontSize: 11, margin: '4px 0 0 0' }}>
+                {lang === 'en' ? 'Player Level: Gold Member' : 'Oyuncu Seviyesi: Altın Üye'}
+              </p>
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, width: '100%', marginTop: 8 }}>
+              <div style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)', borderRadius: 10, padding: 10 }}>
+                <div style={{ fontSize: 9, color: '#aaa' }}>{lang === 'en' ? 'TOTAL MATCHES' : 'TOPLAM MAÇ'}</div>
+                <div style={{ fontSize: 16, fontWeight: 900, color: '#fff', marginTop: 4 }}>14</div>
+              </div>
+              <div style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)', borderRadius: 10, padding: 10 }}>
+                <div style={{ fontSize: 9, color: '#aaa' }}>{lang === 'en' ? 'TOTAL WINS' : 'TOPLAM ZAFER'}</div>
+                <div style={{ fontSize: 16, fontWeight: 900, color: '#FFD700', marginTop: 4 }}>{profilePlayer.isBot ? 4 : 10}</div>
+              </div>
+              <div style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)', borderRadius: 10, padding: 10 }}>
+                <div style={{ fontSize: 9, color: '#aaa' }}>{lang === 'en' ? 'WIN RATE' : 'KAZANMA ORANI'}</div>
+                <div style={{ fontSize: 16, fontWeight: 900, color: '#2ECC71', marginTop: 4 }}>71.4%</div>
+              </div>
+              <div style={{ background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.06)', borderRadius: 10, padding: 10 }}>
+                <div style={{ fontSize: 9, color: '#aaa' }}>{lang === 'en' ? 'FAVORITE CARD' : 'EN SEVİLEN KART'}</div>
+                <div style={{ fontSize: 12, fontWeight: 900, color: '#3498DB', marginTop: 4, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                  {lang === 'en' ? 'Rent Card 🔵' : 'Haciz Kartı 🔵'}
+                </div>
+              </div>
+            </div>
+            <button
+              onClick={() => {
+                socket?.emit('sendEmote', { targetId: profilePlayer.id, emoji: '👋' });
+                showToast(lang === 'en' ? `You waved at ${profilePlayer.name}! 👋` : `${profilePlayer.name} oyuncusuna el salladınız! 👋`, 'success');
+                sfxClick();
+              }}
+              style={{ ...btnStyle('linear-gradient(135deg, #3498db, #2980b9)'), width: '100%', padding: '10px', fontSize: 12, borderRadius: 8, marginTop: 8 }}
+            >
+              {lang === 'en' ? '👋 Send Wave' : '👋 Selam Gönder'}
+            </button>
+          </div>
+        </Modal>
+      )}
+
+      {/* Zoom Card Modal */}
+      {zoomedCard && (
+        <div
+          onClick={() => setZoomedCard(null)}
+          style={{
+            position: 'fixed', inset: 0, zIndex: 100000,
+            background: 'rgba(5, 7, 12, 0.93)',
+            display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+            backdropFilter: 'blur(20px)',
+            animation: 'fw-fade-in 0.25s ease-out'
+          }}
+        >
+          <div style={{ transform: 'scale(1.6)' }} onClick={e => e.stopPropagation()}>
+            <CardVisual card={zoomedCard} lang={lang} />
+          </div>
+          <div style={{ marginTop: 40, color: '#aaa', fontSize: 12, fontWeight: 'bold', letterSpacing: 0.5 }}>
+            {lang === 'en' ? 'Tap anywhere to close' : 'Kapatmak için herhangi bir yere dokunun'}
+          </div>
+        </div>
+      )}
+
+    </div>
+  </ThemeContext.Provider>
+);
 }
 
 const getSmartHighlightIds = (hand, me, players) => {

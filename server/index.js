@@ -159,6 +159,12 @@ io.on('connection', (socket) => {
             gamePlayer.selectedTitle = itemId;
           } else if (itemType === 'playEffect') {
             gamePlayer.selectedPlayEffect = itemId;
+          } else if (itemType === 'badge') {
+            gamePlayer.selectedBadge = itemId;
+          } else if (itemType === 'tableTheme') {
+            gamePlayer.selectedTableTheme = itemId;
+          } else if (itemType === 'diceSkin') {
+            gamePlayer.selectedDiceSkin = itemId;
           }
           broadcastState(roomCode);
         }
@@ -192,6 +198,9 @@ io.on('connection', (socket) => {
           gamePlayer.selectedCardBack = dbRes.user.selectedCardBack || 'default';
           gamePlayer.selectedTitle = dbRes.user.selectedTitle || 'default';
           gamePlayer.selectedPlayEffect = dbRes.user.selectedPlayEffect || 'default';
+          gamePlayer.selectedBadge = dbRes.user.selectedBadge || 'default';
+          gamePlayer.selectedTableTheme = dbRes.user.selectedTableTheme || 'default';
+          gamePlayer.selectedDiceSkin = dbRes.user.selectedDiceSkin || 'default';
           broadcastState(roomCode);
         }
       }).catch(err => console.error('[DB] createRoom customization error:', err));
@@ -234,6 +243,9 @@ io.on('connection', (socket) => {
           gamePlayer.selectedCardBack = dbRes.user.selectedCardBack || 'default';
           gamePlayer.selectedTitle = dbRes.user.selectedTitle || 'default';
           gamePlayer.selectedPlayEffect = dbRes.user.selectedPlayEffect || 'default';
+          gamePlayer.selectedBadge = dbRes.user.selectedBadge || 'default';
+          gamePlayer.selectedTableTheme = dbRes.user.selectedTableTheme || 'default';
+          gamePlayer.selectedDiceSkin = dbRes.user.selectedDiceSkin || 'default';
           broadcastState(roomCode);
         }
       }).catch(err => console.error('[DB] joinRoom customization error:', err));

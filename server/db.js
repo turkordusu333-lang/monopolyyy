@@ -104,10 +104,16 @@ function saveLocalUserCustomizations(username, fields) {
       unlockedCardBacks: ['default'],
       unlockedTitles: ['default'],
       unlockedPlayEffects: ['default'],
+      unlockedBadges: ['default'],
+      unlockedTableThemes: ['default'],
+      unlockedDiceSkins: ['default'],
       selectedBorder: 'default',
       selectedCardBack: 'default',
       selectedTitle: 'default',
       selectedPlayEffect: 'default',
+      selectedBadge: 'default',
+      selectedTableTheme: 'default',
+      selectedDiceSkin: 'default',
       winHistory: []
     };
   }
@@ -121,10 +127,16 @@ function serializeCustomizationsForSupabase(user, newFields = {}) {
   let currentCardBack = 'default';
   let currentTitle = 'default';
   let currentPlayEffect = 'default';
+  let currentBadge = 'default';
+  let currentTableTheme = 'default';
+  let currentDiceSkin = 'default';
   let unlockedBorders = ['default'];
   let unlockedCardBacks = ['default'];
   let unlockedTitles = ['default'];
   let unlockedPlayEffects = ['default'];
+  let unlockedBadges = ['default'];
+  let unlockedTableThemes = ['default'];
+  let unlockedDiceSkins = ['default'];
   let winHistory = [];
 
   if (user.avatar && user.avatar.trim().startsWith('{')) {
@@ -135,10 +147,16 @@ function serializeCustomizationsForSupabase(user, newFields = {}) {
       currentCardBack = parsed.selectedCardBack || 'default';
       currentTitle = parsed.selectedTitle || 'default';
       currentPlayEffect = parsed.selectedPlayEffect || 'default';
+      currentBadge = parsed.selectedBadge || 'default';
+      currentTableTheme = parsed.selectedTableTheme || 'default';
+      currentDiceSkin = parsed.selectedDiceSkin || 'default';
       unlockedBorders = parsed.unlockedBorders || ['default'];
       unlockedCardBacks = parsed.unlockedCardBacks || ['default'];
       unlockedTitles = parsed.unlockedTitles || ['default'];
       unlockedPlayEffects = parsed.unlockedPlayEffects || ['default'];
+      unlockedBadges = parsed.unlockedBadges || ['default'];
+      unlockedTableThemes = parsed.unlockedTableThemes || ['default'];
+      unlockedDiceSkins = parsed.unlockedDiceSkins || ['default'];
       winHistory = parsed.winHistory || [];
     } catch (e) {
       console.error('[DB] Error parsing existing serialized customizations:', e);
@@ -152,10 +170,16 @@ function serializeCustomizationsForSupabase(user, newFields = {}) {
   if (user.unlockedCardBacks) unlockedCardBacks = user.unlockedCardBacks;
   if (user.unlockedTitles) unlockedTitles = user.unlockedTitles;
   if (user.unlockedPlayEffects) unlockedPlayEffects = user.unlockedPlayEffects;
+  if (user.unlockedBadges) unlockedBadges = user.unlockedBadges;
+  if (user.unlockedTableThemes) unlockedTableThemes = user.unlockedTableThemes;
+  if (user.unlockedDiceSkins) unlockedDiceSkins = user.unlockedDiceSkins;
   if (user.selectedBorder) currentBorder = user.selectedBorder;
   if (user.selectedCardBack) currentCardBack = user.selectedCardBack;
   if (user.selectedTitle) currentTitle = user.selectedTitle;
   if (user.selectedPlayEffect) currentPlayEffect = user.selectedPlayEffect;
+  if (user.selectedBadge) currentBadge = user.selectedBadge;
+  if (user.selectedTableTheme) currentTableTheme = user.selectedTableTheme;
+  if (user.selectedDiceSkin) currentDiceSkin = user.selectedDiceSkin;
   if (user.winHistory) winHistory = user.winHistory;
 
   const merged = {
@@ -164,10 +188,16 @@ function serializeCustomizationsForSupabase(user, newFields = {}) {
     selectedCardBack: newFields.selectedCardBack !== undefined ? newFields.selectedCardBack : currentCardBack,
     selectedTitle: newFields.selectedTitle !== undefined ? newFields.selectedTitle : currentTitle,
     selectedPlayEffect: newFields.selectedPlayEffect !== undefined ? newFields.selectedPlayEffect : currentPlayEffect,
+    selectedBadge: newFields.selectedBadge !== undefined ? newFields.selectedBadge : currentBadge,
+    selectedTableTheme: newFields.selectedTableTheme !== undefined ? newFields.selectedTableTheme : currentTableTheme,
+    selectedDiceSkin: newFields.selectedDiceSkin !== undefined ? newFields.selectedDiceSkin : currentDiceSkin,
     unlockedBorders: newFields.unlockedBorders !== undefined ? newFields.unlockedBorders : unlockedBorders,
     unlockedCardBacks: newFields.unlockedCardBacks !== undefined ? newFields.unlockedCardBacks : unlockedCardBacks,
     unlockedTitles: newFields.unlockedTitles !== undefined ? newFields.unlockedTitles : unlockedTitles,
     unlockedPlayEffects: newFields.unlockedPlayEffects !== undefined ? newFields.unlockedPlayEffects : unlockedPlayEffects,
+    unlockedBadges: newFields.unlockedBadges !== undefined ? newFields.unlockedBadges : unlockedBadges,
+    unlockedTableThemes: newFields.unlockedTableThemes !== undefined ? newFields.unlockedTableThemes : unlockedTableThemes,
+    unlockedDiceSkins: newFields.unlockedDiceSkins !== undefined ? newFields.unlockedDiceSkins : unlockedDiceSkins,
     winHistory: newFields.winHistory !== undefined ? newFields.winHistory : winHistory
   };
 
@@ -186,10 +216,16 @@ function sanitizeUserCustomizations(user) {
         user.unlockedCardBacks = parsed.unlockedCardBacks || ['default'];
         user.unlockedTitles = parsed.unlockedTitles || ['default'];
         user.unlockedPlayEffects = parsed.unlockedPlayEffects || ['default'];
+        user.unlockedBadges = parsed.unlockedBadges || ['default'];
+        user.unlockedTableThemes = parsed.unlockedTableThemes || ['default'];
+        user.unlockedDiceSkins = parsed.unlockedDiceSkins || ['default'];
         user.selectedBorder = parsed.selectedBorder || 'default';
         user.selectedCardBack = parsed.selectedCardBack || 'default';
         user.selectedTitle = parsed.selectedTitle || 'default';
         user.selectedPlayEffect = parsed.selectedPlayEffect || 'default';
+        user.selectedBadge = parsed.selectedBadge || 'default';
+        user.selectedTableTheme = parsed.selectedTableTheme || 'default';
+        user.selectedDiceSkin = parsed.selectedDiceSkin || 'default';
         user.winHistory = parsed.winHistory || [];
         user.avatar = parsed.style || 'fun-emoji';
       } catch (e) {
@@ -198,10 +234,16 @@ function sanitizeUserCustomizations(user) {
         user.unlockedCardBacks = ['default'];
         user.unlockedTitles = ['default'];
         user.unlockedPlayEffects = ['default'];
+        user.unlockedBadges = ['default'];
+        user.unlockedTableThemes = ['default'];
+        user.unlockedDiceSkins = ['default'];
         user.selectedBorder = 'default';
         user.selectedCardBack = 'default';
         user.selectedTitle = 'default';
         user.selectedPlayEffect = 'default';
+        user.selectedBadge = 'default';
+        user.selectedTableTheme = 'default';
+        user.selectedDiceSkin = 'default';
         user.winHistory = [];
       }
     } else {
@@ -209,10 +251,16 @@ function sanitizeUserCustomizations(user) {
       user.unlockedCardBacks = ['default'];
       user.unlockedTitles = ['default'];
       user.unlockedPlayEffects = ['default'];
+      user.unlockedBadges = ['default'];
+      user.unlockedTableThemes = ['default'];
+      user.unlockedDiceSkins = ['default'];
       user.selectedBorder = 'default';
       user.selectedCardBack = 'default';
       user.selectedTitle = 'default';
       user.selectedPlayEffect = 'default';
+      user.selectedBadge = 'default';
+      user.selectedTableTheme = 'default';
+      user.selectedDiceSkin = 'default';
       user.winHistory = [];
     }
   } else {
@@ -220,10 +268,16 @@ function sanitizeUserCustomizations(user) {
     if (!user.unlockedCardBacks) { user.unlockedCardBacks = ['default']; modified = true; }
     if (!user.unlockedTitles) { user.unlockedTitles = ['default']; modified = true; }
     if (!user.unlockedPlayEffects) { user.unlockedPlayEffects = ['default']; modified = true; }
+    if (!user.unlockedBadges) { user.unlockedBadges = ['default']; modified = true; }
+    if (!user.unlockedTableThemes) { user.unlockedTableThemes = ['default']; modified = true; }
+    if (!user.unlockedDiceSkins) { user.unlockedDiceSkins = ['default']; modified = true; }
     if (!user.selectedBorder) { user.selectedBorder = 'default'; modified = true; }
     if (!user.selectedCardBack) { user.selectedCardBack = 'default'; modified = true; }
     if (!user.selectedTitle) { user.selectedTitle = 'default'; modified = true; }
     if (!user.selectedPlayEffect) { user.selectedPlayEffect = 'default'; modified = true; }
+    if (!user.selectedBadge) { user.selectedBadge = 'default'; modified = true; }
+    if (!user.selectedTableTheme) { user.selectedTableTheme = 'default'; modified = true; }
+    if (!user.selectedDiceSkin) { user.selectedDiceSkin = 'default'; modified = true; }
     if (!user.winHistory) { user.winHistory = []; modified = true; }
   }
 
@@ -547,6 +601,9 @@ async function buyCustomization(username, itemType, itemId, cost) {
         const unlockedCardBacks = tempUser.unlockedCardBacks || ['default'];
         const unlockedTitles = tempUser.unlockedTitles || ['default'];
         const unlockedPlayEffects = tempUser.unlockedPlayEffects || ['default'];
+        const unlockedBadges = tempUser.unlockedBadges || ['default'];
+        const unlockedTableThemes = tempUser.unlockedTableThemes || ['default'];
+        const unlockedDiceSkins = tempUser.unlockedDiceSkins || ['default'];
 
         if (itemType === 'border') {
           if (unlockedBorders.includes(itemId)) return { ok: false, error: 'Bu çerçeve zaten açık.' };
@@ -560,9 +617,18 @@ async function buyCustomization(username, itemType, itemId, cost) {
         } else if (itemType === 'playEffect') {
           if (unlockedPlayEffects.includes(itemId)) return { ok: false, error: 'Bu efekt zaten açık.' };
           unlockedPlayEffects.push(itemId);
+        } else if (itemType === 'badge') {
+          if (unlockedBadges.includes(itemId)) return { ok: false, error: 'Bu rozet zaten açık.' };
+          unlockedBadges.push(itemId);
+        } else if (itemType === 'tableTheme') {
+          if (unlockedTableThemes.includes(itemId)) return { ok: false, error: 'Bu masa teması zaten açık.' };
+          unlockedTableThemes.push(itemId);
+        } else if (itemType === 'diceSkin') {
+          if (unlockedDiceSkins.includes(itemId)) return { ok: false, error: 'Bu zar görünümü zaten açık.' };
+          unlockedDiceSkins.push(itemId);
         }
 
-        const serialized = serializeCustomizationsForSupabase(user, { unlockedBorders, unlockedCardBacks, unlockedTitles, unlockedPlayEffects });
+        const serialized = serializeCustomizationsForSupabase(user, { unlockedBorders, unlockedCardBacks, unlockedTitles, unlockedPlayEffects, unlockedBadges, unlockedTableThemes, unlockedDiceSkins });
 
         const patchRes = await fetch(`${supabaseUrl}/rest/v1/users?username=eq.${encodeURIComponent(normalizedUser)}`, {
           method: 'PATCH',
@@ -598,6 +664,9 @@ async function buyCustomization(username, itemType, itemId, cost) {
       if (!user.unlockedCardBacks) user.unlockedCardBacks = ['default'];
       if (!user.unlockedTitles) user.unlockedTitles = ['default'];
       if (!user.unlockedPlayEffects) user.unlockedPlayEffects = ['default'];
+      if (!user.unlockedBadges) user.unlockedBadges = ['default'];
+      if (!user.unlockedTableThemes) user.unlockedTableThemes = ['default'];
+      if (!user.unlockedDiceSkins) user.unlockedDiceSkins = ['default'];
 
       if (itemType === 'border') {
         if (user.unlockedBorders.includes(itemId)) return { ok: false, error: 'Bu çerçeve zaten açık.' };
@@ -611,6 +680,15 @@ async function buyCustomization(username, itemType, itemId, cost) {
       } else if (itemType === 'playEffect') {
         if (user.unlockedPlayEffects.includes(itemId)) return { ok: false, error: 'Bu efekt zaten açık.' };
         user.unlockedPlayEffects.push(itemId);
+      } else if (itemType === 'badge') {
+        if (user.unlockedBadges.includes(itemId)) return { ok: false, error: 'Bu rozet zaten açık.' };
+        user.unlockedBadges.push(itemId);
+      } else if (itemType === 'tableTheme') {
+        if (user.unlockedTableThemes.includes(itemId)) return { ok: false, error: 'Bu masa teması zaten açık.' };
+        user.unlockedTableThemes.push(itemId);
+      } else if (itemType === 'diceSkin') {
+        if (user.unlockedDiceSkins.includes(itemId)) return { ok: false, error: 'Bu zar görünümü zaten açık.' };
+        user.unlockedDiceSkins.push(itemId);
       }
 
       user.points = points - cost;
@@ -638,17 +716,26 @@ async function selectCustomization(username, itemType, itemId) {
         const unlockedCardBacks = tempUser.unlockedCardBacks || ['default'];
         const unlockedTitles = tempUser.unlockedTitles || ['default'];
         const unlockedPlayEffects = tempUser.unlockedPlayEffects || ['default'];
+        const unlockedBadges = tempUser.unlockedBadges || ['default'];
+        const unlockedTableThemes = tempUser.unlockedTableThemes || ['default'];
+        const unlockedDiceSkins = tempUser.unlockedDiceSkins || ['default'];
 
         if (itemType === 'border' && !unlockedBorders.includes(itemId)) return { ok: false, error: 'Bu öge kilitli.' };
         if (itemType === 'cardBack' && !unlockedCardBacks.includes(itemId)) return { ok: false, error: 'Bu öge kilitli.' };
         if (itemType === 'title' && !unlockedTitles.includes(itemId)) return { ok: false, error: 'Bu öge kilitli.' };
         if (itemType === 'playEffect' && !unlockedPlayEffects.includes(itemId)) return { ok: false, error: 'Bu öge kilitli.' };
+        if (itemType === 'badge' && !unlockedBadges.includes(itemId)) return { ok: false, error: 'Bu öge kilitli.' };
+        if (itemType === 'tableTheme' && !unlockedTableThemes.includes(itemId)) return { ok: false, error: 'Bu öge kilitli.' };
+        if (itemType === 'diceSkin' && !unlockedDiceSkins.includes(itemId)) return { ok: false, error: 'Bu öge kilitli.' };
 
         let updateObj = {};
         if (itemType === 'border') updateObj = { selectedBorder: itemId };
         else if (itemType === 'cardBack') updateObj = { selectedCardBack: itemId };
         else if (itemType === 'title') updateObj = { selectedTitle: itemId };
         else if (itemType === 'playEffect') updateObj = { selectedPlayEffect: itemId };
+        else if (itemType === 'badge') updateObj = { selectedBadge: itemId };
+        else if (itemType === 'tableTheme') updateObj = { selectedTableTheme: itemId };
+        else if (itemType === 'diceSkin') updateObj = { selectedDiceSkin: itemId };
 
         const serialized = serializeCustomizationsForSupabase(user, updateObj);
 
@@ -682,16 +769,25 @@ async function selectCustomization(username, itemType, itemId) {
       const unlockedCardBacks = user.unlockedCardBacks || ['default'];
       const unlockedTitles = user.unlockedTitles || ['default'];
       const unlockedPlayEffects = user.unlockedPlayEffects || ['default'];
+      const unlockedBadges = user.unlockedBadges || ['default'];
+      const unlockedTableThemes = user.unlockedTableThemes || ['default'];
+      const unlockedDiceSkins = user.unlockedDiceSkins || ['default'];
 
       if (itemType === 'border' && !unlockedBorders.includes(itemId)) return { ok: false, error: 'Bu öge kilitli.' };
       if (itemType === 'cardBack' && !unlockedCardBacks.includes(itemId)) return { ok: false, error: 'Bu öge kilitli.' };
       if (itemType === 'title' && !unlockedTitles.includes(itemId)) return { ok: false, error: 'Bu öge kilitli.' };
       if (itemType === 'playEffect' && !unlockedPlayEffects.includes(itemId)) return { ok: false, error: 'Bu öge kilitli.' };
+      if (itemType === 'badge' && !unlockedBadges.includes(itemId)) return { ok: false, error: 'Bu öge kilitli.' };
+      if (itemType === 'tableTheme' && !unlockedTableThemes.includes(itemId)) return { ok: false, error: 'Bu öge kilitli.' };
+      if (itemType === 'diceSkin' && !unlockedDiceSkins.includes(itemId)) return { ok: false, error: 'Bu öge kilitli.' };
 
       if (itemType === 'border') user.selectedBorder = itemId;
       else if (itemType === 'cardBack') user.selectedCardBack = itemId;
       else if (itemType === 'title') user.selectedTitle = itemId;
       else if (itemType === 'playEffect') user.selectedPlayEffect = itemId;
+      else if (itemType === 'badge') user.selectedBadge = itemId;
+      else if (itemType === 'tableTheme') user.selectedTableTheme = itemId;
+      else if (itemType === 'diceSkin') user.selectedDiceSkin = itemId;
 
       writeLocalDB(db);
       const { user: sanitizedUser } = sanitizeUserCustomizations(user);
