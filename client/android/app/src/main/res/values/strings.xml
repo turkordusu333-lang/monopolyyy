@@ -1,7 +1,0 @@
-<?xml version='1.0' encoding='utf-8'?>
-<resources>
-    <string name="app_name">Chaos Deal Cart</string>
-    <string name="title_activity_main">Chaos Deal Cart</string>
-    <string name="package_name">com.chaosdealcart.app</string>
-    <string name="custom_url_scheme">com.chaosdealcart.app</string>
-</resources>
