@@ -201,6 +201,9 @@ io.on('connection', (socket) => {
           gamePlayer.selectedBadge = dbRes.user.selectedBadge || 'default';
           gamePlayer.selectedTableTheme = dbRes.user.selectedTableTheme || 'default';
           gamePlayer.selectedDiceSkin = dbRes.user.selectedDiceSkin || 'default';
+          gamePlayer.selectedAura = dbRes.user.selectedAura || 'default';
+          gamePlayer.selectedChatSkin = dbRes.user.selectedChatSkin || 'default';
+          gamePlayer.selectedMegaEmote = dbRes.user.selectedMegaEmote || 'default';
           broadcastState(roomCode);
         }
       }).catch(err => console.error('[DB] createRoom customization error:', err));
@@ -246,6 +249,9 @@ io.on('connection', (socket) => {
           gamePlayer.selectedBadge = dbRes.user.selectedBadge || 'default';
           gamePlayer.selectedTableTheme = dbRes.user.selectedTableTheme || 'default';
           gamePlayer.selectedDiceSkin = dbRes.user.selectedDiceSkin || 'default';
+          gamePlayer.selectedAura = dbRes.user.selectedAura || 'default';
+          gamePlayer.selectedChatSkin = dbRes.user.selectedChatSkin || 'default';
+          gamePlayer.selectedMegaEmote = dbRes.user.selectedMegaEmote || 'default';
           broadcastState(roomCode);
         }
       }).catch(err => console.error('[DB] joinRoom customization error:', err));

@@ -120,7 +120,6 @@ function saveLocalUserCustomizations(username, fields) {
   custs[normalized] = { ...custs[normalized], ...fields };
   writeLocalCustomizations(custs);
 }
-
 function serializeCustomizationsForSupabase(user, newFields = {}) {
   let style = 'fun-emoji';
   let currentBorder = 'default';
@@ -130,6 +129,9 @@ function serializeCustomizationsForSupabase(user, newFields = {}) {
   let currentBadge = 'default';
   let currentTableTheme = 'default';
   let currentDiceSkin = 'default';
+  let currentAura = 'default';
+  let currentChatSkin = 'default';
+  let currentMegaEmote = 'default';
   let unlockedBorders = ['default'];
   let unlockedCardBacks = ['default'];
   let unlockedTitles = ['default'];
@@ -137,6 +139,9 @@ function serializeCustomizationsForSupabase(user, newFields = {}) {
   let unlockedBadges = ['default'];
   let unlockedTableThemes = ['default'];
   let unlockedDiceSkins = ['default'];
+  let unlockedAuras = ['default'];
+  let unlockedChatSkins = ['default'];
+  let unlockedMegaEmotes = ['default'];
   let winHistory = [];
 
   if (user.avatar && user.avatar.trim().startsWith('{')) {
@@ -150,6 +155,9 @@ function serializeCustomizationsForSupabase(user, newFields = {}) {
       currentBadge = parsed.selectedBadge || 'default';
       currentTableTheme = parsed.selectedTableTheme || 'default';
       currentDiceSkin = parsed.selectedDiceSkin || 'default';
+      currentAura = parsed.selectedAura || 'default';
+      currentChatSkin = parsed.selectedChatSkin || 'default';
+      currentMegaEmote = parsed.selectedMegaEmote || 'default';
       unlockedBorders = parsed.unlockedBorders || ['default'];
       unlockedCardBacks = parsed.unlockedCardBacks || ['default'];
       unlockedTitles = parsed.unlockedTitles || ['default'];
@@ -157,6 +165,9 @@ function serializeCustomizationsForSupabase(user, newFields = {}) {
       unlockedBadges = parsed.unlockedBadges || ['default'];
       unlockedTableThemes = parsed.unlockedTableThemes || ['default'];
       unlockedDiceSkins = parsed.unlockedDiceSkins || ['default'];
+      unlockedAuras = parsed.unlockedAuras || ['default'];
+      unlockedChatSkins = parsed.unlockedChatSkins || ['default'];
+      unlockedMegaEmotes = parsed.unlockedMegaEmotes || ['default'];
       winHistory = parsed.winHistory || [];
     } catch (e) {
       console.error('[DB] Error parsing existing serialized customizations:', e);
@@ -173,6 +184,9 @@ function serializeCustomizationsForSupabase(user, newFields = {}) {
   if (user.unlockedBadges) unlockedBadges = user.unlockedBadges;
   if (user.unlockedTableThemes) unlockedTableThemes = user.unlockedTableThemes;
   if (user.unlockedDiceSkins) unlockedDiceSkins = user.unlockedDiceSkins;
+  if (user.unlockedAuras) unlockedAuras = user.unlockedAuras;
+  if (user.unlockedChatSkins) unlockedChatSkins = user.unlockedChatSkins;
+  if (user.unlockedMegaEmotes) unlockedMegaEmotes = user.unlockedMegaEmotes;
   if (user.selectedBorder) currentBorder = user.selectedBorder;
   if (user.selectedCardBack) currentCardBack = user.selectedCardBack;
   if (user.selectedTitle) currentTitle = user.selectedTitle;
@@ -180,6 +194,9 @@ function serializeCustomizationsForSupabase(user, newFields = {}) {
   if (user.selectedBadge) currentBadge = user.selectedBadge;
   if (user.selectedTableTheme) currentTableTheme = user.selectedTableTheme;
   if (user.selectedDiceSkin) currentDiceSkin = user.selectedDiceSkin;
+  if (user.selectedAura) currentAura = user.selectedAura;
+  if (user.selectedChatSkin) currentChatSkin = user.selectedChatSkin;
+  if (user.selectedMegaEmote) currentMegaEmote = user.selectedMegaEmote;
   if (user.winHistory) winHistory = user.winHistory;
 
   const merged = {
@@ -191,6 +208,9 @@ function serializeCustomizationsForSupabase(user, newFields = {}) {
     selectedBadge: newFields.selectedBadge !== undefined ? newFields.selectedBadge : currentBadge,
     selectedTableTheme: newFields.selectedTableTheme !== undefined ? newFields.selectedTableTheme : currentTableTheme,
     selectedDiceSkin: newFields.selectedDiceSkin !== undefined ? newFields.selectedDiceSkin : currentDiceSkin,
+    selectedAura: newFields.selectedAura !== undefined ? newFields.selectedAura : currentAura,
+    selectedChatSkin: newFields.selectedChatSkin !== undefined ? newFields.selectedChatSkin : currentChatSkin,
+    selectedMegaEmote: newFields.selectedMegaEmote !== undefined ? newFields.selectedMegaEmote : currentMegaEmote,
     unlockedBorders: newFields.unlockedBorders !== undefined ? newFields.unlockedBorders : unlockedBorders,
     unlockedCardBacks: newFields.unlockedCardBacks !== undefined ? newFields.unlockedCardBacks : unlockedCardBacks,
     unlockedTitles: newFields.unlockedTitles !== undefined ? newFields.unlockedTitles : unlockedTitles,
@@ -198,6 +218,9 @@ function serializeCustomizationsForSupabase(user, newFields = {}) {
     unlockedBadges: newFields.unlockedBadges !== undefined ? newFields.unlockedBadges : unlockedBadges,
     unlockedTableThemes: newFields.unlockedTableThemes !== undefined ? newFields.unlockedTableThemes : unlockedTableThemes,
     unlockedDiceSkins: newFields.unlockedDiceSkins !== undefined ? newFields.unlockedDiceSkins : unlockedDiceSkins,
+    unlockedAuras: newFields.unlockedAuras !== undefined ? newFields.unlockedAuras : unlockedAuras,
+    unlockedChatSkins: newFields.unlockedChatSkins !== undefined ? newFields.unlockedChatSkins : unlockedChatSkins,
+    unlockedMegaEmotes: newFields.unlockedMegaEmotes !== undefined ? newFields.unlockedMegaEmotes : unlockedMegaEmotes,
     winHistory: newFields.winHistory !== undefined ? newFields.winHistory : winHistory
   };
 
@@ -219,6 +242,9 @@ function sanitizeUserCustomizations(user) {
         user.unlockedBadges = parsed.unlockedBadges || ['default'];
         user.unlockedTableThemes = parsed.unlockedTableThemes || ['default'];
         user.unlockedDiceSkins = parsed.unlockedDiceSkins || ['default'];
+        user.unlockedAuras = parsed.unlockedAuras || ['default'];
+        user.unlockedChatSkins = parsed.unlockedChatSkins || ['default'];
+        user.unlockedMegaEmotes = parsed.unlockedMegaEmotes || ['default'];
         user.selectedBorder = parsed.selectedBorder || 'default';
         user.selectedCardBack = parsed.selectedCardBack || 'default';
         user.selectedTitle = parsed.selectedTitle || 'default';
@@ -226,6 +252,9 @@ function sanitizeUserCustomizations(user) {
         user.selectedBadge = parsed.selectedBadge || 'default';
         user.selectedTableTheme = parsed.selectedTableTheme || 'default';
         user.selectedDiceSkin = parsed.selectedDiceSkin || 'default';
+        user.selectedAura = parsed.selectedAura || 'default';
+        user.selectedChatSkin = parsed.selectedChatSkin || 'default';
+        user.selectedMegaEmote = parsed.selectedMegaEmote || 'default';
         user.winHistory = parsed.winHistory || [];
         user.avatar = parsed.style || 'fun-emoji';
       } catch (e) {
@@ -237,6 +266,9 @@ function sanitizeUserCustomizations(user) {
         user.unlockedBadges = ['default'];
         user.unlockedTableThemes = ['default'];
         user.unlockedDiceSkins = ['default'];
+        user.unlockedAuras = ['default'];
+        user.unlockedChatSkins = ['default'];
+        user.unlockedMegaEmotes = ['default'];
         user.selectedBorder = 'default';
         user.selectedCardBack = 'default';
         user.selectedTitle = 'default';
@@ -244,6 +276,9 @@ function sanitizeUserCustomizations(user) {
         user.selectedBadge = 'default';
         user.selectedTableTheme = 'default';
         user.selectedDiceSkin = 'default';
+        user.selectedAura = 'default';
+        user.selectedChatSkin = 'default';
+        user.selectedMegaEmote = 'default';
         user.winHistory = [];
       }
     } else {
@@ -254,6 +289,9 @@ function sanitizeUserCustomizations(user) {
       user.unlockedBadges = ['default'];
       user.unlockedTableThemes = ['default'];
       user.unlockedDiceSkins = ['default'];
+      user.unlockedAuras = ['default'];
+      user.unlockedChatSkins = ['default'];
+      user.unlockedMegaEmotes = ['default'];
       user.selectedBorder = 'default';
       user.selectedCardBack = 'default';
       user.selectedTitle = 'default';
@@ -261,6 +299,9 @@ function sanitizeUserCustomizations(user) {
       user.selectedBadge = 'default';
       user.selectedTableTheme = 'default';
       user.selectedDiceSkin = 'default';
+      user.selectedAura = 'default';
+      user.selectedChatSkin = 'default';
+      user.selectedMegaEmote = 'default';
       user.winHistory = [];
     }
   } else {
@@ -271,6 +312,9 @@ function sanitizeUserCustomizations(user) {
     if (!user.unlockedBadges) { user.unlockedBadges = ['default']; modified = true; }
     if (!user.unlockedTableThemes) { user.unlockedTableThemes = ['default']; modified = true; }
     if (!user.unlockedDiceSkins) { user.unlockedDiceSkins = ['default']; modified = true; }
+    if (!user.unlockedAuras) { user.unlockedAuras = ['default']; modified = true; }
+    if (!user.unlockedChatSkins) { user.unlockedChatSkins = ['default']; modified = true; }
+    if (!user.unlockedMegaEmotes) { user.unlockedMegaEmotes = ['default']; modified = true; }
     if (!user.selectedBorder) { user.selectedBorder = 'default'; modified = true; }
     if (!user.selectedCardBack) { user.selectedCardBack = 'default'; modified = true; }
     if (!user.selectedTitle) { user.selectedTitle = 'default'; modified = true; }
@@ -278,6 +322,9 @@ function sanitizeUserCustomizations(user) {
     if (!user.selectedBadge) { user.selectedBadge = 'default'; modified = true; }
     if (!user.selectedTableTheme) { user.selectedTableTheme = 'default'; modified = true; }
     if (!user.selectedDiceSkin) { user.selectedDiceSkin = 'default'; modified = true; }
+    if (!user.selectedAura) { user.selectedAura = 'default'; modified = true; }
+    if (!user.selectedChatSkin) { user.selectedChatSkin = 'default'; modified = true; }
+    if (!user.selectedMegaEmote) { user.selectedMegaEmote = 'default'; modified = true; }
     if (!user.winHistory) { user.winHistory = []; modified = true; }
   }
 
@@ -604,6 +651,9 @@ async function buyCustomization(username, itemType, itemId, cost) {
         const unlockedBadges = tempUser.unlockedBadges || ['default'];
         const unlockedTableThemes = tempUser.unlockedTableThemes || ['default'];
         const unlockedDiceSkins = tempUser.unlockedDiceSkins || ['default'];
+        const unlockedAuras = tempUser.unlockedAuras || ['default'];
+        const unlockedChatSkins = tempUser.unlockedChatSkins || ['default'];
+        const unlockedMegaEmotes = tempUser.unlockedMegaEmotes || ['default'];
 
         if (itemType === 'border') {
           if (unlockedBorders.includes(itemId)) return { ok: false, error: 'Bu çerçeve zaten açık.' };
@@ -626,9 +676,18 @@ async function buyCustomization(username, itemType, itemId, cost) {
         } else if (itemType === 'diceSkin') {
           if (unlockedDiceSkins.includes(itemId)) return { ok: false, error: 'Bu zar görünümü zaten açık.' };
           unlockedDiceSkins.push(itemId);
+        } else if (itemType === 'aura') {
+          if (unlockedAuras.includes(itemId)) return { ok: false, error: 'Bu aura zaten açık.' };
+          unlockedAuras.push(itemId);
+        } else if (itemType === 'chatSkin') {
+          if (unlockedChatSkins.includes(itemId)) return { ok: false, error: 'Bu sohbet teması zaten açık.' };
+          unlockedChatSkins.push(itemId);
+        } else if (itemType === 'megaEmote') {
+          if (unlockedMegaEmotes.includes(itemId)) return { ok: false, error: 'Bu mega ifade zaten açık.' };
+          unlockedMegaEmotes.push(itemId);
         }
 
-        const serialized = serializeCustomizationsForSupabase(user, { unlockedBorders, unlockedCardBacks, unlockedTitles, unlockedPlayEffects, unlockedBadges, unlockedTableThemes, unlockedDiceSkins });
+        const serialized = serializeCustomizationsForSupabase(user, { unlockedBorders, unlockedCardBacks, unlockedTitles, unlockedPlayEffects, unlockedBadges, unlockedTableThemes, unlockedDiceSkins, unlockedAuras, unlockedChatSkins, unlockedMegaEmotes });
 
         const patchRes = await fetch(`${supabaseUrl}/rest/v1/users?username=eq.${encodeURIComponent(normalizedUser)}`, {
           method: 'PATCH',
@@ -667,6 +726,9 @@ async function buyCustomization(username, itemType, itemId, cost) {
       if (!user.unlockedBadges) user.unlockedBadges = ['default'];
       if (!user.unlockedTableThemes) user.unlockedTableThemes = ['default'];
       if (!user.unlockedDiceSkins) user.unlockedDiceSkins = ['default'];
+      if (!user.unlockedAuras) user.unlockedAuras = ['default'];
+      if (!user.unlockedChatSkins) user.unlockedChatSkins = ['default'];
+      if (!user.unlockedMegaEmotes) user.unlockedMegaEmotes = ['default'];
 
       if (itemType === 'border') {
         if (user.unlockedBorders.includes(itemId)) return { ok: false, error: 'Bu çerçeve zaten açık.' };
@@ -689,6 +751,15 @@ async function buyCustomization(username, itemType, itemId, cost) {
       } else if (itemType === 'diceSkin') {
         if (user.unlockedDiceSkins.includes(itemId)) return { ok: false, error: 'Bu zar görünümü zaten açık.' };
         user.unlockedDiceSkins.push(itemId);
+      } else if (itemType === 'aura') {
+        if (user.unlockedAuras.includes(itemId)) return { ok: false, error: 'Bu aura zaten açık.' };
+        user.unlockedAuras.push(itemId);
+      } else if (itemType === 'chatSkin') {
+        if (user.unlockedChatSkins.includes(itemId)) return { ok: false, error: 'Bu sohbet teması zaten açık.' };
+        user.unlockedChatSkins.push(itemId);
+      } else if (itemType === 'megaEmote') {
+        if (user.unlockedMegaEmotes.includes(itemId)) return { ok: false, error: 'Bu mega ifade zaten açık.' };
+        user.unlockedMegaEmotes.push(itemId);
       }
 
       user.points = points - cost;
@@ -719,6 +790,9 @@ async function selectCustomization(username, itemType, itemId) {
         const unlockedBadges = tempUser.unlockedBadges || ['default'];
         const unlockedTableThemes = tempUser.unlockedTableThemes || ['default'];
         const unlockedDiceSkins = tempUser.unlockedDiceSkins || ['default'];
+        const unlockedAuras = tempUser.unlockedAuras || ['default'];
+        const unlockedChatSkins = tempUser.unlockedChatSkins || ['default'];
+        const unlockedMegaEmotes = tempUser.unlockedMegaEmotes || ['default'];
 
         if (itemType === 'border' && !unlockedBorders.includes(itemId)) return { ok: false, error: 'Bu öge kilitli.' };
         if (itemType === 'cardBack' && !unlockedCardBacks.includes(itemId)) return { ok: false, error: 'Bu öge kilitli.' };
@@ -727,6 +801,9 @@ async function selectCustomization(username, itemType, itemId) {
         if (itemType === 'badge' && !unlockedBadges.includes(itemId)) return { ok: false, error: 'Bu öge kilitli.' };
         if (itemType === 'tableTheme' && !unlockedTableThemes.includes(itemId)) return { ok: false, error: 'Bu öge kilitli.' };
         if (itemType === 'diceSkin' && !unlockedDiceSkins.includes(itemId)) return { ok: false, error: 'Bu öge kilitli.' };
+        if (itemType === 'aura' && !unlockedAuras.includes(itemId)) return { ok: false, error: 'Bu öge kilitli.' };
+        if (itemType === 'chatSkin' && !unlockedChatSkins.includes(itemId)) return { ok: false, error: 'Bu öge kilitli.' };
+        if (itemType === 'megaEmote' && !unlockedMegaEmotes.includes(itemId)) return { ok: false, error: 'Bu öge kilitli.' };
 
         let updateObj = {};
         if (itemType === 'border') updateObj = { selectedBorder: itemId };
@@ -736,6 +813,9 @@ async function selectCustomization(username, itemType, itemId) {
         else if (itemType === 'badge') updateObj = { selectedBadge: itemId };
         else if (itemType === 'tableTheme') updateObj = { selectedTableTheme: itemId };
         else if (itemType === 'diceSkin') updateObj = { selectedDiceSkin: itemId };
+        else if (itemType === 'aura') updateObj = { selectedAura: itemId };
+        else if (itemType === 'chatSkin') updateObj = { selectedChatSkin: itemId };
+        else if (itemType === 'megaEmote') updateObj = { selectedMegaEmote: itemId };
 
         const serialized = serializeCustomizationsForSupabase(user, updateObj);
 
@@ -772,6 +852,9 @@ async function selectCustomization(username, itemType, itemId) {
       const unlockedBadges = user.unlockedBadges || ['default'];
       const unlockedTableThemes = user.unlockedTableThemes || ['default'];
       const unlockedDiceSkins = user.unlockedDiceSkins || ['default'];
+      const unlockedAuras = user.unlockedAuras || ['default'];
+      const unlockedChatSkins = user.unlockedChatSkins || ['default'];
+      const unlockedMegaEmotes = user.unlockedMegaEmotes || ['default'];
 
       if (itemType === 'border' && !unlockedBorders.includes(itemId)) return { ok: false, error: 'Bu öge kilitli.' };
       if (itemType === 'cardBack' && !unlockedCardBacks.includes(itemId)) return { ok: false, error: 'Bu öge kilitli.' };
@@ -780,6 +863,9 @@ async function selectCustomization(username, itemType, itemId) {
       if (itemType === 'badge' && !unlockedBadges.includes(itemId)) return { ok: false, error: 'Bu öge kilitli.' };
       if (itemType === 'tableTheme' && !unlockedTableThemes.includes(itemId)) return { ok: false, error: 'Bu öge kilitli.' };
       if (itemType === 'diceSkin' && !unlockedDiceSkins.includes(itemId)) return { ok: false, error: 'Bu öge kilitli.' };
+      if (itemType === 'aura' && !unlockedAuras.includes(itemId)) return { ok: false, error: 'Bu öge kilitli.' };
+      if (itemType === 'chatSkin' && !unlockedChatSkins.includes(itemId)) return { ok: false, error: 'Bu öge kilitli.' };
+      if (itemType === 'megaEmote' && !unlockedMegaEmotes.includes(itemId)) return { ok: false, error: 'Bu öge kilitli.' };
 
       if (itemType === 'border') user.selectedBorder = itemId;
       else if (itemType === 'cardBack') user.selectedCardBack = itemId;
@@ -788,6 +874,9 @@ async function selectCustomization(username, itemType, itemId) {
       else if (itemType === 'badge') user.selectedBadge = itemId;
       else if (itemType === 'tableTheme') user.selectedTableTheme = itemId;
       else if (itemType === 'diceSkin') user.selectedDiceSkin = itemId;
+      else if (itemType === 'aura') user.selectedAura = itemId;
+      else if (itemType === 'chatSkin') user.selectedChatSkin = itemId;
+      else if (itemType === 'megaEmote') user.selectedMegaEmote = itemId;
 
       writeLocalDB(db);
       const { user: sanitizedUser } = sanitizeUserCustomizations(user);

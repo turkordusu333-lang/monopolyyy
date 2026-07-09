@@ -159,18 +159,25 @@ export function sfxWhoosh({ actorId } = {}) {
   playSmart({ url: '/sounds/whoosh.mp3', volume: 0.7, category: 'local', actorId });
 }
 
-// Kart bankaya konuldu
 export function sfxCoin({ actorId } = {}) {
-  // Parayı yatıran oyuncu güçlü duyar, diğerleri izleyici
-  playSmart({ url: '/sounds/coin.mp3', volume: 0.85, category: 'local', actorId });
+  // Tok metal sikke sesi (coins_cling.mp3), eğer yoksa standart coin.mp3
+  playSmart({ url: '/sounds/coins_cling.mp3', volume: 0.85, category: 'local', actorId, fallbackUrl: '/sounds/coin.mp3' });
 }
 
-// Hata / geçersiz hamle
+export function sfxCardHover() {
+  // Kartların üzerine gelindiğinde/kaydırıldığında hafif kağıt/kart sürtünme sesi
+  playSmart({ url: '/sounds/card_slide.mp3', volume: 0.28, category: 'local', actorId: localPlayerId, fallbackUrl: '/sounds/card_draw.mp3' });
+}
+
+export function sfxCashCounter() {
+  // Kağıt para sayma makinesi sesi
+  playSmart({ url: '/sounds/cash_counter.mp3', volume: 0.85, category: 'global', fallbackUrl: '/sounds/meme_money.mp3' });
+}
+
 export function sfxError({ actorId } = {}) {
   playSmart({ url: '/sounds/error.mp3', volume: 0.8, category: 'local', actorId });
 }
 
-// Sıra sana geçti
 export function sfxYourTurn({ targetId } = {}) {
   playSmart({ url: '/sounds/your-turn.mp3', volume: 0.85, category: 'local', actorId: targetId });
 }
@@ -277,6 +284,14 @@ export function sfxHeartbeat() { playSmart({ url: '/sounds/heartbeat.mp3', volum
 export function sfxBlackMarket({ actorId } = {}) { playSmart({ url: '/sounds/blackmarket.mp3', volume: 0.85, category: 'local', actorId }); }
 export function sfxCoinsCling({ actorId } = {}) { playSmart({ url: '/sounds/coins_cling.mp3', volume: 0.85, category: 'local', actorId }); }
 export function sfxVaultClose({ actorId } = {}) { playSmart({ url: '/sounds/vault_close.mp3', volume: 0.9, category: 'local', actorId }); }
+
+export function sfxPlayEffectFlame() { playSmart({ url: '/sounds/sfx_effect_flame.mp3', volume: 0.8, category: 'global', fallbackUrl: '/sounds/whoosh.mp3' }); }
+export function sfxPlayEffectThunder() { playSmart({ url: '/sounds/sfx_effect_thunder.mp3', volume: 0.85, category: 'global', fallbackUrl: '/sounds/alert.mp3' }); }
+export function sfxPlayEffectCosmic() { playSmart({ url: '/sounds/sfx_effect_cosmic.mp3', volume: 0.8, category: 'global', fallbackUrl: '/sounds/whoosh.mp3' }); }
+export function sfxPlayEffectBlackhole() { playSmart({ url: '/sounds/sfx_effect_blackhole.mp3', volume: 0.85, category: 'global', fallbackUrl: '/sounds/glass.mp3' }); }
+export function sfxPlayEffectConfetti() { playSmart({ url: '/sounds/sfx_effect_confetti.mp3', volume: 0.8, category: 'global', fallbackUrl: '/sounds/horn.mp3' }); }
+export function sfxPlayEffectHeart() { playSmart({ url: '/sounds/sfx_effect_heart.mp3', volume: 0.75, category: 'global', fallbackUrl: '/sounds/click.mp3' }); }
+export function sfxPlayEffectCash() { playSmart({ url: '/sounds/sfx_effect_cash.mp3', volume: 0.8, category: 'global', fallbackUrl: '/sounds/coin.mp3' }); }
 
 export function stopAllSFX() {
   Object.values(audioInstances).forEach(audio => {

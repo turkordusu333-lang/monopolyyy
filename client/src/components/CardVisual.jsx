@@ -28,6 +28,49 @@ const ACTION_COLORS = {
   thief_squirrel: '#8B4513'
 };
 
+
+const renderColorizedDescription = (text) => {
+  if (!text) return text;
+
+  const colorsMap = {
+    brown: '#783f04', kahverengi: '#783f04',
+    lightblue: '#0c5a80', 'açık mavi': '#0c5a80', 'light blue': '#0c5a80',
+    pink: '#b0125a', pembe: '#b0125a',
+    orange: '#b45f06', turuncu: '#b45f06',
+    red: '#990000', kırmızı: '#990000',
+    yellow: '#8f7300', sarı: '#8f7300',
+    green: '#0f5132', yeşil: '#0f5132',
+    blue: '#0a365c', lacivert: '#0a365c',
+    railroad: '#444444', demiryolu: '#444444', 'demiryolları': '#444444', 'demir yolları': '#444444',
+    utility: '#495057', 'kamu hizmetleri': '#495057', 'kamu hizmeti': '#495057'
+  };
+
+  const regex = /(\d+M|Kahverengi|Açık Mavi|Pembe|Turuncu|Kırmızı|Sarı|Yeşil|Lacivert|Demir Yolları|Demiryolu|Kamu Hizmetleri|Kamu Hizmeti|Brown|Light Blue|Pink|Orange|Red|Yellow|Green|Blue|Railroad|Utility)/gi;
+  const parts = text.split(regex);
+
+  return parts.map((part, i) => {
+    const lowerPart = part.toLowerCase();
+    
+    if (/^\d+m$/i.test(lowerPart)) {
+      return (
+        <strong key={i} style={{ color: '#198754', fontWeight: 900 }}>
+          {part}
+        </strong>
+      );
+    }
+    
+    if (colorsMap[lowerPart] != null) {
+      return (
+        <strong key={i} style={{ color: colorsMap[lowerPart], fontWeight: 900 }}>
+          {part}
+        </strong>
+      );
+    }
+    
+    return part;
+  });
+};
+
 export function CardVisual({ card, selected, onClick, small, dimmed, onHover, usable, comboClass, lang, showBack, cardBackTheme }) {
   const { themeId, manifest } = useContext(ThemeContext);
   const imgSrc = getCardImageSrc(themeId, card?.key);
@@ -312,9 +355,16 @@ export function CardVisual({ card, selected, onClick, small, dimmed, onHover, us
                 marginLeft: 4,
                 flex: 1,
                 textShadow: '0 1px 2px rgba(0,0,0,0.4)',
-                textTransform: 'uppercase'
+                textTransform: 'uppercase',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'flex-end',
+                gap: 3
               }}>
-                {isAction ? (activeLang === 'en' ? 'ACTION' : 'AKSİYON') : displayName}
+                {comboClass && (
+                  <span style={{ fontSize: small ? 8 : 10, animation: 'active-player-pulse 1.2s infinite ease-in-out' }} title="Combo Active">🔗</span>
+                )}
+                <span>{isAction ? (activeLang === 'en' ? 'ACTION' : 'AKSİYON') : displayName}</span>
               </div>
             </div>
           )}
@@ -552,7 +602,7 @@ export function CardVisual({ card, selected, onClick, small, dimmed, onHover, us
                       marginTop: 4,
                       padding: '0 2px'
                     }}>
-                      {cardTranslated.description}
+                      {renderColorizedDescription(cardTranslated.description)}
                     </div>
                   </>
                 ) : (
@@ -599,7 +649,7 @@ export function CardVisual({ card, selected, onClick, small, dimmed, onHover, us
                       padding: '0 4px',
                       boxSizing: 'border-box'
                     }}>
-                      {cardTranslated.description}
+                      {renderColorizedDescription(cardTranslated.description)}
                     </div>
                   </>
                 )}

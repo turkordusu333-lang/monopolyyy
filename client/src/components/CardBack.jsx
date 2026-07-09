@@ -30,6 +30,60 @@ export function CardBack({ theme, small }) {
           symbolColor: '#00ffff',
           title: 'CYBERPUNK'
         };
+      case 'holo':
+        return {
+          background: 'linear-gradient(135deg, #00f0ff 0%, #ff007f 50%, #7f00ff 100%)',
+          border: '2px solid #fff',
+          boxShadow: '0 0 12px rgba(0, 240, 255, 0.5), inset 0 0 10px rgba(255,255,255,0.4)',
+          centerSymbol: '💎',
+          symbolColor: '#fff',
+          title: 'PRISM HOLO'
+        };
+      case 'carbon':
+        return {
+          background: 'repeating-linear-gradient(45deg, #111 0px, #111 2px, #222 2px, #222 4px)',
+          border: '2px solid #ff4757',
+          boxShadow: '0 0 10px rgba(255, 71, 87, 0.4), inset 0 0 8px rgba(0,0,0,0.8)',
+          centerSymbol: '🏁',
+          symbolColor: '#ff4757',
+          title: 'STEALTH'
+        };
+      case 'scroll':
+        return {
+          background: 'radial-gradient(circle, #f3e5ab 30%, #c19a6b 100%)',
+          border: '2px solid #8b5a2b',
+          boxShadow: '0 0 8px rgba(139, 90, 43, 0.4), inset 0 0 10px rgba(0,0,0,0.3)',
+          centerSymbol: '📜',
+          symbolColor: '#8b5a2b',
+          title: 'SCROLL'
+        };
+      case 'galaxy':
+        return {
+          background: 'radial-gradient(circle, #2d1b4e 20%, #0c081e 80%, #020107 100%)',
+          border: '2px solid #a8a5e6',
+          boxShadow: '0 0 15px rgba(168, 165, 230, 0.4), inset 0 0 12px rgba(168, 165, 230, 0.2)',
+          centerSymbol: '🌌',
+          symbolColor: '#a8a5e6',
+          title: 'GALAXY'
+        };
+      case 'retro_arcade':
+        return {
+          background: 'radial-gradient(circle, #ff007f 10%, #7f00ff 70%, #010008 100%)',
+          border: '2px solid #00f0ff',
+          boxShadow: '0 0 10px rgba(0, 240, 255, 0.5), inset 0 0 8px rgba(255,0,127,0.3)',
+          centerSymbol: '👾',
+          symbolColor: '#00f0ff',
+          title: 'ARCADE'
+        };
+      case 'gilded_deco':
+        return {
+          background: 'radial-gradient(circle, #1a1a1a 40%, #0a0a0a 100%)',
+          border: '2px solid #d4af37',
+          boxShadow: '0 0 12px rgba(212, 175, 55, 0.5), inset 0 0 6px rgba(212, 175, 55, 0.3)',
+          centerSymbol: '⚜️',
+          symbolColor: '#d4af37',
+          title: 'GILDED DECO'
+        };
       default: // classic/red
         return {
           background: 'radial-gradient(circle, #c0392b 40%, #78281f 100%)',

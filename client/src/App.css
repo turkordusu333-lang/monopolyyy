@@ -1553,52 +1553,31 @@ body {
 }
 
 .combo-rent {
-  animation: combo-glow-rent 1.5s infinite ease-in-out !important;
-  border-width: 2px !important;
+  animation: combo-soft-rent 1.5s infinite ease-in-out !important;
 }
-
-@keyframes combo-glow-building {
-  0% {
-    box-shadow: 0 0 5px #27AE60;
-    border-color: #27AE60;
-  }
-
-  50% {
-    box-shadow: 0 0 15px #2ECC71;
-    border-color: #2ECC71;
-  }
-
-  100% {
-    box-shadow: 0 0 5px #27AE60;
-    border-color: #27AE60;
-  }
-}
-
 .combo-building {
-  animation: combo-glow-building 1.5s infinite ease-in-out !important;
-  border-width: 2px !important;
+  animation: combo-soft-building 1.5s infinite ease-in-out !important;
 }
-
-@keyframes combo-glow-deal {
-  0% {
-    box-shadow: 0 0 5px #2980B9;
-    border-color: #2980B9;
-  }
-
-  50% {
-    box-shadow: 0 0 15px #3498DB;
-    border-color: #3498DB;
-  }
-
-  100% {
-    box-shadow: 0 0 5px #2980B9;
-    border-color: #2980B9;
-  }
-}
-
 .combo-deal {
-  animation: combo-glow-deal 1.5s infinite ease-in-out !important;
-  border-width: 2px !important;
+  animation: combo-soft-deal 1.5s infinite ease-in-out !important;
+}
+
+@keyframes combo-soft-rent {
+  0% { box-shadow: 0 0 5px rgba(211, 84, 0, 0.4); border-color: rgba(211, 84, 0, 0.5) !important; }
+  50% { box-shadow: 0 0 15px rgba(230, 126, 34, 0.8), inset 0 0 5px rgba(230, 126, 34, 0.3); border-color: rgba(230, 126, 34, 0.9) !important; }
+  100% { box-shadow: 0 0 5px rgba(211, 84, 0, 0.4); border-color: rgba(211, 84, 0, 0.5) !important; }
+}
+
+@keyframes combo-soft-building {
+  0% { box-shadow: 0 0 5px rgba(39, 174, 96, 0.4); border-color: rgba(39, 174, 96, 0.5) !important; }
+  50% { box-shadow: 0 0 15px rgba(46, 204, 113, 0.8), inset 0 0 5px rgba(46, 204, 113, 0.3); border-color: rgba(46, 204, 113, 0.9) !important; }
+  100% { box-shadow: 0 0 5px rgba(39, 174, 96, 0.4); border-color: rgba(39, 174, 96, 0.5) !important; }
+}
+
+@keyframes combo-soft-deal {
+  0% { box-shadow: 0 0 5px rgba(142, 68, 173, 0.4); border-color: rgba(142, 68, 173, 0.5) !important; }
+  50% { box-shadow: 0 0 15px rgba(155, 89, 182, 0.8), inset 0 0 5px rgba(155, 89, 182, 0.3); border-color: rgba(155, 89, 182, 0.9) !important; }
+  100% { box-shadow: 0 0 5px rgba(142, 68, 173, 0.4); border-color: rgba(142, 68, 173, 0.5) !important; }
 }
 
 /* ── Lobby Ambient Auroras ── */
@@ -1830,20 +1809,22 @@ input:checked+.switch-toggle::after {
   border-radius: 12px;
 }
 
-.mini-card-wrapper:hover {
-  z-index: 99999 !important;
-}
+@media (hover: hover) {
+  .mini-card-wrapper:hover {
+    z-index: 99999 !important;
+  }
 
-.mini-card-wrapper:hover .mini-card-hover-view {
-  display: block;
-}
+  .mini-card-wrapper:hover .mini-card-hover-view {
+    display: block;
+  }
 
-.mini-card-wrapper:hover .mini-card-face {
-  opacity: 0;
-}
+  .mini-card-wrapper:hover .mini-card-face {
+    opacity: 0;
+  }
 
-.mini-card-wrapper:hover .card-details-hoverable {
-  display: flex !important;
+  .mini-card-wrapper:hover .card-details-hoverable {
+    display: flex !important;
+  }
 }
 
 /* ── Kart Üzerindeki Aksiyon Butonları (Mobil Uyumlu) ── */
@@ -2128,31 +2109,71 @@ input:checked+.switch-toggle::after {
 }
 
 /* ── AKILLI HAMLE ÖNERİLERİ (Smart Glow) ── */
-@keyframes smart-glow-keyframes {
-  0% {
-    box-shadow: 0 0 4px #2ecc71;
-    border-color: #2ecc71;
-  }
-
-  50% {
-    box-shadow: 0 0 14px #2ecc71, 0 0 4px rgba(46, 204, 113, 0.6);
-    border-color: #2ecc71;
-  }
-
-  100% {
-    box-shadow: 0 0 4px #2ecc71;
-    border-color: #2ecc71;
-  }
+@keyframes smart-glow-gold-kf {
+  0% { box-shadow: 0 0 5px #ffd700; border-color: #ffd700; }
+  50% { box-shadow: 0 0 15px #ffd700, 0 0 5px rgba(255, 215, 0, 0.6); border-color: #ffd700; }
+  100% { box-shadow: 0 0 5px #ffd700; border-color: #ffd700; }
+}
+@keyframes smart-glow-blue-kf {
+  0% { box-shadow: 0 0 5px #00d2ff; border-color: #00d2ff; }
+  50% { box-shadow: 0 0 15px #00d2ff, 0 0 5px rgba(0, 210, 255, 0.6); border-color: #00d2ff; }
+  100% { box-shadow: 0 0 5px #00d2ff; border-color: #00d2ff; }
+}
+@keyframes smart-glow-red-kf {
+  0% { box-shadow: 0 0 5px #ff4757; border-color: #ff4757; }
+  50% { box-shadow: 0 0 15px #ff4757, 0 0 5px rgba(255, 71, 87, 0.6); border-color: #ff4757; }
+  100% { box-shadow: 0 0 5px #ff4757; border-color: #ff4757; }
 }
 
-.smart-glow {
-  transform: translateY(-4px) scale(1.01) !important;
+.smart-glow-gold {
+  transform: translateY(-8px) scale(1.02) !important;
   z-index: 5;
 }
+.smart-glow-gold .card-visual, .card-visual.smart-glow-gold {
+  animation: smart-glow-gold-kf 1.5s infinite ease-in-out !important;
+}
 
-.smart-glow .card-visual,
-.card-visual.smart-glow {
-  animation: smart-glow-keyframes 1.5s infinite ease-in-out !important;
+.smart-glow-blue {
+  transform: translateY(-6px) scale(1.01) !important;
+  z-index: 5;
+}
+.smart-glow-blue .card-visual, .card-visual.smart-glow-blue {
+  animation: smart-glow-blue-kf 1.5s infinite ease-in-out !important;
+}
+
+.smart-glow-red {
+  transform: translateY(-6px) scale(1.01) !important;
+  z-index: 5;
+}
+.smart-glow-red .card-visual, .card-visual.smart-glow-red {
+  animation: smart-glow-red-kf 1.5s infinite ease-in-out !important;
+}
+
+.card-ai-hint-tooltip {
+  position: absolute;
+  bottom: 105%;
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(18, 25, 41, 0.95);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+  border: 1px solid #ffd700;
+  border-radius: 8px;
+  color: #fff;
+  padding: 6px 12px;
+  font-size: 11px;
+  font-weight: 700;
+  white-space: nowrap;
+  pointer-events: none;
+  z-index: 1000;
+  opacity: 0;
+  transition: opacity 0.2s ease, transform 0.2s ease;
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.5);
+}
+
+.stacked-card-wrapper:hover .card-ai-hint-tooltip {
+  opacity: 1;
+  transform: translateX(-50%) translateY(-5px);
 }
 
 /* ── Kompakt Oyuncu Avatar Şeridi ── */
@@ -2293,97 +2314,16 @@ input:checked+.switch-toggle::after {
   z-index: 10;
 }
 
-.combo-rent::after {
-  content: '';
-  position: absolute;
-  inset: -3px;
-  border-radius: 14px;
-  border: 3px solid transparent;
-  background: linear-gradient(90deg, #D35400, #E67E22, #D35400) border-box;
-  -webkit-mask: linear-gradient(#fff 0 0) padding-box, linear-gradient(#fff 0 0);
-  -webkit-mask-composite: destination-out;
-  mask-composite: exclude;
-  animation: comboGlowRotate 2.5s linear infinite;
-  z-index: 1;
-  pointer-events: none;
-}
-
-.combo-rent::before {
-  content: '';
-  position: absolute;
-  inset: -6px;
-  border-radius: 16px;
-  background: rgba(230, 126, 34, 0.45);
-  filter: blur(8px);
-  animation: comboGlowPulse 1.2s ease-in-out infinite alternate;
-  z-index: 0;
-  pointer-events: none;
-}
-
 /* ── Combo Glow - Building ── */
 .combo-building {
   position: relative;
   z-index: 10;
 }
 
-.combo-building::after {
-  content: '';
-  position: absolute;
-  inset: -3px;
-  border-radius: 14px;
-  border: 3px solid transparent;
-  background: linear-gradient(90deg, #27AE60, #2ECC71, #27AE60) border-box;
-  -webkit-mask: linear-gradient(#fff 0 0) padding-box, linear-gradient(#fff 0 0);
-  -webkit-mask-composite: destination-out;
-  mask-composite: exclude;
-  animation: comboGlowRotate 2.5s linear infinite;
-  z-index: 1;
-  pointer-events: none;
-}
-
-.combo-building::before {
-  content: '';
-  position: absolute;
-  inset: -6px;
-  border-radius: 16px;
-  background: rgba(46, 204, 113, 0.45);
-  filter: blur(8px);
-  animation: comboGlowPulse 1.2s ease-in-out infinite alternate;
-  z-index: 0;
-  pointer-events: none;
-}
-
 /* ── Combo Glow - Deal ── */
 .combo-deal {
   position: relative;
   z-index: 10;
-}
-
-.combo-deal::after {
-  content: '';
-  position: absolute;
-  inset: -3px;
-  border-radius: 14px;
-  border: 3px solid transparent;
-  background: linear-gradient(90deg, #8E44AD, #9B59B6, #8E44AD) border-box;
-  -webkit-mask: linear-gradient(#fff 0 0) padding-box, linear-gradient(#fff 0 0);
-  -webkit-mask-composite: destination-out;
-  mask-composite: exclude;
-  animation: comboGlowRotate 2.5s linear infinite;
-  z-index: 1;
-  pointer-events: none;
-}
-
-.combo-deal::before {
-  content: '';
-  position: absolute;
-  inset: -6px;
-  border-radius: 16px;
-  background: rgba(155, 89, 182, 0.45);
-  filter: blur(8px);
-  animation: comboGlowPulse 1.2s ease-in-out infinite alternate;
-  z-index: 0;
-  pointer-events: none;
 }
 
 /* ── Cyberpunk Theme ── */
@@ -3088,8 +3028,8 @@ input:focus, select:focus {
 /* ── Central Play Arena Redesign ── */
 .central-play-arena {
   display: flex;
-  gap: 32px;
-  padding: 16px 32px;
+  gap: 18px;
+  padding: 14px 24px;
   background: rgba(15, 23, 42, 0.45) !important;
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
@@ -3100,7 +3040,7 @@ input:focus, select:focus {
   box-shadow: 0 12px 35px rgba(0, 0, 0, 0.45), inset 0 1px 0 rgba(255, 255, 255, 0.05);
   margin: 14px auto;
   width: 95%;
-  max-width: 480px;
+  max-width: 520px;
   transition: all 0.3s ease;
 }
 
@@ -3208,6 +3148,78 @@ input:focus, select:focus {
   background-size: 300% 300%;
   animation: border-gradient-rotate 5s infinite linear;
   box-shadow: 0 0 15px rgba(142, 68, 173, 0.5), inset 0 0 4px rgba(41, 128, 185, 0.2);
+}
+
+.border-style-rgb {
+  padding: 3px;
+  background: linear-gradient(90deg, #ff0000, #ff7f00, #ffff00, #00ff00, #0000ff, #4b0082, #8b00ff, #ff0000);
+  background-size: 400% 400%;
+  animation: border-gradient-rotate 2.5s infinite linear;
+  box-shadow: 0 0 15px rgba(255, 0, 0, 0.4), 0 0 5px rgba(0, 0, 255, 0.4);
+}
+
+.border-style-vortex {
+  padding: 3px;
+  background: radial-gradient(circle, #8e44ad, #2c3e50, #000000);
+  background-size: 200% 200%;
+  animation: border-gradient-rotate 6s infinite linear;
+  box-shadow: 0 0 18px rgba(142, 68, 173, 0.6), inset 0 0 10px rgba(0, 0, 0, 0.8);
+}
+
+.border-style-tesla {
+  padding: 3px;
+  background: linear-gradient(135deg, #00d2ff, #0066ff, #9b5DE5, #00d2ff);
+  background-size: 300% 300%;
+  animation: border-gradient-rotate 1.5s infinite linear;
+  box-shadow: 0 0 20px rgba(0, 210, 255, 0.7), inset 0 0 5px rgba(255, 255, 255, 0.5);
+}
+
+.border-style-matrix_code {
+  padding: 3px;
+  background: linear-gradient(180deg, #00ff00, #003300, #00ff00);
+  background-size: 100% 300%;
+  animation: border-gradient-rotate 1s infinite linear;
+  box-shadow: 0 0 14px rgba(0, 255, 0, 0.6), inset 0 0 4px rgba(0, 255, 0, 0.3);
+}
+
+.border-style-frost {
+  padding: 3px;
+  background: linear-gradient(135deg, #e0f7fa, #80deea, #b2ebf2, #e0f7fa);
+  background-size: 300% 300%;
+  animation: border-gradient-rotate 4s infinite linear;
+  box-shadow: 0 0 16px rgba(128, 222, 234, 0.5), inset 0 0 6px rgba(255, 255, 255, 0.8);
+}
+
+.border-style-bio {
+  padding: 3px;
+  background: linear-gradient(135deg, #a8ff78, #78ffd6, #a8ff78);
+  background-size: 300% 300%;
+  animation: border-gradient-rotate 3s infinite linear;
+  box-shadow: 0 0 15px rgba(120, 255, 214, 0.6);
+}
+
+.border-style-sakura {
+  padding: 3px;
+  background: linear-gradient(135deg, #ff9eb5, #ff7ebb, #ffe5ec, #ff9eb5);
+  background-size: 300% 300%;
+  animation: border-gradient-rotate 3.5s infinite linear;
+  box-shadow: 0 0 15px rgba(255, 126, 187, 0.6), inset 0 0 4px rgba(255, 255, 255, 0.4);
+}
+
+.border-style-pirate {
+  padding: 3px;
+  background: linear-gradient(135deg, #d4af37, #8b7320, #f3e5ab, #d4af37);
+  background-size: 300% 300%;
+  animation: border-gradient-rotate 4s infinite linear;
+  box-shadow: 0 0 16px rgba(212, 175, 55, 0.6), inset 0 0 4px rgba(0, 0, 0, 0.5);
+}
+
+.border-style-haunted {
+  padding: 3px;
+  background: linear-gradient(135deg, #9b5de5, #4a00e0, #8e2de2, #9b5de5);
+  background-size: 300% 300%;
+  animation: border-gradient-rotate 3s infinite linear;
+  box-shadow: 0 0 18px rgba(155, 93, 229, 0.7), inset 0 0 5px rgba(0, 0, 0, 0.4);
 }
 
 @keyframes border-gradient-rotate {
@@ -3593,6 +3605,110 @@ input:focus, select:focus {
   animation: gold-shimmer 6s ease-in-out infinite alternate;
 }
 
+.theme-overlay-snow {
+  background: radial-gradient(circle at center, transparent 35%, #a5f3fc 100%);
+  mix-blend-mode: screen;
+  animation: snow-glow 5s ease-in-out infinite alternate;
+}
+
+.theme-overlay-blizzard {
+  background: radial-gradient(circle at center, transparent 20%, #cbd5e1 100%),
+              linear-gradient(135deg, rgba(255,255,255,0.05) 0%, transparent 100%);
+  mix-blend-mode: color-dodge;
+  animation: blizzard-flash 4s ease-in-out infinite alternate;
+}
+
+.theme-overlay-neon_alley {
+  background: radial-gradient(circle at center, transparent 30%, #ff00ff 100%),
+              radial-gradient(circle at 10% 10%, #00ffff 0%, transparent 40%);
+  mix-blend-mode: screen;
+  animation: cosmic-drift 8s ease-in-out infinite alternate;
+}
+
+.theme-overlay-zen_garden {
+  background: radial-gradient(circle at center, transparent 40%, #1e8449 100%);
+  mix-blend-mode: soft-light;
+  opacity: 0.35;
+}
+
+.theme-overlay-haunted_castle {
+  background: radial-gradient(circle at center, transparent 30%, #4a00e0 100%),
+              radial-gradient(circle at 80% 20%, #7f00ff 0%, transparent 40%);
+  mix-blend-mode: color-dodge;
+  animation: volcano-pulse 10s ease-in-out infinite alternate;
+}
+
+.theme-overlay-pirate_ship {
+  background: radial-gradient(circle at center, transparent 35%, #8b5a2b 100%);
+  mix-blend-mode: multiply;
+  opacity: 0.55;
+}
+
+@keyframes snow-glow {
+  0% { opacity: 0.12; }
+  100% { opacity: 0.28; }
+}
+
+@keyframes blizzard-flash {
+  0% { opacity: 0.15; filter: brightness(1); }
+  50% { opacity: 0.35; filter: brightness(1.2); }
+  100% { opacity: 0.2; filter: brightness(0.9); }
+}
+
+/* ===== FLOATING PARTICLES FOR THEMES ===== */
+.lava-bubbles-container, .cosmic-stars-container, .gold-sparkles-container, .snow-flakes-container, .blizzard-winds-container {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  pointer-events: none;
+  overflow: hidden;
+  z-index: 1;
+}
+
+/* Snowflakes */
+.snow-flake {
+  position: absolute;
+  top: -20px;
+  left: var(--left);
+  width: var(--size);
+  height: var(--size);
+  background: #ffffff;
+  border-radius: 50%;
+  box-shadow: 0 0 5px #ffffff;
+  animation: snow-fall var(--dur) linear infinite;
+  animation-delay: var(--delay);
+}
+
+@keyframes snow-fall {
+  0% { transform: translateY(0) translateX(0); opacity: 0; }
+  10% { opacity: 0.8; }
+  90% { opacity: 0.8; }
+  100% { transform: translateY(105vh) translateX(var(--drift)); opacity: 0; }
+}
+
+/* Blizzard Wind */
+.blizzard-wind {
+  position: absolute;
+  top: -20px;
+  left: var(--left);
+  width: var(--size);
+  height: var(--size);
+  background: rgba(220, 240, 255, 0.4);
+  border-radius: 50%;
+  box-shadow: 0 0 10px rgba(255, 255, 255, 0.7);
+  animation: blizzard-storm var(--dur) linear infinite;
+  animation-delay: var(--delay);
+}
+
+@keyframes blizzard-storm {
+  0% { transform: translateY(0) translateX(0) scale(0.8); opacity: 0; }
+  5% { opacity: 0.9; }
+  95% { opacity: 0.9; }
+  100% { transform: translateY(105vh) translateX(-250px) scale(1.4); opacity: 0; }
+}
+
 @keyframes volcano-pulse {
   0% { opacity: 0.1; filter: saturate(1); }
   100% { opacity: 0.22; filter: saturate(1.5); }
@@ -3608,17 +3724,7 @@ input:focus, select:focus {
   100% { opacity: 0.25; }
 }
 
-/* ===== FLOATING PARTICLES FOR THEMES ===== */
-.lava-bubbles-container, .cosmic-stars-container, .gold-sparkles-container {
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  pointer-events: none;
-  overflow: hidden;
-  z-index: 1;
-}
+
 
 /* Lava Bubble */
 .lava-bubble {
@@ -3804,32 +3910,33 @@ input:focus, select:focus {
 /* ===== PREMIUM GAME ACTION OVERLAYS ===== */
 .action-overlay-wrapper {
   position: fixed;
-  top: 0;
-  left: 0;
-  width: 100vw;
-  height: 100vh;
-  background: rgba(6, 10, 23, 0.7);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
+  top: 24px;
+  left: 50%;
+  transform: translateX(-50%);
   z-index: 10200;
   display: flex;
   align-items: center;
   justify-content: center;
+  pointer-events: none; /* Make click-through so user can click cards underneath */
   animation: action-fade-in 0.25s ease-out forwards;
 }
 
 .action-overlay-card {
-  background: rgba(18, 25, 41, 0.85);
+  background: rgba(18, 25, 41, 0.95);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
   border: 2px solid;
-  border-radius: 28px;
-  padding: 36px 40px;
-  text-align: center;
-  max-width: 440px;
-  width: 90%;
+  border-radius: 16px;
+  padding: 10px 18px;
+  max-width: 520px;
+  width: max-content;
   position: relative;
   overflow: hidden;
-  box-shadow: 0 30px 60px rgba(0, 0, 0, 0.6), inset 0 1px 0 rgba(255,255,255,0.05);
-  animation: action-zoom-spring 0.45s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5), inset 0 1px 0 rgba(255,255,255,0.10);
+  animation: action-slide-down-spring 0.45s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
+  display: flex;
+  align-items: center;
+  gap: 14px;
 }
 
 .action-overlay-glow {
@@ -3845,34 +3952,41 @@ input:focus, select:focus {
 }
 
 .action-overlay-icon {
-  font-size: 84px;
+  font-size: 32px;
   line-height: 1;
-  margin-bottom: 16px;
-  display: inline-block;
-  animation: action-icon-bounce 1.5s ease-in-out infinite alternate;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.action-overlay-content {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
 }
 
 .action-overlay-text {
-  font-size: 32px;
-  font-weight: 900;
+  font-size: 15px;
+  font-weight: 800;
   color: #ffffff;
-  letter-spacing: 2px;
+  letter-spacing: 1px;
   text-transform: uppercase;
-  text-shadow: 0 4px 10px rgba(0, 0, 0, 0.5);
-  margin-top: 8px;
+  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.5);
+  margin: 0;
 }
 
 .action-overlay-subtext {
-  font-size: 14px;
+  font-size: 13px;
   color: #b0bec5;
-  margin-top: 14px;
   font-weight: 500;
-  line-height: 1.7;
-  letter-spacing: 0.5px;
-  background: rgba(0, 0, 0, 0.25);
-  padding: 10px 16px;
-  border-radius: 12px;
-  border: 1px solid rgba(255, 255, 255, 0.07);
+  line-height: 1.4;
+  letter-spacing: 0.3px;
+  margin: 0;
+  padding: 0;
+  background: transparent;
+  border: none;
 }
 
 /* ── Overlay Subtext Token Vurgu Sınıfları ── */
@@ -3946,6 +4060,11 @@ input:focus, select:focus {
   100% { transform: scale(1); opacity: 1; }
 }
 
+@keyframes action-slide-down-spring {
+  0% { transform: translateY(-40px) scale(0.95); opacity: 0; }
+  100% { transform: translateY(0) scale(1); opacity: 1; }
+}
+
 @keyframes action-glow-spin {
   0% { transform: rotate(0deg); }
   100% { transform: rotate(360deg); }
@@ -3980,4 +4099,294 @@ input:focus, select:focus {
   }
 }
 
+/* ===== GAME TOAST STACK SYSTEM ===== */
+.game-toast-container {
+  position: fixed;
+  top: 24px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 10000;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  align-items: center;
+  pointer-events: none;
+  width: 90%;
+  max-width: 520px;
+  transition: all 0.3s ease;
+}
 
+.game-toast-item {
+  background: rgba(18, 25, 41, 0.95);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  border-radius: 16px;
+  padding: 10px 18px;
+  width: 100%;
+  position: relative;
+  overflow: hidden;
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.game-toast-glow {
+  position: absolute;
+  top: -50%;
+  left: -50%;
+  width: 200%;
+  height: 200%;
+  opacity: 0.18;
+  filter: blur(40px);
+  pointer-events: none;
+  animation: action-glow-spin 10s linear infinite;
+}
+
+.game-toast-icon {
+  font-size: 32px;
+  line-height: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.game-toast-content {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  flex: 1;
+}
+
+.game-toast-text {
+  font-size: 15px;
+  font-weight: 800;
+  color: #ffffff;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.5);
+  margin: 0;
+}
+
+.game-toast-subtext {
+  font-size: 13px;
+  color: #b0bec5;
+  font-weight: 500;
+  line-height: 1.4;
+  letter-spacing: 0.3px;
+  margin: 0;
+  padding: 0;
+  background: transparent;
+  border: none;
+}
+
+/* Responsive adjustment for Mobile (Toast Stack) */
+@media (max-width: 600px) {
+  .game-toast-container {
+    top: 12px;
+    width: 95%;
+    left: 50%;
+    transform: translateX(-50%);
+  }
+  
+  .game-toast-item {
+    padding: 8px 12px;
+    gap: 10px;
+    border-radius: 12px;
+  }
+  
+  .game-toast-icon {
+    font-size: 26px;
+  }
+  
+  .game-toast-text {
+    font-size: 13px;
+    letter-spacing: 0.5px;
+  }
+  
+  .game-toast-subtext {
+    font-size: 11px;
+    line-height: 1.3;
+  }
+}
+
+
+/* ════════════════════════════════════════════════
+   PROFIL AURA EFEKTLERİ (Profile Aura Effects)
+   Uses outline + filter:drop-shadow so inline boxShadow
+   on player cards cannot override the aura glow.
+   ════════════════════════════════════════════════ */
+
+@keyframes aura-outline-fire {
+  0%, 100% { outline-color: rgba(255,80,0,0.9);  filter: drop-shadow(0 0 8px rgba(255,80,0,0.8)); }
+  50%       { outline-color: rgba(255,140,0,1);   filter: drop-shadow(0 0 20px rgba(255,80,0,1)); }
+}
+@keyframes aura-outline-gold {
+  0%, 100% { outline-color: rgba(255,215,0,0.9); filter: drop-shadow(0 0 8px rgba(255,215,0,0.7)); }
+  50%       { outline-color: rgba(255,215,0,1);   filter: drop-shadow(0 0 22px rgba(255,215,0,1)); }
+}
+@keyframes aura-outline-glitch {
+  0%, 88%, 100% { outline-color: rgba(255,0,255,0.9); filter: drop-shadow(0 0 8px rgba(255,0,255,0.7)); }
+  50%           { outline-color: rgba(0,255,255,1);   filter: drop-shadow(0 0 20px rgba(0,255,255,0.9)); }
+  90%           { outline-color: rgba(255,255,0,1);   filter: drop-shadow(0 0 30px rgba(255,0,255,1)); }
+  92%           { outline-color: rgba(0,255,255,1);   filter: drop-shadow(0 0 30px rgba(0,255,255,1)); }
+}
+@keyframes aura-outline-frost {
+  0%, 100% { outline-color: rgba(0,220,255,0.9); filter: drop-shadow(0 0 8px rgba(0,200,255,0.6)); }
+  50%       { outline-color: rgba(100,255,255,1); filter: drop-shadow(0 0 22px rgba(0,220,255,1)); }
+}
+
+@keyframes aura-crown-float {
+  0%, 100% { transform: translateX(-50%) translateY(0px) rotate(-5deg); }
+  50%       { transform: translateX(-50%) translateY(-7px) rotate(5deg); }
+}
+@keyframes aura-crown-float-right {
+  0%, 100% { transform: translateY(0px) rotate(-5deg); }
+  50%       { transform: translateY(-7px) rotate(5deg); }
+}
+
+/* ── Hellfire Aura ── */
+.aura-effect-hellfire {
+  position: relative !important;
+  outline: 2.5px solid rgba(255,80,0,0.9) !important;
+  outline-offset: 2px !important;
+  border-color: #ff5000 !important;
+  animation: aura-outline-fire 2s ease-in-out infinite !important;
+}
+.aura-effect-hellfire::before {
+  content: '🔥';
+  position: absolute;
+  top: -20px;
+  left: -10px;
+  font-size: 18px;
+  animation: aura-crown-float-right 1.4s ease-in-out infinite;
+  pointer-events: none;
+  z-index: 100;
+}
+.aura-effect-hellfire::after {
+  content: '🔥';
+  position: absolute;
+  top: -14px;
+  right: -8px;
+  font-size: 14px;
+  animation: aura-crown-float-right 1.8s ease-in-out infinite reverse;
+  pointer-events: none;
+  z-index: 100;
+}
+
+/* ── Royal Crown Aura ── */
+.aura-effect-royal_crown {
+  position: relative !important;
+  outline: 2.5px solid rgba(255,215,0,0.9) !important;
+  outline-offset: 2px !important;
+  border-color: #ffd700 !important;
+  animation: aura-outline-gold 2.5s ease-in-out infinite !important;
+}
+.aura-effect-royal_crown::before {
+  content: '👑';
+  position: absolute;
+  top: -24px;
+  left: 50%;
+  font-size: 20px;
+  animation: aura-crown-float 2.2s ease-in-out infinite;
+  pointer-events: none;
+  z-index: 100;
+}
+
+/* ── Cyber Glitch Aura ── */
+.aura-effect-glitch {
+  position: relative !important;
+  outline: 2.5px solid rgba(255,0,255,0.9) !important;
+  outline-offset: 2px !important;
+  border-color: #ff00ff !important;
+  animation: aura-outline-glitch 1.8s ease-in-out infinite !important;
+}
+
+/* ── Frozen Aurora Aura ── */
+.aura-effect-frozen_aurora {
+  position: relative !important;
+  outline: 2.5px solid rgba(0,220,255,0.9) !important;
+  outline-offset: 2px !important;
+  border-color: #00ffdc !important;
+  animation: aura-outline-frost 3s ease-in-out infinite !important;
+}
+.aura-effect-frozen_aurora::before {
+  content: '❄️';
+  position: absolute;
+  top: -18px;
+  left: 50%;
+  font-size: 16px;
+  animation: aura-crown-float 3s ease-in-out infinite;
+  pointer-events: none;
+  z-index: 100;
+}
+
+/* ── Default: no aura ── */
+.aura-effect-default {}
+
+/* ════════════════════════════════════════════════
+   SOHBET BALONU TEMALARı (Chat Bubble Skins)
+   ════════════════════════════════════════════════ */
+@keyframes rainbow-cycle {
+  0%   { border-color: #ff0000; box-shadow: 0 0 8px rgba(255,0,0,0.4); }
+  16%  { border-color: #ff8800; box-shadow: 0 0 8px rgba(255,136,0,0.4); }
+  33%  { border-color: #ffff00; box-shadow: 0 0 8px rgba(255,255,0,0.4); }
+  50%  { border-color: #00ff00; box-shadow: 0 0 8px rgba(0,255,0,0.4); }
+  66%  { border-color: #0088ff; box-shadow: 0 0 8px rgba(0,136,255,0.4); }
+  83%  { border-color: #aa00ff; box-shadow: 0 0 8px rgba(170,0,255,0.4); }
+  100% { border-color: #ff0000; box-shadow: 0 0 8px rgba(255,0,0,0.4); }
+}
+
+.chat-skin-gold_leaf {
+  background: linear-gradient(135deg, #3d2a00, #1a1000) !important;
+  border: 1.5px solid #ffd700 !important;
+  box-shadow: 0 2px 10px rgba(255,215,0,0.3), inset 0 1px 0 rgba(255,215,0,0.15) !important;
+  color: #fff8e1 !important;
+}
+
+.chat-skin-matrix_hacker {
+  background: #000 !important;
+  border: 1.5px solid #39ff14 !important;
+  box-shadow: 0 2px 10px rgba(57,255,20,0.3) !important;
+  color: #39ff14 !important;
+  font-family: 'Courier New', monospace !important;
+}
+
+.chat-skin-rainbow_wave {
+  background: linear-gradient(135deg, #1a0030, #000a1a) !important;
+  border: 2px solid !important;
+  animation: rainbow-cycle 1.5s linear infinite !important;
+}
+
+.chat-skin-lava_bubble {
+  background: linear-gradient(135deg, #3d1400, #1a0700) !important;
+  border: 1.5px solid #e67e22 !important;
+  box-shadow: 0 2px 10px rgba(230,126,34,0.4), 0 0 20px rgba(230,126,34,0.15) !important;
+  color: #ffd5b0 !important;
+}
+
+/* ════════════════════════════════════════════════
+   MEGA EMOTE ANIMATIONS
+   ════════════════════════════════════════════════ */
+@keyframes mega-particle-fall {
+  0%   { transform: translateY(0) rotate(0deg) scale(1); opacity: 1; }
+  70%  { opacity: 1; }
+  100% { transform: translateY(120vh) rotate(720deg) scale(0.4); opacity: 0; }
+}
+
+@keyframes bounce-in {
+  0%   { transform: scale(0) translateY(40px); opacity: 0; }
+  70%  { transform: scale(1.12) translateY(-8px); opacity: 1; }
+  100% { transform: scale(1) translateY(0); opacity: 1; }
+}
+
+/* Hızlı Mesajlar Scrollbar'ı Gizleme Sınıfı */
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+.no-scrollbar {
+  -ms-overflow-style: none;  /* IE and Edge */
+  scrollbar-width: none;  /* Firefox */
+}

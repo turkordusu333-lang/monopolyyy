@@ -14,7 +14,8 @@ import {
   sfxDisconnect, sfxReconnect,
   sfxFire,
   sfxJackpot, sfxWompWomp, sfxCricket, sfxSwordClash, sfxCrumple, sfxHeartbeat, sfxBlackMarket, sfxCoinsCling, sfxVaultClose, sfxCry, sfxShock, sfxClap,
-  setSfxVolume, getSfxVolume, stopAllSFX
+  sfxPlayEffectFlame, sfxPlayEffectThunder, sfxPlayEffectCosmic, sfxPlayEffectBlackhole, sfxPlayEffectConfetti, sfxPlayEffectHeart, sfxPlayEffectCash,
+  setSfxVolume, getSfxVolume, stopAllSFX, sfxCardHover, sfxCashCounter
 } from './sounds';
 
 import { THEMES, COLOR_INFO, PLAYER_COLORS, SET_SIZES, ACTION_STYLE, CARD_TOTAL_COUNTS } from './constants';
@@ -593,6 +594,49 @@ const translateLog = (logText, lang) => {
 };
 
 // ---- GELİŞMİŞ İPUCU ÜRETİCİ ----
+
+const renderColorizedDetailedTip = (text) => {
+  if (!text) return text;
+
+  const colorsMap = {
+    brown: '#e5a93b', kahverengi: '#e5a93b',
+    lightblue: '#4FA8D5', 'açık mavi': '#4FA8D5', 'light blue': '#4FA8D5',
+    pink: '#ff7ebb', pembe: '#ff7ebb',
+    orange: '#E67E22', turuncu: '#E67E22',
+    red: '#E74C3C', kırmızı: '#E74C3C',
+    yellow: '#F1C40F', sarı: '#F1C40F',
+    green: '#2ECC71', yeşil: '#2ECC71',
+    blue: '#3498DB', lacivert: '#3498DB',
+    railroad: '#95A5A6', demiryolu: '#95A5A6', 'demir yolları': '#95A5A6',
+    utility: '#BDC3C7', 'kamu hizmetleri': '#BDC3C7', 'kamu hizmeti': '#BDC3C7'
+  };
+
+  const regex = /(\d+M|Kahverengi|Açık Mavi|Pembe|Turuncu|Kırmızı|Sarı|Yeşil|Lacivert|Demir Yolları|Demiryolu|Kamu Hizmetleri|Kamu Hizmeti|Brown|Light Blue|Pink|Orange|Red|Yellow|Green|Blue|Railroad|Utility)/gi;
+  const parts = text.split(regex);
+
+  return parts.map((part, i) => {
+    const lowerPart = part.toLowerCase();
+    
+    if (/^\d+m$/i.test(lowerPart)) {
+      return (
+        <strong key={i} style={{ color: '#2ECC71', fontWeight: 900, textShadow: '0 0 4px rgba(46,204,113,0.3)' }}>
+          {part}
+        </strong>
+      );
+    }
+    
+    if (colorsMap[lowerPart] != null) {
+      return (
+        <strong key={i} style={{ color: colorsMap[lowerPart], fontWeight: 900 }}>
+          {part}
+        </strong>
+      );
+    }
+    
+    return part;
+  });
+};
+
 const getDetailedCardTip = (card, lang) => {
   if (lang === 'en') {
     if (card.type === 'money') return `Instantly adds ${card.value}M cash to your bank vault. Keeping money in your vault is always good to avoid losing properties for payments.`;
@@ -1201,6 +1245,17 @@ export default function App() {
   const myBankRef = useRef(null); // Kendi bankamızın pozisyonu için
   const [previewCard, setPreviewCard] = useState(null);
   const [previewLocked, setPreviewLocked] = useState(false);
+  const [aiHintsEnabled, setAiHintsEnabled] = useState(() => {
+    const saved = localStorage.getItem('md_ai_hints');
+    return saved !== null ? saved === 'true' : true;
+  });
+  const [showHintsAfterDelay, setShowHintsAfterDelay] = useState(false);
+
+  useEffect(() => {
+    localStorage.setItem('md_ai_hints', aiHintsEnabled);
+  }, [aiHintsEnabled]);
+
+
 
   const handleCardHover = (card) => {
     if (!previewLocked) {
@@ -1310,6 +1365,7 @@ export default function App() {
   const prevTurnAlertRef = useRef(null); // Süre dolduğunda çalacak alarm için
   const [mousePos, setMousePos] = useState({ x: 0, y: 0 }); // Dinamik önizleme ekranı için
   const [chatMessages, setChatMessages] = useState([]);
+  const [activeMegaEmote, setActiveMegaEmote] = useState(null);
   const [chatInput, setChatInput] = useState('');
   const [isChatOpen, setIsChatOpen] = useState(false);
   const chatEndRef = useRef(null);
@@ -1324,6 +1380,18 @@ export default function App() {
   const isBlocked = (gameState?.pendingChallenges?.length > 0) || (gameState?.pendingPayments?.length > 0) || (gameState?.pendingTrades?.length > 0);
   const activeTheme = gameState?.theme || selectedTheme;
   const myPendingTrade = gameState?.pendingTrades?.find(t => t.targetId === playerId);
+
+  useEffect(() => {
+    if (isMyTurn && !isBlocked) {
+      setShowHintsAfterDelay(false);
+      const timer = setTimeout(() => {
+        setShowHintsAfterDelay(true);
+      }, 7000); // 7 saniye gecikme
+      return () => clearTimeout(timer);
+    } else {
+      setShowHintsAfterDelay(false);
+    }
+  }, [isMyTurn, isBlocked, gameState?.turnStartTime]);
 
   // ---- SIRALI EL HESAPLAMA ----
   const handToRender = isMyTurn ? [...localHand].sort((a, b) => {
@@ -1396,20 +1464,36 @@ export default function App() {
   }, []);
 
   // ---- BİLDİRİM (TOAST) SİSTEMİ ----
-  const showToast = useCallback((text, kind = 'info', duration = 2500) => {
+  const showToast = useCallback((textOrObj, kind = 'info', duration = 2500) => {
+    let text = '';
+    let subtext = null;
+    let icon = null;
+    let toastKind = kind;
+    let toastDuration = duration;
+
+    if (typeof textOrObj === 'object' && textOrObj !== null) {
+      text = textOrObj.text;
+      subtext = textOrObj.subtext;
+      icon = textOrObj.icon;
+      toastKind = textOrObj.kind || kind;
+      toastDuration = textOrObj.duration || duration;
+    } else {
+      text = textOrObj;
+    }
+
     const id = Date.now() + Math.random();
-    setToasts(prev => [...prev, { id, text, kind }]);
+    setToasts(prev => [...prev, { id, text, subtext, icon, kind: toastKind }]);
 
     // 📳 Haptic Feedback (Dokunsal Geri Bildirim)
     if (navigator.vibrate) {
-      if (kind === 'turn') navigator.vibrate([200, 100, 200]);
-      else if (kind === 'error') navigator.vibrate([80, 50, 80]);
-      else if (kind === 'success') navigator.vibrate(50);
+      if (toastKind === 'turn') navigator.vibrate([200, 100, 200]);
+      else if (toastKind === 'error' || toastKind === 'danger') navigator.vibrate([80, 50, 80]);
+      else if (toastKind === 'success') navigator.vibrate(50);
     }
 
     setTimeout(() => {
       setToasts(prev => prev.filter(t => t.id !== id));
-    }, duration);
+    }, toastDuration);
   }, []);
 
   // --- Animasyon Fonksiyonları (TDZ Hatasını Önlemek İçin En Üste Taşındı) ---
@@ -1426,11 +1510,27 @@ export default function App() {
     setTimeout(() => setSmokeParticles([]), 800);
   }, []);
 
-  const PLAY_EFFECT_ICONS = { gold: '✨', heart: '💖', flame: '🔥', cosmic: '☄️' };
+  const PLAY_EFFECT_ICONS = { 
+    gold: '✨', 
+    heart: '💖', 
+    flame: '🔥', 
+    cosmic: '☄️',
+    cash: '💵',
+    emerald: '💚',
+    blackhole: '🕳️',
+    thunder: '⚡',
+    confetti: '🎉',
+    pixie: '✨',
+    sakura_petals: '🌸',
+    bubbles: '🫧',
+    skulls: '💀',
+    ice_shards: '❄️'
+  };
 
   const spawnMoney = useCallback((options = {}) => {
     const { fromPos, toPos, count = 12, forceIcon } = options;
 
+    let effect = 'default';
     // Resolve the icon: first check the last log actor's selectedPlayEffect,
     // then fall back to dbUser's own effect, then default money icon.
     let finalIcon = '💸';
@@ -1448,7 +1548,7 @@ export default function App() {
         }
       }
       // Fall back to our own effect if we're the actor or no actor found
-      const effect = actorEffect || dbUser?.selectedPlayEffect || 'default';
+      effect = actorEffect || dbUser?.selectedPlayEffect || 'default';
       if (effect && effect !== 'default') {
         finalIcon = PLAY_EFFECT_ICONS[effect] || '💸';
       }
@@ -1456,7 +1556,18 @@ export default function App() {
 
     let newParts = [];
     if (fromPos && toPos) {
-      sfxCoin();
+      if (effect === 'flame') sfxPlayEffectFlame();
+      else if (effect === 'thunder') sfxPlayEffectThunder();
+      else if (effect === 'cosmic') sfxPlayEffectCosmic();
+      else if (effect === 'blackhole') sfxPlayEffectBlackhole();
+      else if (effect === 'confetti') sfxPlayEffectConfetti();
+      else if (effect === 'heart') sfxPlayEffectHeart();
+      else if (effect === 'cash') sfxPlayEffectCash();
+      else if (effect === 'sakura_petals') sfxWhoosh();
+      else if (effect === 'bubbles') sfxClick();
+      else if (effect === 'skulls') sfxShock();
+      else if (effect === 'ice_shards') sfxGlassBreak();
+      else sfxCoin();
       for (let i = 0; i < count; i++) {
         const sx = fromPos.x + (Math.random() - 0.5) * 50;
         const sy = fromPos.y + (Math.random() - 0.5) * 50;
@@ -1482,8 +1593,9 @@ export default function App() {
       const elapsedTurnTime = currentServerTime - gameState.turnStartTime;
       const remaining = gameState.turnTimer - Math.floor(elapsedTurnTime / 1000);
 
-      // SÜRE AZALDI TİK-TAK SESİ
+      // SÜRE AZALDI TİK-TAK SESİ & BGM GERİLİM HIZLANDIRMA
       if (remaining > 0 && remaining <= 10) {
+        setBgmTension(true); // Gerilim müziğini hızlandır
         if (remaining <= 5) {
           sfxHeartbeat();
           setIsTimeRunningOut(true);
@@ -1492,6 +1604,7 @@ export default function App() {
           setIsTimeRunningOut(false);
         }
       } else {
+        setBgmTension(false); // Normal BGM hızına dön
         setIsTimeRunningOut(false);
       }
 
@@ -1512,6 +1625,7 @@ export default function App() {
     } else if (!isMyTurn) {
       prevTurnAlertRef.current = null;
       setIsTimeRunningOut(false);
+      setBgmTension(false); // Normal BGM hızına dön
     }
   }, [now, gameState?.currentPlayerId, playerId, isMyTurn, isBlocked, gameState?.turnTimer, gameState?.turnStartTime, gameState?.serverTime, playTurkishVoice, showToast]);
   // ---- CONSOLE KANCA (INTERCEPTOR) ----
@@ -1662,6 +1776,24 @@ export default function App() {
     });
 
     s.on('chatMessage', (msg) => {
+      if (msg.text && msg.text.startsWith('[MEGA_EMOTE:')) {
+        const emoteId = msg.text.split(':')[1].replace(']', '');
+        setActiveMegaEmote({ id: emoteId, senderName: msg.senderName });
+        setTimeout(() => {
+          setActiveMegaEmote(null);
+        }, 5500);
+        
+        // Play corresponding epic sound effect!
+        if (emoteId === 'nuke_boom') {
+          sfxGlassBreak(); // Nuke siren style
+        } else if (emoteId === 'make_it_rain') {
+          sfxChaChing();
+        } else {
+          sfxChatSent();
+        }
+        return;
+      }
+
       setChatMessages(prev => [...prev.slice(-49), msg]);
       if (msg.senderId !== playerId) {
         sfxChatSent();
@@ -1686,9 +1818,9 @@ export default function App() {
       playTurkishVoice(msg);
     });
 
-    s.on('playerEmote', ({ senderId, emoji }) => {
+    s.on('playerEmote', ({ senderId, targetId, emoji }) => {
       const id = Math.random();
-      setEmotes(prev => [...prev, { id, senderId, emoji }]);
+      setEmotes(prev => [...prev, { id, senderId, targetId, emoji }]);
       if (emoji === '😂') sfxLaugh();
       else if (emoji === '😡') sfxAngry();
       else if (emoji === '💸') sfxChaChing();
@@ -1785,6 +1917,22 @@ export default function App() {
     return false;
   };
 
+  // Çift renk ve wild kartların masada hangi aktif renkte olduğunu gösteren şerit stili
+  const getMiniCardStripeStyle = (c, activeColor) => {
+    const activeHex = COLOR_INFO[activeColor]?.hex || '#aaa';
+    if (c.isWild) {
+      // Aktif renk baskın (65%), diğer renkler küçük bir gökkuşağı şeridi olarak sağda (35%)
+      return `linear-gradient(90deg, ${activeHex} 0%, ${activeHex} 65%, #E74C3C 65%, #F39C12 75%, #2ECC71 85%, #3498DB 100%)`;
+    }
+    if (c.isDual && c.colors) {
+      const inactiveColor = c.colors.find(col => col !== activeColor);
+      const inactiveHex = COLOR_INFO[inactiveColor]?.hex || activeHex;
+      // Aktif renk baskın (75%), pasif renk ikincil olarak sağda (25%)
+      return `linear-gradient(90deg, ${activeHex} 0%, ${activeHex} 75%, ${inactiveHex} 75%, ${inactiveHex} 100%)`;
+    }
+    return activeHex;
+  };
+
   // Kira modalı için kira miktarını hesaplayan istemci tarafı fonksiyonu
   const calculateRentClient = (player, color) => {
     const props = player?.properties?.[color] || [];
@@ -1866,7 +2014,18 @@ export default function App() {
       const currentPlayer = gameState.players?.find(p => p.id === newTurnId);
       const effect = currentPlayer?.selectedPlayEffect;
       if (effect && effect !== 'default') {
-        const icon = { gold: '✨', heart: '💖', flame: '🔥', cosmic: '☄️' }[effect];
+        const icon = { 
+          gold: '✨', 
+          heart: '💖', 
+          flame: '🔥', 
+          cosmic: '☄️',
+          cash: '💵',
+          emerald: '💚',
+          blackhole: '🕳️',
+          thunder: '⚡',
+          confetti: '🎉',
+          pixie: '✨'
+        }[effect];
         if (icon) {
           // Small burst from that player's panel position
           const panelEl = playerPanelRefs.current?.[newTurnId];
@@ -2110,7 +2269,7 @@ export default function App() {
       if (overlay) {
         setActionOverlay(overlay);
         spawnMoney({ icon: '💰' });
-        setTimeout(() => setActionOverlay(null), 2500);
+        setTimeout(() => setActionOverlay(null), 2000);
       }
       return; // Kasaya koydu ise başka kontrollere girme
     }
@@ -2357,6 +2516,12 @@ export default function App() {
         ? `${actorName} paid ${amountM}M.`
         : `Payment completed successfully.`;
     overlay = { text: 'ÖDEME YAPILDI!', subtext: lang === 'en' ? subtextEN : subtextTR, icon: '💵', type: 'success' };
+    // Büyük ödemelerde para sayma makinesi sesi, normalde metal sikke sesi
+    if (amountM && parseInt(amountM) >= 3) {
+      sfxCashCounter();
+    } else {
+      sfxCoin();
+    }
     if (lastEntry.actorId && lastEntry.targetId) {
       const fromPos = getCoordsForPlayer(lastEntry.actorId);
       const toPos = getCoordsForPlayer(lastEntry.targetId);
@@ -2485,7 +2650,7 @@ export default function App() {
     } else if (overlay.icon === '🎴') {
       spawnMoney({ count: 6 });
     }
-    setTimeout(() => setActionOverlay(null), 2500);
+    setTimeout(() => setActionOverlay(null), 2000);
   } else {
     // Dev overlay çıkmıyorsa bile önemli olayları mini Toast ile göster
     if (lastEntry.type === 'property' || lastEntry.type === 'payment' || lastEntry.type === 'action' || lastEntry.type === 'draw') {
@@ -2563,15 +2728,13 @@ useEffect(() => {
   const curr = gameState.currentPlayerId;
   if (prev !== null && prev !== curr) {
     if (prev === playerId) {
-      showToast(lang === 'en' ? '✅ Turn Ended' : '✅ Tur Bitti', 'success', 1800);
       setActionOverlay({ text: lang === 'en' ? 'TURN ENDED!' : 'TUR BİTTİ!', icon: '⏳' });
-      setTimeout(() => setActionOverlay(null), 2500);
+      setTimeout(() => setActionOverlay(null), 2000);
       sfxTurnEnded();
     }
     if (curr === playerId) {
-      showToast(lang === 'en' ? '🎲 YOUR TURN!' : '🎲 SIRA SENDE!', 'turn', 2800);
       setActionOverlay({ text: lang === 'en' ? 'YOUR TURN!' : 'SIRA SENDE!', icon: '🎲' });
-      setTimeout(() => setActionOverlay(null), 2500);
+      setTimeout(() => setActionOverlay(null), 2000);
       sfxYourTurn();
       setShowTurnFlash(true);
       setTimeout(() => setShowTurnFlash(false), 1200);
@@ -2580,9 +2743,8 @@ useEffect(() => {
     } else {
       const p = gameState.players.find(pl => pl.id === curr);
       if (p) {
-        showToast(lang === 'en' ? `🎲 ${p.name}'s turn` : `🎲 ${p.name}'in sırası`, 'info', 1800);
         setActionOverlay({ text: lang === 'en' ? `${p.name.toUpperCase()}'S TURN!` : `${p.name.toUpperCase()}'İN SIRASI!`, icon: '🎲' });
-        setTimeout(() => setActionOverlay(null), 2500);
+        setTimeout(() => setActionOverlay(null), 2000);
       }
     }
   }
@@ -3230,6 +3392,15 @@ const renderHistoryModal = () => {
                 <div style={{ color: '#E2E8F0', lineHeight: 1.4 }}>
                   {renderLogMsg(entry)}
                 </div>
+                {entry.cards && Array.isArray(entry.cards) && entry.cards.length > 0 && (
+                  <div style={{ display: 'flex', gap: 6, marginTop: 6, flexWrap: 'wrap' }}>
+                    {entry.cards.map((c, cIdx) => (
+                      <div key={cIdx} style={{ transform: 'scale(0.55)', transformOrigin: 'top left', width: 38 * 0.55, height: 52 * 0.55, marginRight: 22, marginBottom: 8 }}>
+                        <CardVisual card={c} small lang={lang} />
+                      </div>
+                    ))}
+                  </div>
+                )}
                 <div style={{
                   fontSize: 10,
                   color: '#718096',
@@ -3617,6 +3788,36 @@ const renderPlayerDetailsModal = () => {
             </button>
           ))}
         </div>
+        {/* Mega Emote Fire Button */}
+        {me?.selectedMegaEmote && me.selectedMegaEmote !== 'default' && (() => {
+          const megaCfg = {
+            tomato_splat: { label: '🍅 DOMATES YAĞMURU', color: '#e74c3c' },
+            make_it_rain: { label: '💸 PARA SAÇMA', color: '#2ecc71' },
+            salt_bae: { label: '🧂 TUZLAMA', color: '#ecf0f1' },
+            nuke_boom: { label: '☢️ NÜKLEER', color: '#f39c12' }
+          };
+          const cfg = megaCfg[me.selectedMegaEmote] || { label: '📣 MEGA İFADE', color: '#9b59b6' };
+          return (
+            <button
+              onClick={() => {
+                socket?.emit('sendChatMessage', { text: `[MEGA_EMOTE:${me.selectedMegaEmote}]` });
+                setViewingPlayerId(null);
+              }}
+              style={{
+                marginTop: 10, width: '100%',
+                background: `linear-gradient(135deg, ${cfg.color}, ${cfg.color}88)`,
+                border: `2px solid ${cfg.color}`,
+                color: '#fff', fontSize: 13, fontWeight: 900,
+                padding: '10px 14px', borderRadius: 10, cursor: 'pointer',
+                boxShadow: `0 4px 20px ${cfg.color}66`,
+                animation: 'active-player-pulse 1.8s ease-in-out infinite',
+                letterSpacing: 1
+              }}
+            >
+              {cfg.label}
+            </button>
+          );
+        })()}
       </div>
 
       {gameState?.allowTrades && isMyTurn && !isBlocked && p.id !== playerId && (
@@ -3782,7 +3983,15 @@ const handleSendChat = (e) => {
   setChatInput('');
   sfxChatSent();
 };
-useEffect(() => { if (isChatOpen) chatEndRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [chatMessages, isChatOpen]);
+
+useEffect(() => {
+  if (isChatOpen && chatEndRef.current) {
+    const parent = chatEndRef.current.parentNode;
+    if (parent) {
+      parent.scrollTop = parent.scrollHeight;
+    }
+  }
+}, [chatMessages, isChatOpen]);
 
 const handleDiscard = () => {
   const over = (me?.hand?.length || 0) - (gameState?.handLimit || 7);
@@ -4062,7 +4271,7 @@ const renderModal = () => {
                                   border: `1.2px solid ${info.hex}`, borderRadius: 3,
                                   display: 'flex', flexDirection: 'column', alignItems: 'center', overflow: 'hidden'
                                 }}>
-                                  <div style={{ width: '100%', height: 3, background: c.isWild ? 'linear-gradient(90deg, #E74C3C, #F39C12, #2ECC71, #3498DB)' : (c.isDual && c.colors ? `linear-gradient(90deg, ${COLOR_INFO[c.colors[0]]?.hex} 0%, ${COLOR_INFO[c.colors[0]]?.hex} 50%, ${COLOR_INFO[c.colors[1]]?.hex} 50%, ${COLOR_INFO[c.colors[1]]?.hex} 100%)` : info.hex) }} />
+                                  <div style={{ width: '100%', height: 3, background: getMiniCardStripeStyle(c, color) }} />
                                   <span style={{ fontSize: 6, fontWeight: 900, color: '#333', transform: 'scale(0.8)', marginTop: 2 }}>{c.isWild ? '★' : c.value}</span>
                                 </div>
                               ))}
@@ -4787,7 +4996,7 @@ const renderModal = () => {
               <div style={{ display: 'flex', flexDirection: 'column', gap: 6, background: 'rgba(255,255,255,0.03)', borderRadius: 10, padding: 12, border: '1px solid rgba(255,255,255,0.05)' }}>
                 <div style={{ fontWeight: 'bold', color: '#FFD700', fontSize: 11, borderBottom: '1px solid rgba(255,255,255,0.1)', paddingBottom: 6, marginBottom: 4 }}>{lang === 'en' ? 'CARD DESCRIPTION' : 'KART AÇIKLAMASI'}</div>
                 <p style={{ lineHeight: 1.5, margin: 0, fontSize: 12, color: '#eee' }}>
-                  {getDetailedCardTip(card, lang)}
+                  {renderColorizedDetailedTip(getDetailedCardTip(card, lang))}
                 </p>
               </div>
             )}
@@ -4946,6 +5155,9 @@ const renderModal = () => {
     const unlockedPlayEffects = dbUser?.unlockedPlayEffects || ['default'];
     const unlockedTableThemes = dbUser?.unlockedTableThemes || ['default'];
     const unlockedDiceSkins = dbUser?.unlockedDiceSkins || ['default'];
+    const unlockedAuras = dbUser?.unlockedAuras || ['default'];
+    const unlockedChatSkins = dbUser?.unlockedChatSkins || ['default'];
+    const unlockedMegaEmotes = dbUser?.unlockedMegaEmotes || ['default'];
 
     const currentBorder = dbUser?.selectedBorder || 'default';
     const currentCardBack = dbUser?.selectedCardBack || 'default';
@@ -4953,6 +5165,9 @@ const renderModal = () => {
     const currentPlayEffect = dbUser?.selectedPlayEffect || 'default';
     const currentTableTheme = dbUser?.selectedTableTheme || 'default';
     const currentDiceSkin = dbUser?.selectedDiceSkin || 'default';
+    const currentAura = dbUser?.selectedAura || 'default';
+    const currentChatSkin = dbUser?.selectedChatSkin || 'default';
+    const currentMegaEmote = dbUser?.selectedMegaEmote || 'default';
 
     const points = dbUser?.points || 0;
 
@@ -4962,19 +5177,31 @@ const renderModal = () => {
     const previewPlayEffect = (hoveredShopItem?.type === 'playEffect' ? hoveredShopItem.id : currentPlayEffect);
     const previewTableTheme = (hoveredShopItem?.type === 'tableTheme' ? hoveredShopItem.id : currentTableTheme);
     const previewDiceSkin = (hoveredShopItem?.type === 'diceSkin' ? hoveredShopItem.id : currentDiceSkin);
+    const previewAura = (hoveredShopItem?.type === 'aura' ? hoveredShopItem.id : currentAura);
+    const previewChatSkin = (hoveredShopItem?.type === 'chatSkin' ? hoveredShopItem.id : currentChatSkin);
+    const previewMegaEmote = (hoveredShopItem?.type === 'megaEmote' ? hoveredShopItem.id : currentMegaEmote);
 
     const tableThemeItems = [
       { id: 'volcano', name: { tr: '🌋 Lav Çukuru', en: '🌋 Volcanic Rift' }, cost: 300, color: '#ff4500', desc: { tr: 'Sıcak akan lavlar ve yanan közler', en: 'Flowing volcanic magma background' } },
       { id: 'cosmic', name: { tr: '🌌 Kozmik Bulut', en: '🌌 Cosmic Nebulae' }, cost: 400, color: '#8e44ad', desc: { tr: 'Yıldızlar ve mor nebula bulutları', en: 'Deep space purple starry galaxy backdrop' } },
       { id: 'matrix', name: { tr: '🟢 Neon Matris', en: '🟢 Neon Grid' }, cost: 300, color: '#39ff14', desc: { tr: 'Siber kod yağmuru ve yeşil gridler', en: 'Cyberpunk neon green hacker grid layout' } },
-      { id: 'gold', name: { tr: '👑 Altın Saray', en: '👑 Golden Palace' }, cost: 500, color: '#FFD700', desc: { tr: 'Lüks altın parçacıkları ve sarı ışıltılar', en: 'Luxury golden palace premium backdrop' } }
+      { id: 'gold', name: { tr: '👑 Altın Saray', en: '👑 Golden Palace' }, cost: 500, color: '#FFD700', desc: { tr: 'Lüks altın parçacıkları ve sarı ışıltılar', en: 'Luxury golden palace premium backdrop' } },
+      { id: 'snow', name: { tr: '❄️ Kış Uykusu', en: '❄️ Winter Snowfall' }, cost: 350, color: '#a5f3fc', desc: { tr: 'Yumuşak kar taneleri ve buz mavisi atmosfer', en: 'Gentle snowflakes falling on ice blue backdrop' } },
+      { id: 'blizzard', name: { tr: '💨 Kar Fırtınası', en: '💨 Blizzard Storm' }, cost: 500, color: '#e2e8f0', desc: { tr: 'Dondurucu fırtına rüzgarları ve kar birikintileri', en: 'Violent freezing blizzard storm with frost particles' } },
+      { id: 'neon_alley', name: { tr: '🌆 Siber Sokak', en: '🌆 Neon Alley' }, cost: 450, color: '#ff00ff', desc: { tr: 'Mor ve turkuaz neon ışıklı siber şehir', en: 'Cyberpunk city alley with neon lights' } },
+      { id: 'zen_garden', name: { tr: '🎋 Zen Bahçesi', en: '🎋 Zen Garden' }, cost: 350, color: '#2ecc71', desc: { tr: 'Huzurlu bambular ve yeşil bahçe masası', en: 'Bamboo forest and zen green garden table' } },
+      { id: 'haunted_castle', name: { tr: '🏰 Drakula Şatosu', en: '🏰 Haunted Castle' }, cost: 480, color: '#7f00ff', desc: { tr: 'Loş mum ışıklı karanlık gotik şato', en: 'Dark gothic castle with dim candlelight' } },
+      { id: 'pirate_ship', name: { tr: '🏴‍☠️ Korsan Kamarası', en: '🏴‍☠️ Pirate Ship' }, cost: 380, color: '#d4af37', desc: { tr: 'Eski ahşap haritalı denizci masası', en: 'Captain cabin wooden map table' } }
     ];
 
     const diceSkinItems = [
       { id: 'gold', name: { tr: '👑 Altın Zar', en: '👑 Gold Dice' }, cost: 150, color: '#FFD700', symbol: '🪙', desc: { tr: 'Zar atarken altın maden saçılır', en: 'Rolls premium golden luxury dice' } },
       { id: 'matrix', name: { tr: '🟢 Neon Zar', en: '🟢 Neon Dice' }, cost: 200, color: '#39ff14', symbol: '🔋', desc: { tr: 'Siber yeşil neon iz bırakan zar', en: 'Matrix green cyberpunk trail dice' } },
       { id: 'lava', name: { tr: '🔥 Lav Zarı', en: '🔥 Lava Dice' }, cost: 250, color: '#ff4500', symbol: '☄️', desc: { tr: 'Yanan alev topları fırlatan zar', en: 'Rolls burning volcanic ember dice' } },
-      { id: 'cosmic', name: { tr: '🌌 Kozmik Zar', en: '🌌 Cosmic Dice' }, cost: 300, color: '#8e44ad', symbol: '🌌', desc: { tr: 'Kuyruklu yıldız izi bırakan mor zar', en: 'Nebula stardust space portal dice' } }
+      { id: 'cosmic', name: { tr: '🌌 Kozmik Zar', en: '🌌 Cosmic Dice' }, cost: 300, color: '#8e44ad', symbol: '🌌', desc: { tr: 'Kuyruklu yıldız izi bırakan mor zar', en: 'Nebula stardust space portal dice' } },
+      { id: 'crystal', name: { tr: '🧊 Kristal Buz Zarı', en: '🧊 Crystal Ice Dice' }, cost: 250, color: '#a5f3fc', symbol: '❄️', desc: { tr: 'Şeffaf buzul kristalinden oyulmuş zar', en: 'Rolls frosted crystal ice dice' } },
+      { id: 'wood_carved', name: { tr: '🪵 El Oyması Ahşap Zar', en: '🪵 Wood Carved Dice' }, cost: 150, color: '#8b5a2b', symbol: '🪵', desc: { tr: 'Tok ses çıkaran antik meşe ağacı zarı', en: 'Classic wooden dice roll sound' } },
+      { id: 'emerald_dice', name: { tr: '💚 Zümrüt Zar', en: '💚 Emerald Dice' }, cost: 300, color: '#2ecc71', symbol: '💚', desc: { tr: 'Yeşil parıltılı lüks değerli taş zar', en: 'Luxury emerald gemstone dice' } }
     ];
 
     const borderItems = [
@@ -4982,13 +5209,32 @@ const renderModal = () => {
       { id: 'neon', name: { tr: 'Neon Çerçeve', en: 'Neon Border' }, cost: 250, color: '#ff00ff', desc: { tr: 'Fütüristik mor neon parlaması', en: 'Vibrant neon purple glow' } },
       { id: 'cyber', name: { tr: 'Siber Çerçeve', en: 'Cyber Border' }, cost: 350, color: '#39ff14', desc: { tr: 'Hacker yeşili matrix efekti', en: 'Cyberpunk green glow' } },
       { id: 'flame', name: { tr: 'Alevli Çerçeve', en: 'Flame Border' }, cost: 500, color: '#ff4500', desc: { tr: 'Efsanevi yanan alev halkası', en: 'Legendary burning flame border' } },
-      { id: 'cosmic', name: { tr: 'Kozmik Çerçeve', en: 'Cosmic Border' }, cost: 600, color: '#8e44ad', desc: { tr: 'Uzay yıldızlı gizemli çerçeve', en: 'Mysterious space nebula border' } }
+      { id: 'cosmic', name: { tr: 'Kozmik Çerçeve', en: 'Cosmic Border' }, cost: 600, color: '#8e44ad', desc: { tr: 'Uzay yıldızlı gizemli çerçeve', en: 'Mysterious space nebula border' } },
+      { id: 'rgb', name: { tr: 'RGB Dalga Çerçeve', en: 'RGB Wave Border' }, cost: 400, color: '#ff3f34', desc: { tr: 'Gökkuşağı neon renk döngüsü', en: 'Rainbow neon color wave' } },
+      { id: 'vortex', name: { tr: 'Girdap Çerçeve', en: 'Vortex Border' }, cost: 450, color: '#9b5de5', desc: { tr: 'Kozmik karanlık uzay girdabı', en: 'Cosmic space portal vortex' } },
+      { id: 'tesla', name: { tr: 'Tesla Çerçeve', en: 'Tesla Border' }, cost: 350, color: '#00d2ff', desc: { tr: 'Elektrik kıvılcımlı parlama', en: 'Pulsing electric tesla spark border' } },
+      { id: 'matrix_code', name: { tr: 'Matris Çerçeve', en: 'Matrix Border' }, cost: 300, color: '#00ff00', desc: { tr: 'Aşağı süzülen siber yeşil kod', en: 'Green matrix cyber hacker border' } },
+      { id: 'frost', name: { tr: 'Buzlu Çerçeve', en: 'Frost Border' }, cost: 280, color: '#80deea', desc: { tr: 'Dondurucu buz kristali parıltısı', en: 'Icy frostbite glowing outline' } },
+      { id: 'bio', name: { tr: 'Biyo Çerçeve', en: 'Biohazard Border' }, cost: 260, color: '#78ffd6', desc: { tr: 'Biyo-tehlike parlak toksik gaz', en: 'Toxic green biohazard border' } },
+      { id: 'sakura', name: { tr: 'Sakura Çerçeve', en: 'Sakura Border' }, cost: 220, color: '#ff7ebb', desc: { tr: 'Pembe yaprak saçan kiraz çiçeği', en: 'Cherry blossom petal overlay' } },
+      { id: 'pirate', name: { tr: 'Korsan Çerçevesi', en: 'Pirate Border' }, cost: 300, color: '#d4af37', desc: { tr: 'Altın sikkeler ve antik kurukafalar', en: 'Gold coins and pirate skull border' } },
+      { id: 'haunted', name: { tr: 'Hayalet Çerçeve', en: 'Haunted Border' }, cost: 350, color: '#9b5de5', desc: { tr: 'Mor dumanlı tekinsiz gölge', en: 'Purple smoke haunted shadow glow' } }
     ];
 
     const cardBackItems = [
       { id: 'naruto', name: { tr: 'Naruto Teması', en: 'Naruto Back' }, cost: 150, symbol: '🍥', bg: 'linear-gradient(135deg, #ff5722, #e64a19)', border: '#ffeb3b', desc: { tr: 'Girdap logolu turuncu arkalık', en: 'Orange vortex card design' } },
       { id: 'onepiece', name: { tr: 'One Piece Teması', en: 'One Piece Back' }, cost: 250, symbol: '☠️', bg: 'linear-gradient(135deg, #2a2a2a, #0d0d0d)', border: '#f1c40f', desc: { tr: 'Korsan logolu karanlık arkalık', en: 'Dark Strawhat Jolly Roger design' } },
-      { id: 'cyberpunk', name: { tr: 'Cyberpunk Teması', en: 'Cyberpunk Back' }, cost: 350, symbol: '⚡', bg: 'linear-gradient(135deg, #0f0f1b, #f7df1e)', border: '#39ff14', desc: { tr: 'Matris yeşili neon siber desen', en: 'Neon hacker matrix layout' } }
+      { id: 'cyberpunk', name: { tr: 'Cyberpunk Teması', en: 'Cyberpunk Back' }, cost: 350, symbol: '⚡', bg: 'linear-gradient(135deg, #0f0f1b, #f7df1e)', border: '#39ff14', desc: { tr: 'Matris yeşili neon siber desen', en: 'Neon hacker matrix layout' } },
+      { id: 'holo', name: { tr: 'Holo Prizma Arkalık', en: 'Prism Holo Back' }, cost: 300, symbol: '💎', bg: 'linear-gradient(135deg, #00f0ff, #ff007f, #7f00ff)', border: '#ffffff', desc: { tr: 'Holografik metalik parıltı', en: 'Holographic metallic rainbow glow' } },
+      { id: 'carbon', name: { tr: 'Karbon Fiber Arkalık', en: 'Carbon Stealth Back' }, cost: 350, symbol: '🏁', bg: 'linear-gradient(45deg, #111, #222)', border: '#ff4757', desc: { tr: 'Yarış arabası karbon dokusu', en: 'Sporty carbon fiber matte texture' } },
+      { id: 'scroll', name: { tr: 'Antik Parşömen Arkalık', en: 'Royal Scroll Back' }, cost: 200, symbol: '📜', bg: 'linear-gradient(135deg, #f3e5ab, #c19a6b)', border: '#8b5a2b', desc: { tr: 'Eski antika deri kaplama', en: 'Old royal leather scroll texture' } },
+      { id: 'galaxy', name: { tr: 'Galaksi Nebulası Arkalık', en: 'Milky Way Back' }, cost: 400, symbol: '🌌', bg: 'linear-gradient(135deg, #2d1b4e, #0c081e)', border: '#a8a5e6', desc: { tr: 'Yıldızlı derin uzay nebulası', en: 'Star stardust galaxy space texture' } },
+      { id: 'retro_arcade', name: { tr: 'Retro Arcade Arkalık', en: 'Vaporwave Back' }, cost: 220, symbol: '👾', bg: 'linear-gradient(135deg, #ff007f, #7f00ff)', border: '#00f0ff', desc: { tr: '80ler retro piksel sanatı', en: 'Retro pixel vaporwave gaming texture' } },
+      { id: 'gilded_deco', name: { tr: 'Altın Bölme Arkalık', en: 'Gilded Deco Back' }, cost: 280, symbol: '⚜️', bg: 'linear-gradient(135deg, #1a1a1a, #0a0a0a)', border: '#d4af37', desc: { tr: 'Kraliyet saray çizgi desenleri', en: 'Royal geometric gold line back' } },
+      { id: 'retro_boy', name: { tr: 'Gameboy Arkalık', en: 'Gameboy Back' }, cost: 200, symbol: '🎮', bg: 'linear-gradient(135deg, #386b52, #1b3a2b)', border: '#00ff00', desc: { tr: '90lar retro el konsolu deseni', en: '90s retro hand console pattern' } },
+      { id: 'steampunk', name: { tr: 'Steampunk Arkalık', en: 'Steampunk Back' }, cost: 300, symbol: '⚙️', bg: 'linear-gradient(135deg, #5c3a21, #2e1d0f)', border: '#d4af37', desc: { tr: 'Dönen mekanik altın çarklar', en: 'Rotating mechanical gold brass gears' } },
+      { id: 'ancient', name: { tr: 'Mısır Parşömeni', en: 'Ancient Egyptian' }, cost: 220, symbol: '🏺', bg: 'linear-gradient(135deg, #dfc15d, #a28522)', border: '#ffffff', desc: { tr: 'Kum sarısı parıldayan hiyeroglifler', en: 'Ancient hieroglyphic desert yellow' } },
+      { id: 'candy', name: { tr: 'Şeker Diyarı', en: 'Candy Crush Back' }, cost: 180, symbol: '🍬', bg: 'linear-gradient(135deg, #ff9eb5, #e91e63)', border: '#ffeb3b', desc: { tr: 'Bonbon desenli kremalı kaplama', en: 'Cute colorful candy land back' } }
     ];
 
     const titleItems = [
@@ -4996,14 +5242,28 @@ const renderModal = () => {
       { id: 'flame', name: { tr: '🔥 Sinsi Hırsız', en: '🔥 Sly Thief' }, cost: 200, color: '#ff4500', desc: { tr: 'Yanan alevli sinsi unvan', en: 'Flaming red thief profile title' } },
       { id: 'cyber', name: { tr: '⚡ Siber Kartal', en: '⚡ Cyber Falcon' }, cost: 300, color: '#39ff14', desc: { tr: 'Matris yeşili neon siber unvan', en: 'Cyberpunk glowing profile title' } },
       { id: 'kral', name: { tr: '👑 Oyunun Kralı', en: '👑 Game King' }, cost: 450, color: '#f1c40f', desc: { tr: 'Altın renkli hareketli unvan', en: 'Golden bouncing king profile title' } },
-      { id: 'cosmic', name: { tr: '🌌 Kozmik Efendi', en: '🌌 Cosmic Lord' }, cost: 500, color: '#8e44ad', desc: { tr: 'Nebula moru dönen kozmik unvan', en: 'Space rotating celestial title' } }
+      { id: 'cosmic', name: { tr: '🌌 Kozmik Efendi', en: '🌌 Cosmic Lord' }, cost: 500, color: '#8e44ad', desc: { tr: 'Nebula moru dönen kozmik unvan', en: 'Space rotating celestial title' } },
+      { id: 'ice_bender', name: { tr: '🧊 Buz Bükücü', en: '🧊 Ice Bender' }, cost: 120, color: '#a5f3fc', desc: { tr: 'Soğukkanlı strateji kuran akıllar', en: 'Frost tactical master profile title' } },
+      { id: 'sea_raider', name: { tr: '🏴‍☠️ Deniz Yağmacısı', en: '🏴‍☠️ Sea Raider' }, cost: 150, color: '#d4af37', desc: { tr: 'Kartları çalan korsan ruhlar', en: 'Greedy pirate sailor profile title' } },
+      { id: 'gamer', name: { tr: '👾 Retro Oyuncu', en: '👾 Retro Gamer' }, cost: 100, color: '#ff00ff', desc: { tr: 'Arcade atari salonu nostaljisi', en: 'Classic gaming layout enthusiast' } },
+      { id: 'lucky', name: { tr: '🍀 Şanslı Yusuf', en: '🍀 Lucky Charm' }, cost: 120, color: '#2ecc71', desc: { tr: 'Hep en iyi kartı çeken şanslı eller', en: 'Always draws the right card' } }
     ];
 
     const playEffectItems = [
       { id: 'gold', name: { tr: '✨ Yıldız Patlaması', en: '✨ Star Explosion' }, cost: 150, symbol: '✨', bg: 'linear-gradient(135deg, #FFD700, #F39C12)', border: '#ffe57f', desc: { tr: 'Kart atınca altın yıldızlar saçar', en: 'Gold stars fly out on play' } },
       { id: 'heart', name: { tr: '💖 Neon Kalpler', en: '💖 Neon Hearts' }, cost: 250, symbol: '💖', bg: 'linear-gradient(135deg, #e91e63, #ad1457)', border: '#ff80ab', desc: { tr: 'Pembe renkli parlayan kalpler atar', en: 'Glow hearts fly out on play' } },
       { id: 'flame', name: { tr: '🔥 Alev Topları', en: '🔥 Fireballs' }, cost: 350, symbol: '🔥', bg: 'linear-gradient(135deg, #d35400, #e67e22)', border: '#ffab40', desc: { tr: 'Yanan kırmızı alev kıvılcımları saçar', en: 'Fire ember sparks fly out on play' } },
-      { id: 'cosmic', name: { tr: '☄️ Kozmik Meteor', en: '☄️ Cosmic Meteor' }, cost: 400, symbol: '☄️', bg: 'linear-gradient(135deg, #8e44ad, #2980b9)', border: '#b388ff', desc: { tr: 'Mor renkli kayan yıldızlar saçar', en: 'Celestial stardust flies out on play' } }
+      { id: 'cosmic', name: { tr: '☄️ Kozmik Meteor', en: '☄️ Cosmic Meteor' }, cost: 400, symbol: '☄️', bg: 'linear-gradient(135deg, #8e44ad, #2980b9)', border: '#b388ff', desc: { tr: 'Mor renkli kayan yıldızlar saçar', en: 'Celestial stardust flies out on play' } },
+      { id: 'cash', name: { tr: '💵 Para Yağmuru', en: '💵 Cash Shower' }, cost: 300, symbol: '💵', bg: 'linear-gradient(135deg, #2ecc71, #27ae60)', border: '#a3e4d7', desc: { tr: 'Havada uçuşan nakit dolarlar saçar', en: 'Flying paper dollar cash spray' } },
+      { id: 'emerald', name: { tr: '💚 Zümrüt Yağmuru', en: '💚 Emerald Shower' }, cost: 250, symbol: '💚', bg: 'linear-gradient(135deg, #2ecc71, #1abc9c)', border: '#abebc6', desc: { tr: 'Yeşil parıldayan zümrütler saçar', en: 'Emerald gemstone shards fly out' } },
+      { id: 'blackhole', name: { tr: '🕳️ Kara Delik', en: '🕳️ Black Hole' }, cost: 450, symbol: '🕳️', bg: 'linear-gradient(135deg, #34495e, #2c3e50)', border: '#5d6d7e', desc: { tr: 'Yerçekimini büken uzay girdapları', en: 'Vortex spatial gravity particles' } },
+      { id: 'thunder', name: { tr: '⚡ Yıldırım Şimşek', en: '⚡ Thunder Strike' }, cost: 380, symbol: '⚡', bg: 'linear-gradient(135deg, #f1c40f, #f39c12)', border: '#fcf3cf', desc: { tr: 'Elektrikli sarı şimşekler çakar', en: 'Lightning bolt sparks fly out' } },
+      { id: 'confetti', name: { tr: '🎉 Konfeti Bombası', en: '🎉 Celebration Pop' }, cost: 200, symbol: '🎉', bg: 'linear-gradient(135deg, #e74c3c, #9b5de5)', border: '#f5b041', desc: { tr: 'Etrafa renkli konfetiler saçar', en: 'Festive party confetti spray' } },
+      { id: 'pixie', name: { tr: '✨ Peri Tozu', en: '✨ Pixie Dust' }, cost: 180, symbol: '✨', bg: 'linear-gradient(135deg, #f5b041, #f4d03f)', border: '#f9e79f', desc: { tr: 'Hafif süzülen peri simleri saçar', en: 'Slow magical glitter sparkles spray' } },
+      { id: 'sakura_petals', name: { tr: '🌸 Sakura Yaprakları', en: '🌸 Sakura Petals' }, cost: 200, symbol: '🌸', bg: 'linear-gradient(135deg, #ffb3c6, #ff7ebb)', border: '#ffe5ec', desc: { tr: 'Uçuşan pembe kiraz yaprakları', en: 'Cherry blossom petals blow in breeze' } },
+      { id: 'bubbles', name: { tr: '🫧 Sabun Köpükleri', en: '🫧 Soap Bubbles' }, cost: 150, symbol: '🫧', bg: 'linear-gradient(135deg, #85e3ff, #4ea8de)', border: '#caf0f8', desc: { tr: 'Etrafa dağılan parlak şeffaf balonlar', en: 'Free floating glossy water bubbles' } },
+      { id: 'skulls', name: { tr: '💀 Lanetli Kemikler', en: '💀 Haunted Skulls' }, cost: 280, symbol: '💀', bg: 'linear-gradient(135deg, #a29bfe, #6c5ce7)', border: '#d63031', desc: { tr: 'Karanlık hayaletli kurukafalar fırlatır', en: 'Spooky cartoon skulls float out' } },
+      { id: 'ice_shards', name: { tr: '❄️ Buz Kıymıkları', en: '❄️ Frost Shards' }, cost: 220, symbol: '❄️', bg: 'linear-gradient(135deg, #afeeee, #80deea)', border: '#ffffff', desc: { tr: 'Soğuk havada donan buz kristalleri', en: 'Freezing snowflake ice fragments spray' } }
     ];
 
     const unlockedBadges = dbUser?.unlockedBadges || ['default'];
@@ -5015,6 +5275,27 @@ const renderModal = () => {
       { id: 'ghost', name: { tr: '👻 Hayalet', en: '👻 Ghost' }, cost: 300, color: '#c084fc', cssClass: 'badge-ghost', desc: { tr: 'Mor süzülen hayalet rozeti', en: 'Floating purple ghost badge' } },
       { id: 'legend', name: { tr: '🦁 Efsane', en: '🦁 Legend' }, cost: 500, color: '#fbbf24', cssClass: 'badge-legend', desc: { tr: 'Altın renkli parlayan efsane rozeti', en: 'Shining gold legend badge' } },
       { id: 'king', name: { tr: '🫅 Hükümdar', en: '🫅 Ruler' }, cost: 750, color: '#FFD700', cssClass: 'badge-king', desc: { tr: 'Altın ışıltılı kral rozeti', en: 'Royal pulsing king badge' } }
+    ];
+
+    const auraItems = [
+      { id: 'hellfire', name: { tr: '🔥 Cehennem Ateşi', en: '🔥 Hellfire Aura' }, cost: 600, color: '#ff4500', desc: { tr: 'Profil arkasından yükselen cehennem alevleri', en: 'Hellfire flames rising behind profile' } },
+      { id: 'royal_crown', name: { tr: '👑 Hükümdar Tacı', en: '👑 Royal Crown' }, cost: 750, color: '#ffd700', desc: { tr: 'Profil üstünde süzülen asil altın taç', en: 'Noble gold crown floating above profile' } },
+      { id: 'glitch', name: { tr: '👾 Siber Dalgalanma', en: '👾 Cyber Glitch' }, cost: 500, color: '#ff00ff', desc: { tr: 'Neon renklerde dalgalanan siber parlamalar', en: 'Cyberpunk neon glitch aura distortion' } },
+      { id: 'frozen_aurora', name: { tr: '🌌 Kutup Işıkları', en: '🌌 Polar Aurora' }, cost: 650, color: '#00ffff', desc: { tr: 'Yeşil kutup ışıklarının göksel dansı', en: 'Mystical green polar lights glow' } }
+    ];
+
+    const chatSkinItems = [
+      { id: 'gold_leaf', name: { tr: '⚜️ Altın Varak Balon', en: '⚜️ Gold Leaf Bubble' }, cost: 400, color: '#ffd700', desc: { tr: 'Altın renklerinde parlayan lüks sohbet balonu', en: 'Luxury golden shining chat message box' } },
+      { id: 'matrix_hacker', name: { tr: '🟢 Hacker Balonu', en: '🟢 Hacker Bubble' }, cost: 300, color: '#39ff14', desc: { tr: 'Siyah üzerine yeşil akan matris kodları', en: 'Matrix green terminal typing bubble' } },
+      { id: 'rainbow_wave', name: { tr: '🌈 RGB Dalgalanma', en: '🌈 RGB Wave' }, cost: 450, color: '#ff00ff', desc: { tr: 'Gökkuşağı renklerinde değişen sohbet balonu', en: 'Rainbow neon color loop message skin' } },
+      { id: 'lava_bubble', name: { tr: '🔥 Erimiş Lav Balonu', en: '🔥 Volcanic Bubble' }, cost: 380, color: '#e67e22', desc: { tr: 'Kenarlarından dumanlar tüten alevli kutu', en: 'Molten magma hot orange bubble' } }
+    ];
+
+    const megaEmoteItems = [
+      { id: 'tomato_splat', name: { tr: '🍅 Domates Yağmuru', en: '🍅 Tomato Splat' }, cost: 300, color: '#e74c3c', desc: { tr: 'Ekranı kaplayan dev sulu domatesler fırlatır', en: 'Throws giant red tomatoes all over screens' } },
+      { id: 'make_it_rain', name: { tr: '💸 Para Saçma Şovu', en: '💸 Make It Rain' }, cost: 500, color: '#2ecc71', desc: { tr: 'Ekrandan aşağı yağan binlerce dolar banknotu', en: 'Showers massive dollar bills on screens' } },
+      { id: 'salt_bae', name: { tr: '🧂 Tuzlama Şovu', en: '🧂 Salt Bae' }, cost: 350, color: '#ecf0f1', desc: { tr: 'Arazilerin üzerine havalı tuz taneleri döker', en: 'Sprinkles seasoning salt across the board' } },
+      { id: 'nuke_boom', name: { tr: '☢️ Nükleer Patlama', en: '☢️ Nuclear Strike' }, cost: 600, color: '#f39c12', desc: { tr: 'Tüm ekranda devasa bir mantar bulutu patlatır', en: 'Explodes a massive mushroom cloud overlay' } }
     ];
 
     return (
@@ -5727,6 +6008,252 @@ const renderModal = () => {
                         ) : (
                           <button
                             onClick={(e) => handleBuyCustomization('diceSkin', item.id, item.cost, e)}
+                            disabled={points < item.cost}
+                            style={{
+                              width: '100%',
+                              background: points >= item.cost ? `linear-gradient(135deg, ${item.color}, #1e293b)` : 'rgba(255,255,255,0.03)',
+                              color: points >= item.cost ? '#fff' : '#555',
+                              border: 'none', fontSize: 9, fontWeight: 'bold', padding: '4px 8px', borderRadius: 6,
+                              cursor: points >= item.cost ? 'pointer' : 'default',
+                              boxShadow: points >= item.cost ? `0 2px 8px ${item.color}33` : 'none'
+                            }}
+                          >
+                            🪙 {item.cost}
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Profil Auraları Section */}
+            <div style={{ marginTop: 15 }}>
+              <h3 style={{ fontSize: 11, color: '#94a3b8', borderBottom: '1px solid rgba(255,255,255,0.08)', paddingBottom: 4, marginBottom: 10, textTransform: 'uppercase', letterSpacing: 0.5 }}>
+                {lang === 'en' ? '🔮 Profile Auras' : '🔮 Profil Auraları'}
+              </h3>
+              <p style={{ fontSize: 9, color: '#64748b', marginBottom: 10, fontStyle: 'italic' }}>
+                {lang === 'en' ? 'Glowing animations surrounding your profile panel card.' : 'Profil panelinizin arkasında dönen parıltılı efektler.'}
+              </p>
+              <div className="shop-items-grid">
+                {/* Default Aura */}
+                <div
+                  className={`shop-item-card ${currentAura === 'default' ? 'is-active' : ''}`}
+                  style={{ '--card-accent': '#64748b', '--card-glow': 'rgba(100,116,139,0.15)' }}
+                  onMouseEnter={() => setHoveredShopItem({ type: 'aura', id: 'default' })}
+                  onMouseLeave={() => setHoveredShopItem(null)}
+                  onClick={() => currentAura !== 'default' && handleSelectCustomization('aura', 'default')}
+                >
+                  <div style={{ fontSize: 20, marginBottom: 6 }}>🔮</div>
+                  <div style={{ fontSize: 11, fontWeight: 'bold', color: '#fff', marginBottom: 2 }}>
+                    {lang === 'en' ? 'No Aura' : 'Aura Yok'}
+                  </div>
+                  <div style={{ fontSize: 8, color: '#64748b', height: 20, overflow: 'hidden', lineHeight: 1.1 }}>
+                    {lang === 'en' ? 'No background effect' : 'Arka plan efekti kapatılır'}
+                  </div>
+                  <div style={{ marginTop: 8, width: '100%' }}>
+                    {currentAura === 'default' ? (
+                      <span style={{ fontSize: 9, fontWeight: 900, color: '#39ff14', background: 'rgba(57,255,20,0.1)', padding: '3px 8px', borderRadius: 6, display: 'block' }}>{lang === 'en' ? 'ACTIVE' : 'AKTİF'}</span>
+                    ) : (
+                      <span style={{ fontSize: 9, fontWeight: 900, color: '#94a3b8', background: 'rgba(255,255,255,0.05)', padding: '3px 8px', borderRadius: 6, display: 'block' }}>{lang === 'en' ? 'EQUIP' : 'KUŞAN'}</span>
+                    )}
+                  </div>
+                </div>
+
+                {/* Custom Auras */}
+                {auraItems.map(item => {
+                  const unlocked = unlockedAuras.includes(item.id);
+                  const active = currentAura === item.id;
+                  return (
+                    <div
+                      key={item.id}
+                      className={`shop-item-card ${active ? 'is-active' : ''}`}
+                      style={{ '--card-accent': item.color, '--card-glow': `${item.color}33` }}
+                      onMouseEnter={() => setHoveredShopItem({ type: 'aura', id: item.id })}
+                      onMouseLeave={() => setHoveredShopItem(null)}
+                    >
+                      <div style={{ fontSize: 20, marginBottom: 6 }}>🔮</div>
+                      <div style={{ fontSize: 11, fontWeight: 'bold', color: item.color, marginBottom: 2 }}>
+                        {lang === 'en' ? item.name.en : item.name.tr}
+                      </div>
+                      <div style={{ fontSize: 8, color: '#64748b', height: 20, overflow: 'hidden', lineHeight: 1.1 }}>
+                        {lang === 'en' ? item.desc.en : item.desc.tr}
+                      </div>
+                      <div style={{ marginTop: 8, width: '100%' }}>
+                        {active ? (
+                          <span style={{ fontSize: 9, fontWeight: 900, color: '#39ff14', background: 'rgba(57,255,20,0.1)', padding: '3px 8px', borderRadius: 6, display: 'block' }}>{lang === 'en' ? 'ACTIVE' : 'AKTİF'}</span>
+                        ) : unlocked ? (
+                          <button onClick={() => handleSelectCustomization('aura', item.id)} style={{ width: '100%', background: 'rgba(255,255,255,0.08)', border: 'none', color: '#fff', fontSize: 9, fontWeight: 'bold', padding: '4px 8px', borderRadius: 6, cursor: 'pointer' }}>
+                            {lang === 'en' ? 'EQUIP' : 'KUŞAN'}
+                          </button>
+                        ) : (
+                          <button
+                            onClick={(e) => handleBuyCustomization('aura', item.id, item.cost, e)}
+                            disabled={points < item.cost}
+                            style={{
+                              width: '100%',
+                              background: points >= item.cost ? `linear-gradient(135deg, ${item.color}, #1e293b)` : 'rgba(255,255,255,0.03)',
+                              color: points >= item.cost ? '#fff' : '#555',
+                              border: 'none', fontSize: 9, fontWeight: 'bold', padding: '4px 8px', borderRadius: 6,
+                              cursor: points >= item.cost ? 'pointer' : 'default',
+                              boxShadow: points >= item.cost ? `0 2px 8px ${item.color}33` : 'none'
+                            }}
+                          >
+                            🪙 {item.cost}
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Sohbet Balonları Section */}
+            <div style={{ marginTop: 15 }}>
+              <h3 style={{ fontSize: 11, color: '#94a3b8', borderBottom: '1px solid rgba(255,255,255,0.08)', paddingBottom: 4, marginBottom: 10, textTransform: 'uppercase', letterSpacing: 0.5 }}>
+                {lang === 'en' ? '💬 Chat Bubble Skins' : '💬 Sohbet Balonu Temaları'}
+              </h3>
+              <p style={{ fontSize: 9, color: '#64748b', marginBottom: 10, fontStyle: 'italic' }}>
+                {lang === 'en' ? 'Custom styled layouts for your chat messages.' : 'Sohbette yazdığınız mesaj kutularının özel görünümleri.'}
+              </p>
+              <div className="shop-items-grid">
+                {/* Default Chat Skin */}
+                <div
+                  className={`shop-item-card ${currentChatSkin === 'default' ? 'is-active' : ''}`}
+                  style={{ '--card-accent': '#64748b', '--card-glow': 'rgba(100,116,139,0.15)' }}
+                  onMouseEnter={() => setHoveredShopItem({ type: 'chatSkin', id: 'default' })}
+                  onMouseLeave={() => setHoveredShopItem(null)}
+                  onClick={() => currentChatSkin !== 'default' && handleSelectCustomization('chatSkin', 'default')}
+                >
+                  <div style={{ fontSize: 20, marginBottom: 6 }}>💬</div>
+                  <div style={{ fontSize: 11, fontWeight: 'bold', color: '#fff', marginBottom: 2 }}>
+                    {lang === 'en' ? 'Standard Box' : 'Klasik Balon'}
+                  </div>
+                  <div style={{ fontSize: 8, color: '#64748b', height: 20, overflow: 'hidden', lineHeight: 1.1 }}>
+                    {lang === 'en' ? 'Standard dark bubble' : 'Sistem varsayılan koyu mesaj kutusu'}
+                  </div>
+                  <div style={{ marginTop: 8, width: '100%' }}>
+                    {currentChatSkin === 'default' ? (
+                      <span style={{ fontSize: 9, fontWeight: 900, color: '#39ff14', background: 'rgba(57,255,20,0.1)', padding: '3px 8px', borderRadius: 6, display: 'block' }}>{lang === 'en' ? 'ACTIVE' : 'AKTİF'}</span>
+                    ) : (
+                      <span style={{ fontSize: 9, fontWeight: 900, color: '#94a3b8', background: 'rgba(255,255,255,0.05)', padding: '3px 8px', borderRadius: 6, display: 'block' }}>{lang === 'en' ? 'EQUIP' : 'KUŞAN'}</span>
+                    )}
+                  </div>
+                </div>
+
+                {/* Custom Chat Skins */}
+                {chatSkinItems.map(item => {
+                  const unlocked = unlockedChatSkins.includes(item.id);
+                  const active = currentChatSkin === item.id;
+                  return (
+                    <div
+                      key={item.id}
+                      className={`shop-item-card ${active ? 'is-active' : ''}`}
+                      style={{ '--card-accent': item.color, '--card-glow': `${item.color}33` }}
+                      onMouseEnter={() => setHoveredShopItem({ type: 'chatSkin', id: item.id })}
+                      onMouseLeave={() => setHoveredShopItem(null)}
+                    >
+                      <div style={{ fontSize: 20, marginBottom: 6 }}>💬</div>
+                      <div style={{ fontSize: 11, fontWeight: 'bold', color: item.color, marginBottom: 2 }}>
+                        {lang === 'en' ? item.name.en : item.name.tr}
+                      </div>
+                      <div style={{ fontSize: 8, color: '#64748b', height: 20, overflow: 'hidden', lineHeight: 1.1 }}>
+                        {lang === 'en' ? item.desc.en : item.desc.tr}
+                      </div>
+                      <div style={{ marginTop: 8, width: '100%' }}>
+                        {active ? (
+                          <span style={{ fontSize: 9, fontWeight: 900, color: '#39ff14', background: 'rgba(57,255,20,0.1)', padding: '3px 8px', borderRadius: 6, display: 'block' }}>{lang === 'en' ? 'ACTIVE' : 'AKTİF'}</span>
+                        ) : unlocked ? (
+                          <button onClick={() => handleSelectCustomization('chatSkin', item.id)} style={{ width: '100%', background: 'rgba(255,255,255,0.08)', border: 'none', color: '#fff', fontSize: 9, fontWeight: 'bold', padding: '4px 8px', borderRadius: 6, cursor: 'pointer' }}>
+                            {lang === 'en' ? 'EQUIP' : 'KUŞAN'}
+                          </button>
+                        ) : (
+                          <button
+                            onClick={(e) => handleBuyCustomization('chatSkin', item.id, item.cost, e)}
+                            disabled={points < item.cost}
+                            style={{
+                              width: '100%',
+                              background: points >= item.cost ? `linear-gradient(135deg, ${item.color}, #1e293b)` : 'rgba(255,255,255,0.03)',
+                              color: points >= item.cost ? '#fff' : '#555',
+                              border: 'none', fontSize: 9, fontWeight: 'bold', padding: '4px 8px', borderRadius: 6,
+                              cursor: points >= item.cost ? 'pointer' : 'default',
+                              boxShadow: points >= item.cost ? `0 2px 8px ${item.color}33` : 'none'
+                            }}
+                          >
+                            🪙 {item.cost}
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Mega İfadeler Section */}
+            <div style={{ marginTop: 15 }}>
+              <h3 style={{ fontSize: 11, color: '#94a3b8', borderBottom: '1px solid rgba(255,255,255,0.08)', paddingBottom: 4, marginBottom: 10, textTransform: 'uppercase', letterSpacing: 0.5 }}>
+                {lang === 'en' ? '📣 Screen Takeover Mega Emotes' : '📣 Dev Mega İfadeler'}
+              </h3>
+              <p style={{ fontSize: 9, color: '#64748b', marginBottom: 10, fontStyle: 'italic' }}>
+                {lang === 'en' ? 'Sends full-screen overlay animations to all players.' : 'Tetiklendiğinde diğer oyuncuların ekranını dev animasyonlarla kaplar.'}
+              </p>
+              <div className="shop-items-grid">
+                {/* Default Mega Emote */}
+                <div
+                  className={`shop-item-card ${currentMegaEmote === 'default' ? 'is-active' : ''}`}
+                  style={{ '--card-accent': '#64748b', '--card-glow': 'rgba(100,116,139,0.15)' }}
+                  onMouseEnter={() => setHoveredShopItem({ type: 'megaEmote', id: 'default' })}
+                  onMouseLeave={() => setHoveredShopItem(null)}
+                  onClick={() => currentMegaEmote !== 'default' && handleSelectCustomization('megaEmote', 'default')}
+                >
+                  <div style={{ fontSize: 20, marginBottom: 6 }}>📣</div>
+                  <div style={{ fontSize: 11, fontWeight: 'bold', color: '#fff', marginBottom: 2 }}>
+                    {lang === 'en' ? 'Classic Emote' : 'Standart İfade'}
+                  </div>
+                  <div style={{ fontSize: 8, color: '#64748b', height: 20, overflow: 'hidden', lineHeight: 1.1 }}>
+                    {lang === 'en' ? 'No screen overlay' : 'Ekranı kaplayan animasyon yok'}
+                  </div>
+                  <div style={{ marginTop: 8, width: '100%' }}>
+                    {currentMegaEmote === 'default' ? (
+                      <span style={{ fontSize: 9, fontWeight: 900, color: '#39ff14', background: 'rgba(57,255,20,0.1)', padding: '3px 8px', borderRadius: 6, display: 'block' }}>{lang === 'en' ? 'ACTIVE' : 'AKTİF'}</span>
+                    ) : (
+                      <span style={{ fontSize: 9, fontWeight: 900, color: '#94a3b8', background: 'rgba(255,255,255,0.05)', padding: '3px 8px', borderRadius: 6, display: 'block' }}>{lang === 'en' ? 'EQUIP' : 'KUŞAN'}</span>
+                    )}
+                  </div>
+                </div>
+
+                {/* Custom Mega Emotes */}
+                {megaEmoteItems.map(item => {
+                  const unlocked = unlockedMegaEmotes.includes(item.id);
+                  const active = currentMegaEmote === item.id;
+                  return (
+                    <div
+                      key={item.id}
+                      className={`shop-item-card ${active ? 'is-active' : ''}`}
+                      style={{ '--card-accent': item.color, '--card-glow': `${item.color}33` }}
+                      onMouseEnter={() => setHoveredShopItem({ type: 'megaEmote', id: item.id })}
+                      onMouseLeave={() => setHoveredShopItem(null)}
+                    >
+                      <div style={{ fontSize: 20, marginBottom: 6 }}>📣</div>
+                      <div style={{ fontSize: 11, fontWeight: 'bold', color: item.color, marginBottom: 2 }}>
+                        {lang === 'en' ? item.name.en : item.name.tr}
+                      </div>
+                      <div style={{ fontSize: 8, color: '#64748b', height: 20, overflow: 'hidden', lineHeight: 1.1 }}>
+                        {lang === 'en' ? item.desc.en : item.desc.tr}
+                      </div>
+                      <div style={{ marginTop: 8, width: '100%' }}>
+                        {active ? (
+                          <span style={{ fontSize: 9, fontWeight: 900, color: '#39ff14', background: 'rgba(57,255,20,0.1)', padding: '3px 8px', borderRadius: 6, display: 'block' }}>{lang === 'en' ? 'ACTIVE' : 'AKTİF'}</span>
+                        ) : unlocked ? (
+                          <button onClick={() => handleSelectCustomization('megaEmote', item.id)} style={{ width: '100%', background: 'rgba(255,255,255,0.08)', border: 'none', color: '#fff', fontSize: 9, fontWeight: 'bold', padding: '4px 8px', borderRadius: 6, cursor: 'pointer' }}>
+                            {lang === 'en' ? 'EQUIP' : 'KUŞAN'}
+                          </button>
+                        ) : (
+                          <button
+                            onClick={(e) => handleBuyCustomization('megaEmote', item.id, item.cost, e)}
                             disabled={points < item.cost}
                             style={{
                               width: '100%',
@@ -6781,7 +7308,7 @@ if (screen === 'lobby') {
 
         {/* USER PROFILE DASHBOARD CARD */}
         {dbUser && (
-          <div style={{
+          <div className={`aura-effect-${dbUser.selectedAura || 'default'}`} style={{
             background: 'linear-gradient(135deg, rgba(255, 255, 255, 0.03), rgba(255, 255, 255, 0.01))',
             border: '1px solid rgba(255, 255, 255, 0.08)',
             borderRadius: 16,
@@ -7418,6 +7945,47 @@ return (
               <div className="gold-sparkle" style={{ '--left': '90%', '--delay': '1.5s', '--dur': '6s' }} />
             </div>
           )}
+          {dbUser.selectedTableTheme === 'snow' && (
+            <div className="snow-flakes-container">
+              <div className="snow-flake" style={{ '--left': '10%', '--size': '8px', '--delay': '0s', '--dur': '10s', '--drift': '50px' }} />
+              <div className="snow-flake" style={{ '--left': '25%', '--size': '12px', '--delay': '3s', '--dur': '14s', '--drift': '-30px' }} />
+              <div className="snow-flake" style={{ '--left': '45%', '--size': '6px', '--delay': '1s', '--dur': '8s', '--drift': '40px' }} />
+              <div className="snow-flake" style={{ '--left': '65%', '--size': '10px', '--delay': '4s', '--dur': '12s', '--drift': '-20px' }} />
+              <div className="snow-flake" style={{ '--left': '85%', '--size': '8px', '--delay': '2s', '--dur': '9s', '--drift': '30px' }} />
+            </div>
+          )}
+          {dbUser.selectedTableTheme === 'blizzard' && (
+            <div className="blizzard-winds-container">
+              <div className="blizzard-wind" style={{ '--left': '20%', '--size': '15px', '--delay': '0s', '--dur': '4s' }} />
+              <div className="blizzard-wind" style={{ '--left': '40%', '--size': '25px', '--delay': '1s', '--dur': '5s' }} />
+              <div className="blizzard-wind" style={{ '--left': '60%', '--size': '18px', '--delay': '0.5s', '--dur': '3.5s' }} />
+              <div className="blizzard-wind" style={{ '--left': '80%', '--size': '22px', '--delay': '2s', '--dur': '4.5s' }} />
+              <div className="blizzard-wind" style={{ '--left': '95%', '--size': '12px', '--delay': '1.5s', '--dur': '3.8s' }} />
+            </div>
+          )}
+          {dbUser.selectedTableTheme === 'zen_garden' && (
+            <div className="snow-flakes-container">
+              <div className="snow-flake" style={{ '--left': '15%', '--size': '10px', '--delay': '0s', '--dur': '8s', '--drift': '40px', background: 'transparent', fontSize: 10 }}>🍃</div>
+              <div className="snow-flake" style={{ '--left': '35%', '--size': '12px', '--delay': '2s', '--dur': '11s', '--drift': '-20px', background: 'transparent', fontSize: 12 }}>🌸</div>
+              <div className="snow-flake" style={{ '--left': '60%', '--size': '9px', '--delay': '1s', '--dur': '9s', '--drift': '30px', background: 'transparent', fontSize: 9 }}>🍃</div>
+              <div className="snow-flake" style={{ '--left': '80%', '--size': '11px', '--delay': '3s', '--dur': '10s', '--drift': '-15px', background: 'transparent', fontSize: 11 }}>🌸</div>
+            </div>
+          )}
+          {dbUser.selectedTableTheme === 'haunted_castle' && (
+            <div className="snow-flakes-container">
+              <div className="snow-flake" style={{ '--left': '20%', '--size': '14px', '--delay': '0s', '--dur': '6s', '--drift': '-100px', background: 'transparent', fontSize: 14 }}>🦇</div>
+              <div className="snow-flake" style={{ '--left': '50%', '--size': '16px', '--delay': '2.5s', '--dur': '7s', '--drift': '80px', background: 'transparent', fontSize: 16 }}>🦇</div>
+              <div className="snow-flake" style={{ '--left': '80%', '--size': '12px', '--delay': '1s', '--dur': '5.5s', '--drift': '-60px', background: 'transparent', fontSize: 12 }}>🦇</div>
+            </div>
+          )}
+          {dbUser.selectedTableTheme === 'pirate_ship' && (
+            <div className="gold-sparkles-container">
+              <div className="gold-sparkle" style={{ '--left': '10%', '--delay': '0s', '--dur': '7s', background: 'transparent', fontSize: 8, transform: 'none', boxShadow: 'none' }}>🪙</div>
+              <div className="gold-sparkle" style={{ '--left': '35%', '--delay': '2s', '--dur': '9s', background: 'transparent', fontSize: 11, transform: 'none', boxShadow: 'none' }}>🫧</div>
+              <div className="gold-sparkle" style={{ '--left': '65%', '--delay': '1s', '--dur': '8s', background: 'transparent', fontSize: 9, transform: 'none', boxShadow: 'none' }}>🪙</div>
+              <div className="gold-sparkle" style={{ '--left': '85%', '--delay': '3s', '--dur': '6s', background: 'transparent', fontSize: 10, transform: 'none', boxShadow: 'none' }}>🫧</div>
+            </div>
+          )}
         </>
       )}
       {/* Sıra Geçiş Ekran Parlaması */}
@@ -7690,7 +8258,7 @@ return (
       {renderTradeModal()}
       {renderScavengeModal()}
       {renderHistoryModal()}
-      <ToastStack toasts={toasts} />
+      <ToastStack toasts={toasts} actionOverlay={actionOverlay} />
 
       {/* Son Saniye Kırmızı Tehlike Ekranı */}
       {showDanger && <div className="danger-vignette" />}
@@ -7784,21 +8352,7 @@ return (
         ))}
       </AnimatePresence>
 
-      {/* Büyük Aksiyon Duyurusu */}
-      {actionOverlay && (
-        <div className={`action-overlay-wrapper overlay-type-${actionOverlay.type || 'info'}`}>
-          <div className="action-overlay-card">
-            <div className="action-overlay-glow" />
-            <div className="action-overlay-icon">{actionOverlay.icon}</div>
-            <div className="action-overlay-text">{actionOverlay.text}</div>
-            {actionOverlay.subtext && (
-              <div className="action-overlay-subtext">
-                {formatSubtext(actionOverlay.subtext)}
-              </div>
-            )}
-          </div>
-        </div>
-      )}
+
 
       {/* Kart Önizleme Tooltip Kaldırıldı */}
 
@@ -7944,7 +8498,7 @@ return (
                 key={player.id}
                 ref={el => (playerPanelRefs.current[player.id] = el)}
                 onClick={() => setViewingPlayerId(player.id)}
-                className={isCurrent ? 'player-strip-card ref-style spotlight-glow turn-pulsate' : 'player-strip-card ref-style'}
+                className={`${isCurrent ? 'player-strip-card ref-style spotlight-glow turn-pulsate' : 'player-strip-card ref-style'} aura-effect-${player.selectedAura || 'default'}`}
                 style={{
                   flexShrink: 0,
                   width: isMobile ? 120 : '100%',
@@ -7961,21 +8515,80 @@ return (
                   cursor: 'pointer',
                   position: 'relative',
                   transition: 'all 0.3s ease',
-                  overflow: 'hidden',
+                  overflow: 'visible',
                   boxSizing: 'border-box',
                 }}
               >
                 {/* Hedef çarpı */}
                 {isTargeted && <div className="target-crosshair" />}
 
+                {/* Emote Animations Directed at this Player */}
+                <AnimatePresence>
+                  {emotes.filter(e => e.targetId === player.id).map(emote => (
+                    <motion.div
+                      key={emote.id}
+                      initial={{ scale: 0.2, y: 10, x: '-50%', opacity: 0 }}
+                      animate={{ scale: [1, 1.6, 1.3], y: [-15, -45, -55], opacity: [1, 1, 0] }}
+                      exit={{ opacity: 0 }}
+                      transition={{ duration: 2.2, ease: "easeOut" }}
+                      style={{
+                        position: 'absolute',
+                        top: '50%',
+                        left: '50%',
+                        fontSize: '48px',
+                        pointerEvents: 'none',
+                        zIndex: 1000,
+                        textShadow: '0 4px 15px rgba(0,0,0,0.8)'
+                      }}
+                    >
+                      {emote.emoji}
+                    </motion.div>
+                  ))}
+                </AnimatePresence>
+
                 {/* Aktif sıra göstergesi — üst çizgi */}
                 {isCurrent && (
-                  <div style={{
-                    position: 'absolute', top: 0, left: 0, right: 0, height: 3,
-                    background: `linear-gradient(90deg, transparent, ${playerColor}, transparent)`,
-                    borderRadius: '14px 14px 0 0',
-                    animation: 'active-player-pulse 1.5s ease-in-out infinite',
-                  }} />
+                  <>
+                    <div style={{
+                      position: 'absolute', top: 0, left: 0, right: 0, height: 3,
+                      background: `linear-gradient(90deg, transparent, ${playerColor}, transparent)`,
+                      borderRadius: '14px 14px 0 0',
+                      animation: 'active-player-pulse 1.5s ease-in-out infinite',
+                    }} />
+                    <div style={{
+                      position: 'absolute',
+                      top: -10,
+                      left: '50%',
+                      transform: 'translateX(-50%)',
+                      background: 'linear-gradient(135deg, rgba(22, 16, 45, 0.95), rgba(12, 10, 24, 0.98))',
+                      border: `1.5px solid ${playerColor}`,
+                      borderRadius: 12,
+                      padding: '3px 8px',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      gap: 4,
+                      boxShadow: `0 4px 12px ${playerColor}60, inset 0 0 6px ${playerColor}20`,
+                      zIndex: 100,
+                      whiteSpace: 'nowrap',
+                      backdropFilter: 'blur(8px)',
+                      WebkitBackdropFilter: 'blur(8px)',
+                      animation: 'active-player-pulse 1.8s ease-in-out infinite'
+                    }}>
+                      <span style={{ 
+                        fontSize: 8, 
+                        color: playerColor, 
+                        fontWeight: 900, 
+                        letterSpacing: 0.5,
+                        textShadow: `0 0 4px ${playerColor}50`
+                      }}>
+                        {lang === 'en' ? 'TURN' : 'SIRA'}
+                      </span>
+                      <span style={{ display: 'inline-flex', alignItems: 'center', marginLeft: 2 }}>
+                        {renderActionPoints(gameState.actionsLeft)}
+                      </span>
+                    </div>
+                  </>
                 )}
 
                 {/* ── ÜSTE: Avatar yuvarlak + İsim + Para ── */}
@@ -8046,17 +8659,7 @@ return (
                       <span style={{ fontSize: 10, color: '#2ECC71', fontWeight: 800 }}>
                         {player.bankTotal}M
                       </span>
-                      {isCurrent && (
-                        <div style={{ display: 'inline-flex', alignItems: 'center', gap: 2 }}>
-                          <span style={{
-                            fontSize: 7, color: '#FFD700', fontWeight: 900, letterSpacing: 0.5,
-                            background: 'rgba(255,215,0,0.15)', padding: '1px 4px', borderRadius: 4,
-                            border: '1px solid rgba(255,215,0,0.35)',
-                            animation: 'active-player-pulse 1s ease-in-out infinite',
-                          }}>{lang === 'en' ? '▶ TURN' : '▶ SIRADA'}</span>
-                          {renderActionPoints(gameState.actionsLeft)}
-                        </div>
-                      )}
+
                     </div>
                   </div>
                 </div>
@@ -8124,12 +8727,12 @@ return (
                           title={`${color}${isComplete ? ' (TAM SET)' : ` (${owned}/${setSize})`}`}
                           style={{
                             width: 20, height: 28, borderRadius: 3,
-                            background: '#fff',
-                            border: isComplete ? `1.5px solid ${info.hex}` : '1px solid rgba(0,0,0,0.2)',
+                            background: isComplete ? 'linear-gradient(135deg, #FFF, #FFF8D0)' : '#fff',
+                            border: isComplete ? '1.5px solid #FFD700' : '1px solid rgba(0,0,0,0.2)',
                             display: 'flex', flexDirection: 'column', alignItems: 'center',
                             overflow: 'hidden', position: 'relative',
                             boxShadow: isComplete
-                              ? `0 0 6px ${info.hex}88, 0 1px 3px rgba(0,0,0,0.4)`
+                              ? '0 0 10px #FFD700, 0 1px 3px rgba(0,0,0,0.4)'
                               : '0 1px 3px rgba(0,0,0,0.4)',
                             transition: 'all 0.2s',
                           }}
@@ -8145,12 +8748,13 @@ return (
                             fontSize: 7, fontWeight: 900, color: '#222',
                             marginTop: 2, lineHeight: 1,
                           }}>{owned}/{setSize}</div>
-                          {/* Tam set yıldız */}
+                          {/* Tam set tacı */}
                           {isComplete && (
                             <div style={{
                               position: 'absolute', bottom: 0, right: 0,
                               fontSize: 7, color: '#FFD700',
-                            }}>★</div>
+                              textShadow: '0 0 3px #FFD700'
+                            }}>👑</div>
                           )}
                         </div>
                       );
@@ -8209,23 +8813,106 @@ return (
                     <div style={{
                       width: 44,
                       height: 60,
-                      borderRadius: 8,
                       boxShadow: '0 4px 15px rgba(255,215,0,0.25)',
                       cursor: 'default',
                       position: 'relative',
-                      overflow: 'hidden'
+                      overflow: 'visible'
                     }}>
-                      <CardBack theme={dbUser?.selectedCardBack || 'default'} small />
-                      <div style={{
-                        position: 'absolute', bottom: -4, right: -4,
-                        background: '#FFD700', color: '#000',
-                        fontSize: 9, fontWeight: 900, borderRadius: '50%',
-                        width: 18, height: 18, display: 'flex', alignItems: 'center', justifyContent: 'center',
-                        boxShadow: '0 2px 5px rgba(0,0,0,0.3)'
-                      }}>{gameState.deckCount}</div>
+                      {/* Mobil 3D Deste Kalınlık Katmanları */}
+                      {gameState.deckCount >= 40 && <div style={{ position: 'absolute', inset: 0, top: 2, left: 1.5, background: 'rgba(0,0,0,0.4)', borderRadius: 8, border: '0.5px solid rgba(255,255,255,0.06)', zIndex: 1 }} />}
+                      {gameState.deckCount >= 25 && <div style={{ position: 'absolute', inset: 0, top: 1.5, left: 1, background: 'rgba(255,255,255,0.02)', borderRadius: 8, border: '0.5px solid rgba(255,255,255,0.07)', zIndex: 2 }} />}
+                      {gameState.deckCount >= 10 && <div style={{ position: 'absolute', inset: 0, top: 0.8, left: 0.5, background: 'rgba(255,255,255,0.03)', borderRadius: 8, border: '0.5px solid rgba(255,255,255,0.08)', zIndex: 3 }} />}
+                      
+                      <div style={{ position: 'relative', width: '100%', height: '100%', borderRadius: 8, overflow: 'hidden', zIndex: 4 }}>
+                        <CardBack theme={dbUser?.selectedCardBack || 'default'} small />
+                        <div style={{
+                          position: 'absolute', bottom: -4, right: -4,
+                          background: '#FFD700', color: '#000',
+                          fontSize: 9, fontWeight: 900, borderRadius: '50%',
+                          width: 18, height: 18, display: 'flex', alignItems: 'center', justifyContent: 'center',
+                          boxShadow: '0 2px 5px rgba(0,0,0,0.3)',
+                          zIndex: 6
+                        }}>{gameState.deckCount}</div>
+                      </div>
                     </div>
                     <span style={{ fontSize: 9, color: '#aaa', fontWeight: 'bold', letterSpacing: 0.5 }}>{lang === 'en' ? 'DECK' : 'DESTE'}</span>
                   </div>
+
+                  {/* ── MOBIL GERI SAYIM ── */}
+                  {(() => {
+                    if (!gameState.turnTimer || gameState.turnTimer <= 0 || !gameState.turnStartTime) {
+                      const currentP = gameState.players.find(p => p.id === gameState.currentPlayerId);
+                      return (
+                        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2, zIndex: 1 }}>
+                          <span style={{ fontSize: 7, color: '#555', fontWeight: 'bold' }}>{lang === 'en' ? 'TURN' : 'SIRA'}</span>
+                          <div style={{
+                            width: 32, height: 32, borderRadius: '50%',
+                            border: '1.5px solid rgba(99,179,237,0.3)',
+                            background: 'rgba(99,179,237,0.05)',
+                            display: 'flex', alignItems: 'center', justifyContent: 'center',
+                            fontSize: 14,
+                          }}>
+                            {currentP?.avatar?.slice(0,2) || '🎲'}
+                          </div>
+                          <span style={{ fontSize: 7, color: '#667', maxWidth: 46, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                            {currentP?.name || ''}
+                          </span>
+                        </div>
+                      );
+                    }
+                    const totalTime = gameState.turnTimer;
+                    const secs = remainingTime ?? totalTime;
+                    const pct = Math.max(0, Math.min(100, (secs / totalTime) * 100));
+                    const isDanger = secs <= 10 && secs > 0;
+                    const isWarn   = secs <= 20 && secs > 10;
+                    const r = 16;
+                    const circ = 2 * Math.PI * r;
+                    const dashOffset = circ * (1 - pct / 100);
+                    const ringColor = isDanger ? '#ef4444' : isWarn ? '#f59e0b' : '#34d399';
+                    const textColor = isDanger ? '#ef4444' : isWarn ? '#f59e0b' : '#e2e8f0';
+                    const bgColor   = isDanger ? 'rgba(239,68,68,0.12)' : isWarn ? 'rgba(245,158,11,0.1)' : 'rgba(52,211,153,0.08)';
+                    const currentP  = gameState.players.find(p => p.id === gameState.currentPlayerId);
+                    return (
+                      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 2, zIndex: 1 }}>
+                        <span style={{ fontSize: 7, color: '#555', fontWeight: 'bold' }}>{lang === 'en' ? 'TIME' : 'SÜRE'}</span>
+                        <div style={{
+                          position: 'relative', width: 40, height: 40,
+                          display: 'flex', alignItems: 'center', justifyContent: 'center',
+                          animation: isDanger ? 'active-player-pulse 0.8s ease-in-out infinite' : 'none',
+                        }}>
+                          <svg width="40" height="40" style={{ position: 'absolute', top: 0, left: 0, transform: 'rotate(-90deg)' }}>
+                            <circle cx="20" cy="20" r={r} fill="none" stroke="rgba(255,255,255,0.07)" strokeWidth="2.5" />
+                            <circle
+                              cx="20" cy="20" r={r}
+                              fill="none"
+                              stroke={ringColor}
+                              strokeWidth="2.5"
+                              strokeLinecap="round"
+                              strokeDasharray={circ}
+                              strokeDashoffset={dashOffset}
+                              style={{ transition: 'stroke-dashoffset 0.9s linear, stroke 0.3s ease', filter: `drop-shadow(0 0 3px ${ringColor})` }}
+                            />
+                          </svg>
+                          <div style={{
+                            width: 28, height: 28, borderRadius: '50%',
+                            background: bgColor,
+                            display: 'flex', alignItems: 'center', justifyContent: 'center',
+                          }}>
+                            <span style={{ fontSize: 12, fontWeight: 900, color: textColor }}>
+                              {secs}
+                            </span>
+                          </div>
+                        </div>
+                        <span style={{
+                          fontSize: 7, color: isDanger ? '#ef4444' : '#667',
+                          maxWidth: 48, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                          fontWeight: isDanger ? '900' : 'normal',
+                        }}>
+                          {currentP?.name || ''}
+                        </span>
+                      </div>
+                    );
+                  })()}
 
                   {/* Son Oynanan / Discard */}
                   <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4, zIndex: 1 }}>
@@ -8342,13 +9029,25 @@ return (
                             position: 'relative',
                             width: 44,
                             minHeight: 64,
-                            background: isComplete ? `${info.hex}15` : 'transparent',
+                            background: isComplete ? 'rgba(255, 215, 0, 0.08)' : 'transparent',
                             borderRadius: 4,
                             padding: 2,
-                            border: isComplete ? `1px solid ${info.hex}` : 'none',
+                            border: isComplete ? '1.5px solid #FFD700' : 'none',
+                            boxShadow: isComplete ? '0 0 10px rgba(255, 215, 0, 0.4), inset 0 0 6px rgba(255, 215, 0, 0.1)' : 'none',
                             boxSizing: 'border-box'
                           }}
                         >
+                          {/* Yüzen Set Tamamlandı Tacı */}
+                          {isComplete && (
+                            <div style={{
+                              position: 'absolute',
+                              top: -12,
+                              fontSize: 10,
+                              zIndex: 100,
+                              animation: 'active-player-pulse 1.5s infinite ease-in-out',
+                              textShadow: '0 0 5px #FFD700'
+                            }}>👑</div>
+                          )}
                           {cards.map((c, i) => (
                             <div
                               key={c.id}
@@ -8384,7 +9083,7 @@ return (
                                 transition: 'opacity 0.1s',
                                 '--glow-color': info.hex
                               }} className={`mini-card-face ${isComplete ? 'complete-set-glow' : ''}`}>
-                                <div style={{ width: '100%', height: 8, background: c.isWild ? 'linear-gradient(90deg, #E74C3C, #F39C12, #2ECC71, #3498DB)' : (c.isDual && c.colors ? `linear-gradient(90deg, ${COLOR_INFO[c.colors[0]]?.hex} 0%, ${COLOR_INFO[c.colors[0]]?.hex} 50%, ${COLOR_INFO[c.colors[1]]?.hex} 50%, ${COLOR_INFO[c.colors[1]]?.hex} 100%)` : info.hex) }} />
+                                <div style={{ width: '100%', height: 8, background: getMiniCardStripeStyle(c, color) }} />
                                 <div style={{ fontSize: 8, fontWeight: 900, color: '#333', marginTop: 4, transform: 'scale(0.85)' }}>
                                   {c.isWild ? '★' : (c.value || '')}
                                 </div>
@@ -8479,16 +9178,122 @@ return (
               <div className="central-play-arena">
                 <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6 }}>
                   <span style={{ fontSize: 9, color: '#aaa', fontWeight: 'bold', letterSpacing: 0.5 }}>🎴 {lang === 'en' ? 'DECK' : 'DESTE'} ({gameState.deckCount})</span>
-                  <div className="play-arena-slot">
+                  <div className="play-arena-slot" style={{ position: 'relative', overflow: 'visible' }}>
                     {gameState.deckCount > 0 ? (
-                      <div style={{ width: '100%', height: '100%', borderRadius: 8, overflow: 'hidden' }} title={lang === 'en' ? 'Remaining Cards in Deck' : 'Destedeki Kalan Kart Sayısı'}>
-                        <CardBack theme={dbUser?.selectedCardBack || 'default'} />
-                      </div>
+                      <>
+                        {/* 3D Deste Kalınlık Katmanları */}
+                        {gameState.deckCount >= 40 && <div style={{ position: 'absolute', inset: 0, top: 4, left: 3, background: 'rgba(0,0,0,0.4)', borderRadius: 8, border: '1px solid rgba(255,255,255,0.06)', zIndex: 1 }} />}
+                        {gameState.deckCount >= 30 && <div style={{ position: 'absolute', inset: 0, top: 3, left: 2, background: 'rgba(255,255,255,0.02)', borderRadius: 8, border: '1px solid rgba(255,255,255,0.07)', zIndex: 2 }} />}
+                        {gameState.deckCount >= 20 && <div style={{ position: 'absolute', inset: 0, top: 2, left: 1, background: 'rgba(255,255,255,0.03)', borderRadius: 8, border: '1px solid rgba(255,255,255,0.08)', zIndex: 3 }} />}
+                        {gameState.deckCount >= 10 && <div style={{ position: 'absolute', inset: 0, top: 1, left: 0, background: 'rgba(255,255,255,0.04)', borderRadius: 8, border: '1px solid rgba(255,255,255,0.1)', zIndex: 4 }} />}
+                        
+                        <div style={{ position: 'relative', width: '100%', height: '100%', borderRadius: 8, overflow: 'hidden', zIndex: 5 }} title={lang === 'en' ? 'Remaining Cards in Deck' : 'Destedeki Kalan Kart Sayısı'}>
+                          <CardBack theme={dbUser?.selectedCardBack || 'default'} />
+                        </div>
+                      </>
                     ) : (
                       <span style={{ fontSize: 10, color: '#444' }}>{TRANSLATIONS[lang]?.empty || 'BOŞ'}</span>
                     )}
                   </div>
                 </div>
+
+                {/* ── GERI SAYIM (Deste ile Son Hamle Arasında) ── */}
+                {(() => {
+                  if (!gameState.turnTimer || gameState.turnTimer <= 0 || !gameState.turnStartTime) {
+                    // Zamansız mod: sadece aktif oyuncu avatarı
+                    const currentP = gameState.players.find(p => p.id === gameState.currentPlayerId);
+                    return (
+                      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4 }}>
+                        <span style={{ fontSize: 8, color: '#555', letterSpacing: 0.5, fontWeight: 'bold' }}>
+                          {lang === 'en' ? 'TURN' : 'SIRA'}
+                        </span>
+                        <div style={{
+                          width: 44, height: 44, borderRadius: '50%',
+                          border: '2px solid rgba(99,179,237,0.4)',
+                          background: 'rgba(99,179,237,0.08)',
+                          display: 'flex', alignItems: 'center', justifyContent: 'center',
+                          fontSize: 20,
+                        }}>
+                          {currentP?.avatar?.slice(0,2) || '🎲'}
+                        </div>
+                        <span style={{ fontSize: 8, color: '#667', maxWidth: 54, textAlign: 'center', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                          {currentP?.name || ''}
+                        </span>
+                      </div>
+                    );
+                  }
+
+                  const totalTime = gameState.turnTimer;
+                  const secs = remainingTime ?? totalTime;
+                  const pct = Math.max(0, Math.min(100, (secs / totalTime) * 100));
+                  const isDanger = secs <= 10 && secs > 0;
+                  const isWarn   = secs <= 20 && secs > 10;
+
+                  // SVG çember için
+                  const r = 22;
+                  const circ = 2 * Math.PI * r;
+                  const dashOffset = circ * (1 - pct / 100);
+
+                  const ringColor = isDanger ? '#ef4444' : isWarn ? '#f59e0b' : '#34d399';
+                  const textColor = isDanger ? '#ef4444' : isWarn ? '#f59e0b' : '#e2e8f0';
+                  const bgColor   = isDanger ? 'rgba(239,68,68,0.12)' : isWarn ? 'rgba(245,158,11,0.1)' : 'rgba(52,211,153,0.08)';
+                  const currentP  = gameState.players.find(p => p.id === gameState.currentPlayerId);
+
+                  return (
+                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 3 }}>
+                      <span style={{ fontSize: 8, color: '#555', letterSpacing: 0.5, fontWeight: 'bold' }}>
+                        {lang === 'en' ? 'TIME LEFT' : 'KALAN SÜRE'}
+                      </span>
+
+                      {/* SVG Ring Countdown */}
+                      <div style={{
+                        position: 'relative', width: 54, height: 54,
+                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        animation: isDanger ? 'active-player-pulse 0.8s ease-in-out infinite' : 'none',
+                      }}>
+                        <svg width="54" height="54" style={{ position: 'absolute', top: 0, left: 0, transform: 'rotate(-90deg)' }}>
+                          {/* Track */}
+                          <circle cx="27" cy="27" r={r} fill="none" stroke="rgba(255,255,255,0.07)" strokeWidth="3.5" />
+                          {/* Progress */}
+                          <circle
+                            cx="27" cy="27" r={r}
+                            fill="none"
+                            stroke={ringColor}
+                            strokeWidth="3.5"
+                            strokeLinecap="round"
+                            strokeDasharray={circ}
+                            strokeDashoffset={dashOffset}
+                            style={{ transition: 'stroke-dashoffset 0.9s linear, stroke 0.3s ease', filter: `drop-shadow(0 0 4px ${ringColor})` }}
+                          />
+                        </svg>
+                        {/* Center number */}
+                        <div style={{
+                          width: 38, height: 38, borderRadius: '50%',
+                          background: bgColor,
+                          display: 'flex', alignItems: 'center', justifyContent: 'center',
+                          flexDirection: 'column',
+                        }}>
+                          <span style={{ fontSize: secs >= 100 ? 11 : 15, fontWeight: 900, color: textColor, lineHeight: 1 }}>
+                            {secs}
+                          </span>
+                          {currentP && (
+                            <span style={{ fontSize: 7, color: 'rgba(255,255,255,0.3)', lineHeight: 1 }}>s</span>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Aktif Oyuncu İsmi */}
+                      <span style={{
+                        fontSize: 8, color: isDanger ? '#ef4444' : '#667',
+                        maxWidth: 60, textAlign: 'center',
+                        overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+                        fontWeight: isDanger ? 900 : 'normal',
+                      }}>
+                        {currentP?.name || ''}
+                      </span>
+                    </div>
+                  );
+                })()}
 
                 <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6 }}>
                   <span style={{ fontSize: 9, color: '#aaa', fontWeight: 'bold', letterSpacing: 0.5 }}>📤 {lang === 'en' ? 'LAST MOVEMENT' : 'SON OYNANAN'}</span>
@@ -8504,6 +9309,7 @@ return (
                   </div>
                 </div>
               </div>
+
 
               {/* Benim arazilerim (Desktop) */}
               <div data-drop-target="properties" style={{
@@ -8594,13 +9400,25 @@ return (
                           position: 'relative',
                           width: 44,
                           minHeight: 64,
-                          background: isComplete ? `${info.hex}15` : 'transparent',
+                          background: isComplete ? 'rgba(255, 215, 0, 0.08)' : 'transparent',
                           borderRadius: 4,
                           padding: 2,
-                          border: isComplete ? `1px solid ${info.hex}` : 'none',
+                          border: isComplete ? '1.5px solid #FFD700' : 'none',
+                          boxShadow: isComplete ? '0 0 10px rgba(255, 215, 0, 0.4), inset 0 0 6px rgba(255, 215, 0, 0.1)' : 'none',
                           boxSizing: 'border-box'
                         }}
                       >
+                        {/* Yüzen Set Tamamlandı Tacı */}
+                        {isComplete && (
+                          <div style={{
+                            position: 'absolute',
+                            top: -12,
+                            fontSize: 10,
+                            zIndex: 100,
+                            animation: 'active-player-pulse 1.5s infinite ease-in-out',
+                            textShadow: '0 0 5px #FFD700'
+                          }}>👑</div>
+                        )}
                         {cards.map((c, i) => (
                           <div
                             key={c.id}
@@ -8636,7 +9454,7 @@ return (
                               transition: 'opacity 0.1s',
                               '--glow-color': info.hex
                             }} className={`mini-card-face ${isComplete ? 'complete-set-glow' : ''}`}>
-                              <div style={{ width: '100%', height: 8, background: c.isWild ? 'linear-gradient(90deg, #E74C3C, #F39C12, #2ECC71, #3498DB)' : (c.isDual && c.colors ? `linear-gradient(90deg, ${COLOR_INFO[c.colors[0]]?.hex} 0%, ${COLOR_INFO[c.colors[0]]?.hex} 50%, ${COLOR_INFO[c.colors[1]]?.hex} 50%, ${COLOR_INFO[c.colors[1]]?.hex} 100%)` : info.hex) }} />
+                              <div style={{ width: '100%', height: 8, background: getMiniCardStripeStyle(c, color) }} />
                               <div style={{ fontSize: 8, fontWeight: 900, color: '#333', marginTop: 4, transform: 'scale(0.85)' }}>
                                 {c.isWild ? '★' : (c.value || '')}
                               </div>
@@ -8816,6 +9634,15 @@ return (
                         animation: 'fw-fade-in 0.3s ease-out'
                       }}>
                         <div className={isSystem ? 'system-log-blink' : ''} style={{ lineHeight: 1.4, wordBreak: 'break-word' }}>{renderLogMsg(entry)}</div>
+                        {entry.cards && Array.isArray(entry.cards) && entry.cards.length > 0 && (
+                          <div style={{ display: 'flex', gap: 4, marginTop: 4, flexWrap: 'wrap' }}>
+                            {entry.cards.map((c, cIdx) => (
+                              <div key={cIdx} style={{ transform: 'scale(0.42)', transformOrigin: 'top left', width: 38 * 0.42, height: 52 * 0.42, marginRight: 14, marginBottom: 4 }}>
+                                <CardVisual card={c} small lang={lang} />
+                              </div>
+                            ))}
+                          </div>
+                        )}
                         <div style={{ fontSize: 8, color: '#555', marginTop: 3, textAlign: 'right' }}>
                           {new Date(entry.time).toLocaleTimeString('tr-TR', { hour: '2-digit', minute: '2-digit' })}
                         </div>
@@ -8834,7 +9661,9 @@ return (
       {(() => {
         const numCards = handToRender.length;
         const listJustifyContent = numCards > (isMobile ? 4 : 5) ? 'flex-start' : 'center';
-        const smartHighlightIds = getSmartHighlightIds(handToRender, me, gameState.players);
+        const recommendations = (aiHintsEnabled && showHintsAfterDelay)
+          ? getSmartHighlightIds(handToRender, me, gameState, lang)
+          : {};
 
         return (
           <div
@@ -8948,6 +9777,28 @@ return (
 
                 {/* Sağ: Eylem butonları */}
                 <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
+                  <button
+                    onClick={() => { sfxClick(); setAiHintsEnabled(!aiHintsEnabled); }}
+                    style={{
+                      background: aiHintsEnabled ? 'rgba(255, 215, 0, 0.15)' : 'rgba(255, 255, 255, 0.05)',
+                      border: aiHintsEnabled ? '1px solid rgba(255, 215, 0, 0.4)' : '1px solid rgba(255, 255, 255, 0.15)',
+                      color: aiHintsEnabled ? '#FFD700' : '#888',
+                      padding: '4px 10px',
+                      borderRadius: '8px',
+                      fontSize: '10px',
+                      cursor: 'pointer',
+                      fontWeight: 'bold',
+                      transition: 'all 0.2s',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '4px'
+                    }}
+                    title={lang === 'en' ? 'Toggle AI Hints' : 'Yapay Zeka İpuçlarını Aç/Kapat'}
+                  >
+                    <span>💡</span>
+                    {!isMobile && <span>{lang === 'en' ? 'AI Hint' : 'İpucu'}</span>}
+                  </button>
+
                   {isMyTurn && !discardMode && !isBlocked && gameState.canUndo && (
                     <button
                       onClick={() => { sfxClick(); handleUndoMove(); }}
@@ -9013,6 +9864,7 @@ return (
                 }}
               >
                 {handToRender.map((card, idx) => {
+                  const rec = recommendations[card.id];
                   const isJSNActive = card.action === 'justsayno' && !!gameState?.myPendingChallenge;
                   const cardComboClass = isJSNActive ? 'shield-glow' : getCardComboClass(card, handToRender);
                   const isCardDimmed = (!isMyTurn || isBlocked) && !discardMode && !isJSNActive;
@@ -9029,7 +9881,7 @@ return (
                   return (
                     <motion.div
                       key={card.id}
-                      className={`stacked-card-wrapper ${isSelected ? 'selected-card' : ''} ${smartHighlightIds.includes(card.id) ? 'smart-glow' : ''}`}
+                      className={`stacked-card-wrapper ${isSelected ? 'selected-card' : ''} ${rec ? `smart-glow-${rec.type}` : ''}`}
                       drag={isMyTurn && !isBlocked && !discardMode ? 'y' : false}
                       dragElastic={0.2}
                       dragSnapToOrigin={true}
@@ -9053,6 +9905,7 @@ return (
                         if (!isSelected) {
                           e.currentTarget.style.transform = 'translateY(-18px)';
                           e.currentTarget.style.zIndex = 900;
+                          sfxCardHover(); // Kart sürtünme sesi
                         }
                       }}
                       onMouseLeave={e => {
@@ -9104,6 +9957,12 @@ return (
                           comboClass={cardComboClass}
                         />
                       </div>
+
+                      {rec && (
+                        <div className="card-ai-hint-tooltip">
+                          💡 {rec.reason}
+                        </div>
+                      )}
 
                       <AnimatePresence>
                         {selectedCard?.id === card.id && isMyTurn && !isBlocked && !discardMode && !isMobile && (
@@ -9240,48 +10099,311 @@ return (
         </div>
       )}
 
+      {/* ── MEGA EMOTE FULL-SCREEN OVERLAY ── */}
+      {activeMegaEmote && (() => {
+        const emoteConfig = {
+          tomato_splat: { particles: ['🍅', '🍅', '🍅', '🍅', '🍅', '🍅', '🍅', '🍅'], bg: 'rgba(183,28,28,0.92)', label: '🍅 DOMATES SALDIRISI!' },
+          make_it_rain: { particles: ['💵', '💸', '💴', '💶', '💵', '💸', '💵', '💴'], bg: 'rgba(27,94,32,0.92)', label: '💸 PARA YAĞMURU!' },
+          salt_bae: { particles: ['🧂', '✨', '🧂', '✨', '🧂', '🧂', '✨', '🧂'], bg: 'rgba(38,50,56,0.92)', label: '🧂 TUZLAMA ŞOVU!' },
+          nuke_boom: { particles: ['☢️', '💥', '🔥', '☢️', '💥', '🔥', '💥', '☢️'], bg: 'rgba(90,40,0,0.95)', label: '☢️ NÜKLEER PATLAMA!' },
+        };
+        const cfg = emoteConfig[activeMegaEmote.id] || emoteConfig.tomato_splat;
+        return (
+          <div
+            style={{
+              position: 'fixed', inset: 0, zIndex: 9999,
+              background: cfg.bg,
+              display: 'flex', flexDirection: 'column',
+              alignItems: 'center', justifyContent: 'center',
+              animation: 'fw-fade-in 0.3s ease-out',
+              overflow: 'hidden',
+              pointerEvents: 'none',
+            }}
+          >
+            {/* Particles flying down */}
+            {cfg.particles.map((p, i) => (
+              <div key={i} className="mega-emote-particle" style={{
+                position: 'absolute',
+                left: `${(i / cfg.particles.length) * 100 + Math.random() * 10}%`,
+                top: '-60px',
+                fontSize: `${36 + Math.random() * 24}px`,
+                animation: `mega-particle-fall ${1.2 + i * 0.18}s ease-in ${i * 0.12}s both`,
+                pointerEvents: 'none',
+              }}>
+                {p}
+              </div>
+            ))}
+            <div style={{ fontSize: 80, marginBottom: 20, animation: 'bounce-in 0.6s cubic-bezier(0.175, 0.885, 0.32, 1.275) both' }}>
+              {cfg.particles[0]}
+            </div>
+            <div style={{
+              fontSize: 28, fontWeight: 900, color: '#fff',
+              textShadow: '0 0 20px rgba(255,255,255,0.8), 0 4px 20px rgba(0,0,0,0.8)',
+              letterSpacing: 2, animation: 'bounce-in 0.6s 0.2s both',
+              textAlign: 'center', padding: '0 20px'
+            }}>
+              {cfg.label}
+            </div>
+            <div style={{
+              fontSize: 15, color: 'rgba(255,255,255,0.7)',
+              marginTop: 12, fontStyle: 'italic', animation: 'bounce-in 0.6s 0.4s both'
+            }}>
+              {lang === 'en' ? `by ${activeMegaEmote.senderName}` : `${activeMegaEmote.senderName} attı!`}
+            </div>
+          </div>
+        );
+      })()}
+
+      {/* ── FLOATING CHAT PANEL ── */}
+      {(() => {
+        const myMegaEmote = me?.selectedMegaEmote || dbUser?.selectedMegaEmote || 'default';
+        const megaEmojiMap = { tomato_splat:'🍅', make_it_rain:'💸', salt_bae:'🧂', nuke_boom:'☢️' };
+        const megaLabelMap = {
+          tomato_splat:{tr:'DOMATES!',en:'TOMATO!'}, make_it_rain:{tr:'PARA SAÇMA!',en:'MAKE IT RAIN!'},
+          salt_bae:{tr:'TUZLAMA!',en:'SALT BAE!'}, nuke_boom:{tr:'NÜKLEER!',en:'NUKE!'}
+        };
+        return (
+          <>
+            {/* FAB */}
+            <button
+              onClick={() => { setIsChatOpen(p => !p); sfxClick(); }}
+              style={{
+                position:'fixed', bottom: isMobile ? 100 : 28, right: isMobile ? 14 : 24,
+                zIndex:3000, width:52, height:52, borderRadius:'50%',
+                background:'linear-gradient(135deg,#1e3a5f,#0d1b2a)',
+                border:'2px solid rgba(99,179,237,0.6)',
+                boxShadow:'0 4px 20px rgba(0,0,0,0.5),0 0 12px rgba(99,179,237,0.3)',
+                color:'#fff', fontSize:22, cursor:'pointer',
+                display:'flex', alignItems:'center', justifyContent:'center',
+              }}
+              title={lang==='en'?'Open Chat':'Sohbeti Aç'}
+            >
+              💬
+            </button>
+
+            {/* Panel */}
+            {isChatOpen && (
+              <div style={{
+                position:'fixed', bottom: isMobile ? 160 : 88, right: isMobile ? 8 : 24,
+                width: isMobile ? 'calc(100vw - 16px)' : 300,
+                maxHeight: isMobile ? '55vh' : 420,
+                zIndex:2999, background:'rgba(8,12,24,0.97)',
+                border:'1px solid rgba(99,179,237,0.25)', borderRadius:16,
+                display:'flex', flexDirection:'column',
+                boxShadow:'0 20px 60px rgba(0,0,0,0.6)',
+                animation:'fw-fade-in 0.2s ease-out', overflow:'hidden',
+              }}>
+                {/* Header */}
+                <div style={{ padding:'10px 14px', borderBottom:'1px solid rgba(255,255,255,0.07)',
+                  display:'flex', alignItems:'center', justifyContent:'space-between',
+                  background:'rgba(99,179,237,0.06)', flexShrink:0 }}>
+                  <span style={{ fontSize:11, fontWeight:800, color:'#93c5fd', letterSpacing:1 }}>
+                    💬 {lang==='en'?'CHAT':'SOHBET'}
+                  </span>
+                  <button onClick={()=>{ setIsChatOpen(false); sfxClick(); }}
+                    style={{ background:'none', border:'none', color:'#666', cursor:'pointer', fontSize:14 }}>✕</button>
+                </div>
+
+                {/* Mega Emote Fire Button */}
+                {myMegaEmote !== 'default' && (
+                  <div style={{ padding:'8px 12px', borderBottom:'1px solid rgba(255,255,255,0.06)', flexShrink:0 }}>
+                    <button onClick={() => { socket?.emit('sendChatMessage',{text:`[MEGA_EMOTE:${myMegaEmote}]`}); sfxChaChing(); }}
+                      style={{
+                        width:'100%',
+                        background:'linear-gradient(135deg,rgba(239,68,68,0.25),rgba(234,88,12,0.2))',
+                        border:'1.5px solid rgba(239,68,68,0.6)', color:'#fca5a5',
+                        fontSize:11, fontWeight:900, letterSpacing:1,
+                        padding:'7px 10px', borderRadius:8, cursor:'pointer',
+                        animation:'active-player-pulse 2s ease-in-out infinite',
+                        display:'flex', alignItems:'center', justifyContent:'center', gap:6
+                      }}>
+                      {megaEmojiMap[myMegaEmote]||'📣'}&nbsp;
+                      {lang==='en'?`MEGA: ${megaLabelMap[myMegaEmote]?.en||myMegaEmote.toUpperCase()}`:`MEGA: ${megaLabelMap[myMegaEmote]?.tr||myMegaEmote.toUpperCase()}`}
+                    </button>
+                  </div>
+                )}
+
+                {/* Messages */}
+                <div style={{ flex:1, overflowY:'auto', padding:'10px', display:'flex', flexDirection:'column', gap:6 }}>
+                  {chatMessages.length===0 && (
+                    <div style={{ textAlign:'center', color:'#4b5563', fontSize:11, marginTop:20 }}>
+                      {lang==='en'?'No messages yet…':'Henüz mesaj yok…'}
+                    </div>
+                  )}
+                  {chatMessages.map((msg,i)=>{
+                    const isMine = msg.senderId===playerId;
+                    const senderPlayer = gameState?.players?.find(p=>p.id===msg.senderId);
+                    const senderSkin = senderPlayer?.selectedChatSkin || 'default';
+                    const skinClass = senderSkin!=='default' ? `chat-skin-${senderSkin}` : '';
+                    return (
+                      <div key={i} style={{ display:'flex', flexDirection:'column', alignItems: isMine?'flex-end':'flex-start' }}>
+                        {!isMine && <div style={{ fontSize:9, color:'#64748b', marginBottom:2, marginLeft:4 }}>{msg.senderName}</div>}
+                        <div className={skinClass} style={{
+                          maxWidth:'82%', padding:'6px 10px',
+                          borderRadius: isMine?'12px 12px 4px 12px':'12px 12px 12px 4px',
+                          background: isMine?'rgba(37,99,235,0.35)':'rgba(30,30,50,0.9)',
+                          border:`1px solid ${isMine?'rgba(37,99,235,0.4)':'rgba(255,255,255,0.07)'}`,
+                          fontSize:12, color:'#e2e8f0', wordBreak:'break-word', lineHeight:1.4,
+                        }}>{msg.text}</div>
+                        <div style={{ fontSize:8, color:'#374151', marginTop:2 }}>
+                          {msg.time?new Date(msg.time).toLocaleTimeString('tr-TR',{hour:'2-digit',minute:'2-digit'}):''}
+                        </div>
+                      </div>
+                    );
+                  })}
+                  <div ref={chatEndRef}/>
+                </div>
+
+                {/* Hızlı Mesajlar (Quick Messages) */}
+                <div style={{
+                  display: 'flex', gap: 6, overflowX: 'auto', padding: '6px 8px',
+                  background: 'rgba(255, 255, 255, 0.02)',
+                  borderTop: '1px solid rgba(255,255,255,0.05)',
+                  scrollbarWidth: 'none',
+                  flexShrink: 0
+                }} className="no-scrollbar">
+                  {(lang === 'en'
+                    ? ['Good luck! 🎲', 'Nice move! 👏', 'Watch out for rent! 💸', 'Bank is empty! 🏦', 'Oh no! 😢', 'Wanna trade? 🤝', 'I have Just Say No! 🛡️']
+                    : ['Bol şans! 🎲', 'Güzel hamle! 👏', 'Kiralara dikkat! 💸', 'Banka boşaldı! 🏦', 'Yapma be! 😢', 'Takas yapalım mı? 🤝', 'Reddet var! 🛡️']
+                  ).map((qMsg, idx) => (
+                    <button
+                      key={idx}
+                      onClick={() => {
+                        socket?.emit('sendChatMessage', { text: qMsg });
+                        sfxChatSent();
+                      }}
+                      style={{
+                        background: 'rgba(255,255,255,0.08)',
+                        border: '1px solid rgba(255,255,255,0.1)',
+                        borderRadius: 20,
+                        color: '#fff',
+                        fontSize: 10,
+                        padding: '4px 10px',
+                        whiteSpace: 'nowrap',
+                        cursor: 'pointer',
+                        fontWeight: 'bold',
+                        transition: 'all 0.2s'
+                      }}
+                      onMouseEnter={e => e.currentTarget.style.background = 'rgba(255,255,255,0.15)'}
+                      onMouseLeave={e => e.currentTarget.style.background = 'rgba(255,255,255,0.08)'}
+                    >
+                      {qMsg}
+                    </button>
+                  ))}
+                </div>
+
+                {/* Input */}
+                <form onSubmit={handleSendChat} style={{
+                  display: 'flex', gap: 6, padding: '8px 10px',
+                  borderTop: '1px solid rgba(255,255,255,0.06)', background: 'rgba(0,0,0,0.3)', flexShrink: 0
+                }}>
+                  <input
+                    value={chatInput}
+                    onChange={e => setChatInput(e.target.value)}
+                    placeholder={lang === 'en' ? 'Type a message…' : 'Mesaj yaz…'}
+                    maxLength={120}
+                    onFocus={() => {
+                      if (isMobile) {
+                        // iOS/Android fixed container view alignment fixes
+                        setTimeout(() => {
+                          window.scrollTo({ top: 0, left: 0, behavior: 'instant' });
+                          document.body.scrollTop = 0;
+                        }, 80);
+                      }
+                    }}
+                    onBlur={() => {
+                      if (isMobile) {
+                        setTimeout(() => {
+                          window.scrollTo({ top: 0, left: 0, behavior: 'instant' });
+                          document.body.scrollTop = 0;
+                        }, 80);
+                      }
+                    }}
+                    style={{
+                      flex: 1, background: 'rgba(255,255,255,0.06)',
+                      border: '1px solid rgba(255,255,255,0.1)', borderRadius: 8,
+                      color: '#e2e8f0', fontSize: 12, padding: '7px 10px', outline: 'none',
+                    }}
+                  />
+                  <button type="submit" disabled={!chatInput.trim()} style={{
+                    background: chatInput.trim() ? 'linear-gradient(135deg,#2563eb,#1d4ed8)' : 'rgba(255,255,255,0.05)',
+                    border: 'none', borderRadius: 8,
+                    color: chatInput.trim() ? '#fff' : '#4b5563',
+                    fontSize: 16, width: 36, cursor: chatInput.trim() ? 'pointer' : 'default', flexShrink: 0,
+                  }}>↑</button>
+                </form>
+              </div>
+            )}
+          </>
+        );
+      })()}
+
     </div>
   </ThemeContext.Provider>
 );
 }
 
-const getSmartHighlightIds = (hand, me, players) => {
-  if (!me || !hand || !players) return [];
-  const ids = [];
+const getSmartHighlightIds = (hand, me, gameState, lang) => {
+  if (!me || !hand || !gameState) return {};
+  const players = gameState.players;
+  if (!players) return {};
+  const recs = {};
   const myProperties = me.properties || {};
 
   hand.forEach(card => {
-    // 1. Property completing a set
+    // 1. Property completing a set (GOLD)
     if (card.type === 'property' && card.colors) {
       card.colors.forEach(col => {
         const count = myProperties[col]?.length || 0;
         const size = SET_SIZES[col] || 999;
         if (count + 1 === size) {
-          ids.push(card.id);
+          recs[card.id] = {
+            type: 'gold',
+            reason: lang === 'en' 
+              ? `Completes your set of ${col.toUpperCase()}!` 
+              : `${COLOR_INFO[col]?.name || col} setini tamamlar!`
+          };
         }
       });
     }
-    // 2. Rent card matching our properties
+    // 2. Rent card matching our properties (RED)
     if (card.action === 'rent') {
       if (card.colors === 'all') {
         const hasProps = Object.values(myProperties).some(arr => arr.length > 0);
-        if (hasProps) ids.push(card.id);
+        if (hasProps) {
+          recs[card.id] = {
+            type: 'red',
+            reason: lang === 'en' ? 'Collect rent on your best set!' : 'En yüksek mülk grubundan kira topla!'
+          };
+        }
       } else if (Array.isArray(card.colors)) {
         const hasMatch = card.colors.some(col => myProperties[col]?.length > 0);
-        if (hasMatch) ids.push(card.id);
+        if (hasMatch) {
+          recs[card.id] = {
+            type: 'red',
+            reason: lang === 'en' ? 'Collect rent on matching property!' : 'Uyumlu renkteki mülk grubundan kira iste!'
+          };
+        }
       }
     }
-    // 3. Deal Breaker and opponents have complete sets
+    // 3. Deal Breaker and opponents have complete sets (GOLD)
     if (card.action === 'dealbreaker') {
-      const hasOpponentSet = players.some(opp => {
+      const oppWithCompleteSet = players.find(opp => {
         if (opp.id === me.id) return false;
         return Object.entries(opp.properties || {}).some(([col, cards]) => isSetComplete(cards, col));
       });
-      if (hasOpponentSet) ids.push(card.id);
+      if (oppWithCompleteSet) {
+        recs[card.id] = {
+          type: 'gold',
+          reason: lang === 'en' 
+            ? `Steal a full set from ${oppWithCompleteSet.name}!` 
+            : `${oppWithCompleteSet.name} oyuncusunun tam setini çal!`
+        };
+      }
     }
-    // 4. Buildings (House/Hotel) on complete sets
+    // 4. Buildings (House/Hotel) on complete sets (GOLD)
     if (card.action === 'house' || card.action === 'hotel') {
-      const hasValidSet = Object.entries(myProperties).some(([col, cards]) => {
+      const validSet = Object.entries(myProperties).find(([col, cards]) => {
         if (col === 'railroad' || col === 'utility') return false;
         const isComp = isSetComplete(cards, col);
         if (!isComp) return false;
@@ -9290,9 +10412,30 @@ const getSmartHighlightIds = (hand, me, players) => {
         if (card.action === 'hotel' && b.houses >= 1 && !b.hotel) return true;
         return false;
       });
-      if (hasValidSet) ids.push(card.id);
+      if (validSet) {
+        recs[card.id] = {
+          type: 'gold',
+          reason: lang === 'en' 
+            ? `Build a ${card.action} on your ${validSet[0].toUpperCase()} set!` 
+            : `${COLOR_INFO[validSet[0]]?.name || validSet[0]} setine ${card.action === 'house' ? 'Ev' : 'Otel'} kur!`
+        };
+      }
+    }
+    // 5. Card drawing / pass go (BLUE - Utility/Speed)
+    if (card.action === 'passgo') {
+      recs[card.id] = {
+        type: 'blue',
+        reason: lang === 'en' ? 'Draw 2 extra cards to gain advantage!' : 'Avantaj kazanmak için 2 ekstra kart çek!'
+      };
+    }
+    // 6. Just say no defense (BLUE - Defense saving)
+    if (card.action === 'justsayno' && gameState?.myPendingChallenge) {
+      recs[card.id] = {
+        type: 'blue',
+        reason: lang === 'en' ? 'Play to block the opponent\'s attack!' : 'Rakibin hamlesini engellemek için fırlat!'
+      };
     }
   });
 
-  return ids;
+  return recs;
 };
