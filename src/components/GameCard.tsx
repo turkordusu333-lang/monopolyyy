@@ -868,10 +868,11 @@ export const GameCard: React.FC<GameCardProps> = ({
       );
     };
 
+    const widthClass = className?.includes('w-') ? '' : 'w-[46px] sm:w-[68px] md:w-[80px]';
     return (
       <Holo
         rarity={rarity}
-        className="relative inline-block w-[46px] sm:w-[68px] md:w-[80px] flex-shrink-0 rounded-md overflow-hidden"
+        className={`relative inline-block ${widthClass} flex-shrink-0 rounded-md overflow-hidden ${className || ''}`}
         style={tiltStyle}
       >
         {tooltipElement}

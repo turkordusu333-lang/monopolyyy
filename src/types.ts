@@ -161,6 +161,8 @@ export interface GamePlayer {
   avatarId: string;
   profileFrame?: string;
   isBot: boolean;
+  botPersonality?: 'aggressive' | 'banker' | 'strategic';
+  difficulty?: 'easy' | 'medium' | 'hard';
   isDisconnected?: boolean;
   isSpeaking?: boolean;
   isMuted?: boolean;
@@ -195,6 +197,12 @@ export interface MatchState {
   logs: GameLog[];
   isOffline: boolean;
   activeActionRequest?: ActionRequest; // For interactions like "Just Say No", payments, forced-deal target, etc.
+  settings?: {
+    gameMode: string;
+    turnDuration: number;
+    winSetsTarget: number;
+    autoEndTurn: boolean;
+  };
 }
 
 export interface ActionRequest {

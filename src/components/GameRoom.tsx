@@ -66,6 +66,58 @@ export const GameRoom: React.FC<Props> = ({ roomId, isOffline, profile, onLeaveR
     matchRef.current = newMatch;
     setMatch(newMatch);
   };
+
+  const updateAchievement = async (achievementId: string, amount: number) => {
+    try {
+      const res = await fetch('/api/achievements/update', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId: profile.id, achievementId, amount }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        const updatedProfile = {
+          ...profile,
+          coins: data.coins,
+          achievements: data.achievements,
+        };
+        onUpdateProfile(updatedProfile);
+      }
+    } catch (e) {
+      console.error("Error updating achievement", e);
+    }
+  };
+
+  // Listen for banking changes to trigger Milyoner achievement (ach-2)
+  React.useEffect(() => {
+    if (!match) return;
+    const localP = match.players.find((p) => p.id === profile.id);
+    if (localP) {
+      const bankTotal = localP.bank.reduce((sum, c) => sum + c.value, 0);
+      const ach = profile.achievements.find((a) => a.id === 'ach-2');
+      if (ach && !ach.completed && bankTotal >= ach.targetValue) {
+        updateAchievement('ach-2', ach.targetValue - ach.currentValue);
+      }
+    }
+  }, [match?.players, profile.id, profile.achievements]);
+
+  // Listen for logs to trigger "Sinsi Hırsız" achievement (ach-3)
+  const processedAchievementLogsRef = React.useRef<string[]>([]);
+  React.useEffect(() => {
+    if (!match) return;
+    match.logs.forEach((log) => {
+      if (!processedAchievementLogsRef.current.includes(log.id)) {
+        processedAchievementLogsRef.current.push(log.id);
+        const isMySteal = log.message.includes(profile.username) && log.message.includes('çaldı');
+        if (isMySteal) {
+          const ach = profile.achievements.find((a) => a.id === 'ach-3');
+          if (ach && !ach.completed) {
+            updateAchievement('ach-3', 1);
+          }
+        }
+      }
+    });
+  }, [match?.logs, profile.username, profile.achievements]);
   const [selectedCard, setSelectedCard] = React.useState<Card | null>(null);
   const [showCardMenu, setShowCardMenu] = React.useState(false);
   const [wildcardColorPick, setWildcardColorPick] = React.useState<Card | null>(null);
@@ -77,10 +129,10 @@ export const GameRoom: React.FC<Props> = ({ roomId, isOffline, profile, onLeaveR
   const [paymentSelection, setPaymentSelection] = React.useState<string[]>([]);
   const [voiceMuted, setVoiceMuted] = React.useState(false);
   const [speakingList, setSpeakingList] = React.useState<string[]>([]);
-  
+
   // Interaction targets
   const [pendingSlyDeal, setPendingSlyDeal] = React.useState<Card | null>(null);
-  
+
   // Step-by-step Action target selector states
   const [activeActionCard, setActiveActionCard] = React.useState<Card | null>(null);
   const [selectedOpponentId, setSelectedOpponentId] = React.useState<string | null>(null);
@@ -117,6 +169,10 @@ export const GameRoom: React.FC<Props> = ({ roomId, isOffline, profile, onLeaveR
   const [focusedCard, setFocusedCard] = React.useState<Card | null>(null);
   const [focusedCardZoom, setFocusedCardZoom] = React.useState<number>(1.5);
 
+  // Bot Customization Settings (Difficulty and Personality)
+  const [selectedDifficulty, setSelectedDifficulty] = React.useState<'easy' | 'medium' | 'hard'>('medium');
+  const [selectedPersonality, setSelectedPersonality] = React.useState<'aggressive' | 'banker' | 'strategic'>('strategic');
+
   // Action Cancel Warning alert state (for troubleshooting / stuck recovery)
   const [isHeaderHidden, setIsHeaderHidden] = React.useState(false);
 
@@ -124,6 +180,15 @@ export const GameRoom: React.FC<Props> = ({ roomId, isOffline, profile, onLeaveR
     message: string;
     type: 'warning' | 'success' | 'info';
   } | null>(null);
+
+  // Loading cancel state for stuck prevention
+  const [showCancelLoading, setShowCancelLoading] = React.useState(false);
+  React.useEffect(() => {
+    const timer = setTimeout(() => {
+      setShowCancelLoading(true);
+    }, 3500);
+    return () => clearTimeout(timer);
+  }, []);
 
   // Force bypass/cancel mechanism to prevent the game from getting stuck
   const handleForceCancelActiveAction = (reason?: string) => {
@@ -146,7 +211,7 @@ export const GameRoom: React.FC<Props> = ({ roomId, isOffline, profile, onLeaveR
     });
 
     updateMatchState(updatedMatch);
-    
+
     // Clear interaction selections
     setActiveActionCard(null);
     setSelectedCard(null);
@@ -403,6 +468,95 @@ export const GameRoom: React.FC<Props> = ({ roomId, isOffline, profile, onLeaveR
     }, 2500);
   }, []);
 
+  // Floating Emoji Reactions State
+  const [reactions, setReactions] = React.useState<Record<string, { emoji: string; id: string }>>({});
+
+  const triggerReaction = React.useCallback((playerId: string, emoji: string) => {
+    const id = Math.random().toString(36).substr(2, 9);
+    setReactions((prev) => ({
+      ...prev,
+      [playerId]: { emoji, id }
+    }));
+    setTimeout(() => {
+      setReactions((prev) => {
+        if (prev[playerId]?.id === id) {
+          const copy = { ...prev };
+          delete copy[playerId];
+          return copy;
+        }
+        return prev;
+      });
+    }, 2500);
+  }, []);
+
+  const sendReaction = (emoji: string) => {
+    if (isOffline) {
+      triggerReaction(profile.id, emoji);
+      // Bot reaction simulation (40% chance after 1.2s delay)
+      if (match) {
+        const botPlayer = match.players.find((p) => p.isBot);
+        if (botPlayer && Math.random() < 0.4) {
+          const botEmojis = ['💸', '🛡️', '😂', '😠', '🎉', '🤝'];
+          const randomEmoji = botEmojis[Math.floor(Math.random() * botEmojis.length)];
+          setTimeout(() => {
+            triggerReaction(botPlayer.id, randomEmoji);
+          }, 1200);
+        }
+      }
+    } else {
+      socketRef.current?.send(
+        JSON.stringify({ type: 'quick_reaction', userId: profile.id, roomId, emoji })
+      );
+    }
+  };
+
+  // Confetti Particle System State
+  const [confettiActive, setConfettiActive] = React.useState(false);
+  const [confettiParticles, setConfettiParticles] = React.useState<{ id: number; x: number; y: number; color: string; size: number; delay: number; shape: 'circle' | 'square' }[]>([]);
+
+  const triggerConfetti = React.useCallback(() => {
+    const colors = ['#f59e0b', '#10b981', '#3b82f6', '#ef4444', '#ec4899', '#8b5cf6'];
+    const particles = Array.from({ length: 80 }).map((_, i) => ({
+      id: i,
+      x: Math.random() * 100,
+      y: -10 - Math.random() * 20,
+      color: colors[Math.floor(Math.random() * colors.length)],
+      size: 6 + Math.random() * 10,
+      delay: Math.random() * 2,
+      shape: Math.random() < 0.5 ? 'circle' as const : 'square' as const
+    }));
+    setConfettiParticles(particles);
+    setConfettiActive(true);
+    setTimeout(() => {
+      setConfettiActive(false);
+      setConfettiParticles([]);
+    }, 6000);
+  }, []);
+
+  // Trigger confetti on match finished
+  React.useEffect(() => {
+    if (match?.status === 'finished') {
+      triggerConfetti();
+      const ach = profile.achievements.find((a) => a.id === 'ach-1');
+      if (ach && !ach.completed) {
+        updateAchievement('ach-1', 1);
+      }
+    }
+  }, [match?.status, triggerConfetti]);
+
+  // Trigger confetti on set completion
+  const prevCompletedSetsRef = React.useRef(0);
+  React.useEffect(() => {
+    const lPlayer = match?.players.find((p) => p.id === profile.id) || match?.players[0];
+    if (lPlayer) {
+      const completed = countCompletedSets(lPlayer.properties);
+      if (completed > prevCompletedSetsRef.current) {
+        triggerConfetti();
+      }
+      prevCompletedSetsRef.current = completed;
+    }
+  }, [match?.players, profile.id, triggerConfetti]);
+
   // Game notification stack type & state
   interface GameNotification {
     id: string;
@@ -477,12 +631,18 @@ export const GameRoom: React.FC<Props> = ({ roomId, isOffline, profile, onLeaveR
   // Turn Timer Countdown Effect
   React.useEffect(() => {
     if (match && match.status === 'playing') {
-      setTimeLeft(30);
+      setTimeLeft(match.settings?.turnDuration || 30);
     }
-  }, [match?.turnIndex, match?.status]);
+  }, [match?.turnIndex, match?.status, match?.settings?.turnDuration]);
 
   React.useEffect(() => {
     if (match && match.status === 'playing') {
+      // Early exit if turn duration is unlimited
+      const duration = match.settings?.turnDuration || 30;
+      if (duration >= 99999) {
+        return;
+      }
+
       const timer = setInterval(() => {
         // Paused during active action requests or target selection
         if (match.activeActionRequest || activeActionCard) {
@@ -498,7 +658,7 @@ export const GameRoom: React.FC<Props> = ({ roomId, isOffline, profile, onLeaveR
                 while (currentHand.length > 7) {
                   const toDiscard = currentHand.shift();
                   if (toDiscard) {
-                    handleOfflineDiscard(toDiscard.id);
+                     handleOfflineDiscard(toDiscard.id);
                   }
                 }
                 handleOfflineEndTurn();
@@ -519,7 +679,7 @@ export const GameRoom: React.FC<Props> = ({ roomId, isOffline, profile, onLeaveR
                 }
               }
             }
-            return 30;
+            return duration;
           }
           return prev - 1;
         });
@@ -717,6 +877,12 @@ export const GameRoom: React.FC<Props> = ({ roomId, isOffline, profile, onLeaveR
           { id: 'log-1', message: 'Çevrimdışı Pratik Odası Kuruldu. Bot Can maça hazır!', timestamp: Date.now() },
         ],
         isOffline: true,
+        settings: {
+          gameMode: 'classic',
+          turnDuration: 30,
+          winSetsTarget: 3,
+          autoEndTurn: false,
+        }
       };
       setMatch(initialMatch);
     } else {
@@ -749,11 +915,16 @@ export const GameRoom: React.FC<Props> = ({ roomId, isOffline, profile, onLeaveR
               else if (lastLog.includes('çaldı')) playStealSound();
               else if (lastLog.includes('Hayır Teşekkürler')) playJsnSound();
             }
+          } else if (data.type === 'quick_reaction') {
+            triggerReaction(data.userId, data.emoji);
           } else if (data.type === 'voice_update') {
             const speaking = data.players.filter((p: any) => p.isSpeaking).map((p: any) => p.id);
             setSpeakingList(speaking);
           } else if (data.type === 'alert') {
             alert(data.message);
+          } else if (data.type === 'kicked') {
+            alert(data.message || 'Lobiden atıldınız!');
+            onLeaveRoom();
           }
         } catch (e) {
           console.error(e);
@@ -801,10 +972,24 @@ export const GameRoom: React.FC<Props> = ({ roomId, isOffline, profile, onLeaveR
     let fullDeck = shuffleDeck(generateDeck());
 
     // Deal 5 cards
-    const updatedPlayers = match.players.map((p) => ({
-      ...p,
-      hand: fullDeck.splice(0, 5),
-    }));
+    const updatedPlayers = match.players.map((p) => {
+      if (p.isBot) {
+        let personalityLabel = 'Stratejik';
+        if (selectedPersonality === 'aggressive') personalityLabel = 'Agresif 🥷';
+        if (selectedPersonality === 'banker') personalityLabel = 'Tutumlu 🏦';
+        return {
+          ...p,
+          botPersonality: selectedPersonality,
+          difficulty: selectedDifficulty,
+          username: `Bot Can (${personalityLabel} - ${selectedDifficulty === 'easy' ? 'Kolay' : selectedDifficulty === 'medium' ? 'Orta' : 'Zor'})`,
+          hand: fullDeck.splice(0, 5),
+        };
+      }
+      return {
+        ...p,
+        hand: fullDeck.splice(0, 5),
+      };
+    });
 
     const nextState: MatchState = {
       ...match,
@@ -1019,9 +1204,10 @@ export const GameRoom: React.FC<Props> = ({ roomId, isOffline, profile, onLeaveR
       actionsCost = 2;
     }
 
-    if (match.actionsPlayedThisTurn + actionsCost > 3) {
+    const maxActions = match.settings?.gameMode === 'chaos' ? 99 : 3;
+    if (match.actionsPlayedThisTurn + actionsCost > maxActions) {
       playAlertSound();
-      alert("Bu turda en fazla 3 hamle yapabilirsiniz! Lütfen turunuzu sonlandırın.");
+      alert(`Bu turda en fazla ${maxActions} hamle yapabilirsiniz! Lütfen turunuzu sonlandırın.`);
       return;
     }
 
@@ -1079,7 +1265,7 @@ export const GameRoom: React.FC<Props> = ({ roomId, isOffline, profile, onLeaveR
       playPlaySound();
 
       // Check win
-      if (checkWinner(updatedPlayer.properties)) {
+      if (checkWinner(updatedPlayer.properties, match.settings?.winSetsTarget || 3)) {
         handleOfflineWinner(updatedPlayer.id);
         return;
       }
@@ -1145,7 +1331,7 @@ export const GameRoom: React.FC<Props> = ({ roomId, isOffline, profile, onLeaveR
                 timestamp: Date.now(),
               });
               playJsnSound();
-              
+
               match.activeActionRequest = {
                 id: `req-${Date.now()}`,
                 type: 'just-say-no',
@@ -1213,7 +1399,7 @@ export const GameRoom: React.FC<Props> = ({ roomId, isOffline, profile, onLeaveR
                 timestamp: Date.now(),
               });
               playJsnSound();
-              
+
               match.activeActionRequest = {
                 id: `req-${Date.now()}`,
                 type: 'just-say-no',
@@ -1285,7 +1471,7 @@ export const GameRoom: React.FC<Props> = ({ roomId, isOffline, profile, onLeaveR
                 timestamp: Date.now(),
               });
               playJsnSound();
-              
+
               match.activeActionRequest = {
                 id: `req-${Date.now()}`,
                 type: 'just-say-no',
@@ -1337,7 +1523,7 @@ export const GameRoom: React.FC<Props> = ({ roomId, isOffline, profile, onLeaveR
                 timestamp: Date.now(),
               });
               playJsnSound();
-              
+
               match.activeActionRequest = {
                 id: `req-${Date.now()}`,
                 type: 'just-say-no',
@@ -1651,7 +1837,7 @@ export const GameRoom: React.FC<Props> = ({ roomId, isOffline, profile, onLeaveR
           message: `${currentBot.username}, bankaya ${card.value}M para ekledi.`,
           timestamp: Date.now(),
         });
-        
+
         updateMatchState({ ...activeMatch });
         botActionsPlayedRef.current++;
         setTimeout(playNextBotAction, 1800);
@@ -1659,7 +1845,7 @@ export const GameRoom: React.FC<Props> = ({ roomId, isOffline, profile, onLeaveR
       } else if (decision.targetZone === 'property') {
         currentBot.hand.splice(cardIdx, 1);
         const col = decision.extraColor || card.color || 'brown';
-        
+
         if (!currentBot.properties[col]) {
           currentBot.properties[col] = { cards: [], hasHouse: false, hasHotel: false };
         }
@@ -1681,7 +1867,7 @@ export const GameRoom: React.FC<Props> = ({ roomId, isOffline, profile, onLeaveR
           });
         }
 
-        if (checkWinner(currentBot.properties)) {
+        if (checkWinner(currentBot.properties, match.settings?.winSetsTarget || 3)) {
           handleOfflineWinner(currentBot.id);
           return;
         }
@@ -1896,7 +2082,7 @@ export const GameRoom: React.FC<Props> = ({ roomId, isOffline, profile, onLeaveR
                   timestamp: Date.now(),
                 });
                 enforceBuildingRules(activeHuman, activeMatch.discardPile);
-                
+
                 showActionToast(
                   'sly-deal',
                   '🥷 Sinsi Anlaşma Oynandı!',
@@ -1950,7 +2136,7 @@ export const GameRoom: React.FC<Props> = ({ roomId, isOffline, profile, onLeaveR
                   message: `${currentBot.username}, tamamlanmış ${COLOR_LABELS[targetColor]} setini Anlaşma Bozan kartı ile çaldı!`,
                   timestamp: Date.now(),
                 });
-                
+
                 showActionToast(
                   'deal-breaker',
                   '⚡ Anlaşma Bozan Oynandı!',
@@ -2054,7 +2240,7 @@ export const GameRoom: React.FC<Props> = ({ roomId, isOffline, profile, onLeaveR
                   message: `${currentBot.username}, seninle Zoraki Takas yaptı! ${givenCard.name} verdi ve ${stolenCard.name} aldı.`,
                   timestamp: Date.now(),
                 });
-                
+
                 enforceBuildingRules(activeHuman, activeMatch.discardPile);
                 enforceBuildingRules(currentBot, activeMatch.discardPile);
 
@@ -2225,7 +2411,7 @@ export const GameRoom: React.FC<Props> = ({ roomId, isOffline, profile, onLeaveR
       });
       playPlaySound();
 
-      if (checkWinner(updatedPlayer.properties)) {
+      if (checkWinner(updatedPlayer.properties, match.settings?.winSetsTarget || 3)) {
         handleOfflineWinner(updatedPlayer.id);
         return;
       }
@@ -2260,9 +2446,10 @@ export const GameRoom: React.FC<Props> = ({ roomId, isOffline, profile, onLeaveR
       actionsCost = 2;
     }
 
-    if (match.actionsPlayedThisTurn + actionsCost > 3) {
+    const maxActions = match.settings?.gameMode === 'chaos' ? 99 : 3;
+    if (match.actionsPlayedThisTurn + actionsCost > maxActions) {
       playAlertSound();
-      alert("Bu turda en fazla 3 hamle yapabilirsiniz! Lütfen turunuzu sonlandırın.");
+      alert(`Bu turda en fazla ${maxActions} hamle yapabilirsiniz! Lütfen turunuzu sonlandırın.`);
       return;
     }
 
@@ -2295,7 +2482,7 @@ export const GameRoom: React.FC<Props> = ({ roomId, isOffline, profile, onLeaveR
   const handleRespondActionRequest = (decision: 'just-say-no' | 'pay' | 'decline') => {
     if (decision === 'pay' && match?.activeActionRequest) {
       const amountDue = match.activeActionRequest.amountDue;
-      
+
       let totalBankValue = 0;
       localPlayer.bank.forEach((c) => totalBankValue += c.value);
 
@@ -2424,7 +2611,7 @@ export const GameRoom: React.FC<Props> = ({ roomId, isOffline, profile, onLeaveR
         } else if (type === 'forced-deal') {
           const cardIdToSteal = req.targetCardId;
           const myCardIdToGive = req.myCardId;
-          
+
           let stolenCard: Card | null = null;
           let givenCard: Card | null = null;
           let stolenColor: CardColor | null = null;
@@ -2500,9 +2687,9 @@ export const GameRoom: React.FC<Props> = ({ roomId, isOffline, profile, onLeaveR
         }
 
         // Check winner
-        if (checkWinner(sPlayer.properties)) {
+        if (checkWinner(sPlayer.properties, match.settings?.winSetsTarget || 3)) {
           handleOfflineWinner(sPlayer.id);
-        } else if (checkWinner(tPlayer.properties)) {
+        } else if (checkWinner(tPlayer.properties, match.settings?.winSetsTarget || 3)) {
           handleOfflineWinner(tPlayer.id);
         }
       };
@@ -2529,7 +2716,7 @@ export const GameRoom: React.FC<Props> = ({ roomId, isOffline, profile, onLeaveR
           const newTargetPlayer = activeMatch.players.find((p) => p.id === activeReq.targetPlayerId);
           if (newTargetPlayer && newTargetPlayer.isBot) {
             const botHasJsn = newTargetPlayer.hand.some((c) => c.actionType === 'just-say-no');
-            if (botHasJsn) {
+            if (botHasJsn && BotEngine.shouldPlayJustSayNo(newTargetPlayer)) {
               const botJsnIdx = newTargetPlayer.hand.findIndex((c) => c.actionType === 'just-say-no');
               const botJsnCard = newTargetPlayer.hand.splice(botJsnIdx, 1)[0];
               activeMatch.discardPile.push(botJsnCard);
@@ -2560,7 +2747,7 @@ export const GameRoom: React.FC<Props> = ({ roomId, isOffline, profile, onLeaveR
               if (finalJsnCount % 2 === 0) {
                 // Sender successfully countered target's defense! Execute the action.
                 executeOriginalActionOffline(activeReq, paymentSelection);
-                
+
                 activeMatch.logs.push({
                   id: `jsn-win-human-${Date.now()}`,
                   message: `🎯 Savunma iptal edildi! Hamle başarıyla uygulandı.`,
@@ -2698,7 +2885,46 @@ export const GameRoom: React.FC<Props> = ({ roomId, isOffline, profile, onLeaveR
     setChatText('');
   };
 
-  if (!match) return <div className="text-center py-20 text-white font-bold">Oda yükleniyor...</div>;
+  // Render premium loading screen with stuck prevention button
+  if (!match) {
+    return (
+      <div className="min-h-screen w-screen bg-[#07090F] flex flex-col justify-center items-center p-4 relative overflow-hidden select-none">
+        {/* Glow background circles */}
+        <div className="absolute top-[30%] left-1/2 -translate-x-1/2 w-[350px] h-[350px] rounded-full bg-red-600/10 blur-3xl pointer-events-none" />
+        <div className="absolute bottom-[30%] left-1/2 -translate-x-1/2 w-[350px] h-[350px] rounded-full bg-purple-600/5 blur-3xl pointer-events-none" />
+
+        <div className="max-w-md w-full text-center space-y-6 z-10">
+          {/* Animated Spinner */}
+          <div className="relative w-16 h-16 mx-auto">
+            <div className="absolute inset-0 rounded-full border-4 border-white/5" />
+            <div className="absolute inset-0 rounded-full border-4 border-t-red-600 animate-spin" />
+          </div>
+
+          <div className="space-y-2">
+            <h3 className="text-lg font-black text-white uppercase italic tracking-wider">Oda Yükleniyor</h3>
+            <p className="text-xs text-slate-400">
+              Oyun sunucusu ile bağlantı kuruluyor ve oyun durumu senkronize ediliyor...
+            </p>
+          </div>
+
+          {/* Stuck prevention button shown after a brief delay */}
+          {showCancelLoading && (
+            <div className="pt-2 animate-fade-in">
+              <button
+                onClick={() => {
+                  if (sounds.playPlay) sounds.playPlay(profile.settings);
+                  onLeaveRoom();
+                }}
+                className="px-5 py-2.5 bg-white/5 hover:bg-white/10 border border-white/10 rounded-xl text-[10px] font-black uppercase tracking-wider text-slate-300 transition-all hover:text-white transform active:scale-95 shadow-lg"
+              >
+                🚪 Ana Menüye Dön (Bağlantıyı İptal Et)
+              </button>
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  }
 
   const localPlayer = match.players.find((p) => p.id === profile.id) || match.players[0];
   const otherPlayers = match.players.filter((p) => p.id !== localPlayer.id);
@@ -2740,7 +2966,7 @@ export const GameRoom: React.FC<Props> = ({ roomId, isOffline, profile, onLeaveR
     }
 
     if (card.actionType === 'deal-breaker') {
-      const hasCompletedSet = otherPlayers.some((op) => 
+      const hasCompletedSet = otherPlayers.some((op) =>
         Object.keys(op.properties).some((col) => {
           const set = op.properties[col as CardColor];
           return set && set.cards.length === MAX_IN_SET[col as CardColor];
@@ -2752,7 +2978,7 @@ export const GameRoom: React.FC<Props> = ({ roomId, isOffline, profile, onLeaveR
     }
 
     if (card.actionType === 'sly-deal') {
-      const hasIncompleteProp = otherPlayers.some((op) => 
+      const hasIncompleteProp = otherPlayers.some((op) =>
         Object.keys(op.properties).some((col) => {
           const set = op.properties[col as CardColor];
           return set && set.cards.length > 0 && set.cards.length < MAX_IN_SET[col as CardColor];
@@ -2772,7 +2998,7 @@ export const GameRoom: React.FC<Props> = ({ roomId, isOffline, profile, onLeaveR
         return { playable: false, reason: 'Zoraki takas yapabilmek için önünüzde tamamlanmamış en az bir mülk bulunmalıdır!' };
       }
 
-      const oppIncompleteProp = otherPlayers.some((op) => 
+      const oppIncompleteProp = otherPlayers.some((op) =>
         Object.keys(op.properties).some((col) => {
           const set = op.properties[col as CardColor];
           return set && set.cards.length > 0 && set.cards.length < MAX_IN_SET[col as CardColor];
@@ -2844,6 +3070,26 @@ export const GameRoom: React.FC<Props> = ({ roomId, isOffline, profile, onLeaveR
         background: 'radial-gradient(circle at 50% 50%, #171E31 0%, #07090F 100%)',
       }}
     >
+      {/* Confetti Overlay Particle System */}
+      {confettiActive && (
+        <div className="fixed inset-0 pointer-events-none z-[9999] overflow-hidden">
+          {confettiParticles.map((p) => (
+            <div
+              key={p.id}
+              className={`absolute animate-confetti-fall ${p.shape === 'circle' ? 'rounded-full' : 'rounded-sm'}`}
+              style={{
+                left: `${p.x}%`,
+                top: `${p.y}%`,
+                width: `${p.size}px`,
+                height: `${p.size}px`,
+                backgroundColor: p.color,
+                animationDelay: `${p.delay}s`,
+                opacity: 0.8,
+              }}
+            />
+          ))}
+        </div>
+      )}
       {/* Decorative board circle backgrounds matching Image 4 */}
       <div className="absolute top-[25%] left-1/2 -translate-x-1/2 w-[450px] h-[450px] rounded-full border border-white/[0.03] pointer-events-none z-0" />
       <div className="absolute top-[18%] left-1/2 -translate-x-1/2 w-[650px] h-[650px] rounded-full border border-white/[0.02] pointer-events-none z-0" />
@@ -2913,11 +3159,10 @@ export const GameRoom: React.FC<Props> = ({ roomId, isOffline, profile, onLeaveR
                 playPlaySound();
                 setIsCompactLayout(!isCompactLayout);
               }}
-              className={`p-1 sm:p-1.5 rounded-lg border text-[10px] font-black transition-all flex items-center gap-1 ${
-                isCompactLayout
-                  ? 'bg-amber-500/20 border-amber-500/40 text-amber-300 hover:bg-amber-500/30 shadow-[0_0_8px_rgba(245,158,11,0.2)]'
-                  : 'bg-slate-500/10 border-slate-500/30 text-slate-400 hover:bg-slate-500/20'
-              }`}
+              className={`p-1 sm:p-1.5 rounded-lg border text-[10px] font-black transition-all flex items-center gap-1 ${isCompactLayout
+                ? 'bg-amber-500/20 border-amber-500/40 text-amber-300 hover:bg-amber-500/30 shadow-[0_0_8px_rgba(245,158,11,0.2)]'
+                : 'bg-slate-500/10 border-slate-500/30 text-slate-400 hover:bg-slate-500/20'
+                }`}
               title="Sıkışık Düzen: Mobil ekranlar için kartları küçültür ve boşluk ayarlar"
             >
               📱 <span className="hidden sm:inline">{isCompactLayout ? 'Sıkışık Düzen' : 'Standart Düzen'}</span>
@@ -2933,11 +3178,10 @@ export const GameRoom: React.FC<Props> = ({ roomId, isOffline, profile, onLeaveR
                   setShowChatOverlay(!showChatOverlay);
                 }
               }}
-              className={`p-1 sm:p-1.5 rounded-lg border text-[10px] font-bold transition-all flex items-center gap-1 ${
-                showChatPanel
-                  ? 'bg-purple-500/15 border-purple-500/40 text-purple-300 hover:bg-purple-500/25'
-                  : 'bg-slate-500/10 border-slate-500/30 text-slate-400 hover:bg-slate-500/20'
-              }`}
+              className={`p-1 sm:p-1.5 rounded-lg border text-[10px] font-bold transition-all flex items-center gap-1 ${showChatPanel
+                ? 'bg-purple-500/15 border-purple-500/40 text-purple-300 hover:bg-purple-500/25'
+                : 'bg-slate-500/10 border-slate-500/30 text-slate-400 hover:bg-slate-500/20'
+                }`}
               title="Sohbet ve Akışı Aç/Kapat"
             >
               💬 <span className="hidden sm:inline">{showChatPanel ? 'Sohbet' : 'Sohbet Aç'}</span>
@@ -2952,11 +3196,10 @@ export const GameRoom: React.FC<Props> = ({ roomId, isOffline, profile, onLeaveR
                 playPlaySound();
                 setVoiceMuted(!voiceMuted);
               }}
-              className={`p-1 sm:p-1.5 rounded-lg border text-xs transition-all ${
-                voiceMuted
-                  ? 'bg-red-500/10 border-red-500/30 text-red-400'
-                  : 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400 hover:bg-emerald-500/20'
-              }`}
+              className={`p-1 sm:p-1.5 rounded-lg border text-xs transition-all ${voiceMuted
+                ? 'bg-red-500/10 border-red-500/30 text-red-400'
+                : 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400 hover:bg-emerald-500/20'
+                }`}
             >
               {voiceMuted ? '🔇' : '🎙️'}
             </button>
@@ -2986,13 +3229,12 @@ export const GameRoom: React.FC<Props> = ({ roomId, isOffline, profile, onLeaveR
             transition={{ type: 'spring', stiffness: 350, damping: 25 }}
             className="fixed top-16 left-1/2 -translate-x-1/2 z-50 w-full max-w-sm px-4"
           >
-            <div className={`p-4 rounded-2xl border flex items-start gap-3 shadow-2xl backdrop-blur-md ${
-              recoveryAlert.type === 'warning'
-                ? 'bg-amber-950/90 border-amber-500/40 text-amber-200 shadow-amber-950/50'
-                : recoveryAlert.type === 'success'
+            <div className={`p-4 rounded-2xl border flex items-start gap-3 shadow-2xl backdrop-blur-md ${recoveryAlert.type === 'warning'
+              ? 'bg-amber-950/90 border-amber-500/40 text-amber-200 shadow-amber-950/50'
+              : recoveryAlert.type === 'success'
                 ? 'bg-emerald-950/90 border-emerald-500/40 text-emerald-200 shadow-emerald-950/50'
                 : 'bg-blue-950/90 border-blue-500/40 text-blue-200 shadow-blue-950/50'
-            }`}>
+              }`}>
               <div className="text-lg flex-shrink-0 mt-0.5">
                 {recoveryAlert.type === 'warning' ? '⚠️' : recoveryAlert.type === 'success' ? '✅' : '🛡️'}
               </div>
@@ -3037,17 +3279,233 @@ export const GameRoom: React.FC<Props> = ({ roomId, isOffline, profile, onLeaveR
               </div>
             </div>
 
+            {/* Lobby Custom Rules Settings */}
+            <div className="p-3 bg-black/45 border border-white/5 rounded-xl text-left space-y-3">
+              <span className="text-[10px] uppercase font-black tracking-wider text-slate-400 block border-b border-white/5 pb-1">🔧 OYUN KURALLARI</span>
+              
+              {(() => {
+                const isHost = match.players[0]?.id === profile.id;
+                const currentSettings = match.settings || {
+                  gameMode: 'classic',
+                  turnDuration: 30,
+                  winSetsTarget: 3,
+                  autoEndTurn: false
+                };
+
+                const updateSetting = (key: string, value: any) => {
+                  const updated = {
+                    ...currentSettings,
+                    [key]: value
+                  };
+
+                  // If speed mode is chosen, auto enforce 15s and 2 win sets target
+                  if (key === 'gameMode') {
+                    if (value === 'speed') {
+                      updated.turnDuration = 15;
+                      updated.winSetsTarget = 2;
+                    } else if (value === 'chaos') {
+                      updated.turnDuration = 30;
+                    }
+                  }
+
+                  if (isOffline) {
+                    setMatch(prev => {
+                      if (!prev) return null;
+                      return {
+                        ...prev,
+                        settings: updated
+                      };
+                    });
+                  } else {
+                    socketRef.current?.send(JSON.stringify({
+                      type: 'update_lobby_settings',
+                      roomId,
+                      userId: profile.id,
+                      settings: updated
+                    }));
+                  }
+                };
+
+                if (isHost) {
+                  return (
+                    <div className="space-y-2.5 text-xs">
+                      {/* Game Mode select */}
+                      <div className="space-y-1">
+                        <label className="text-[9px] font-bold text-slate-400 block">Oyun Modu</label>
+                        <select
+                          value={currentSettings.gameMode}
+                          onChange={(e) => updateSetting('gameMode', e.target.value)}
+                          className="w-full bg-slate-950/85 border border-white/10 rounded-lg px-2 py-1 text-slate-200 focus:outline-none focus:border-red-500 cursor-pointer"
+                        >
+                          <option value="classic">Klasik Monopoly</option>
+                          <option value="chaos">Kaos Modu (4 Kart / Sınırsız Hamle)</option>
+                          <option value="speed">Hızlı Monopoly (2 Set / 15s Süre)</option>
+                        </select>
+                      </div>
+
+                      {/* Turn Duration select */}
+                      <div className="space-y-1">
+                        <label className="text-[9px] font-bold text-slate-400 block">Tur Süresi</label>
+                        <select
+                          value={currentSettings.turnDuration}
+                          onChange={(e) => updateSetting('turnDuration', Number(e.target.value))}
+                          disabled={currentSettings.gameMode === 'speed'}
+                          className="w-full bg-slate-950/85 border border-white/10 rounded-lg px-2 py-1 text-slate-200 focus:outline-none focus:border-red-500 cursor-pointer disabled:opacity-50"
+                        >
+                          <option value={15}>15 Saniye (Yıldırım)</option>
+                          <option value={30}>30 Saniye (Standart)</option>
+                          <option value={60}>1 Dakika (Yavaş)</option>
+                          <option value={99999}>Sınırsız Süre</option>
+                        </select>
+                      </div>
+
+                      {/* Win Sets Target select */}
+                      <div className="space-y-1">
+                        <label className="text-[9px] font-bold text-slate-400 block">Gerekli Set Hedefi</label>
+                        <select
+                          value={currentSettings.winSetsTarget}
+                          onChange={(e) => updateSetting('winSetsTarget', Number(e.target.value))}
+                          disabled={currentSettings.gameMode === 'speed'}
+                          className="w-full bg-slate-950/85 border border-white/10 rounded-lg px-2 py-1 text-slate-200 focus:outline-none focus:border-red-500 cursor-pointer disabled:opacity-50"
+                        >
+                          <option value={2}>2 Tam Set (Kısa)</option>
+                          <option value={3}>3 Tam Set (Normal)</option>
+                          <option value={4}>4 Tam Set (Uzun)</option>
+                        </select>
+                      </div>
+
+                      {/* Auto End Turn checkbox */}
+                      <label className="flex items-center gap-2 cursor-pointer select-none py-1">
+                        <input
+                          type="checkbox"
+                          checked={currentSettings.autoEndTurn}
+                          onChange={(e) => updateSetting('autoEndTurn', e.target.checked)}
+                          className="rounded border-white/10 text-red-600 focus:ring-red-500/20"
+                        />
+                        <span className="text-[9.5px] font-bold text-slate-300">Sırayı Otomatik Bitir</span>
+                      </label>
+                    </div>
+                  );
+                } else {
+                  // Non-host read-only summary view
+                  const modeLabel = currentSettings.gameMode === 'speed' ? '⚡ Hızlı Monopoly' : currentSettings.gameMode === 'chaos' ? '💥 Kaos Modu' : 'Klasik';
+                  const timeLabel = currentSettings.turnDuration === 99999 ? 'Sınırsız' : `${currentSettings.turnDuration}s`;
+                  return (
+                    <div className="grid grid-cols-2 gap-2 text-[10px] text-slate-300">
+                      <div>
+                        <span className="text-slate-500 block">Mod:</span>
+                        <span className="font-bold text-slate-200">{modeLabel}</span>
+                      </div>
+                      <div>
+                        <span className="text-slate-500 block">Tur Süresi:</span>
+                        <span className="font-bold text-slate-200">{timeLabel}</span>
+                      </div>
+                      <div>
+                        <span className="text-slate-500 block">Kazanma Koşulu:</span>
+                        <span className="font-bold text-slate-200">{currentSettings.winSetsTarget} Set</span>
+                      </div>
+                      <div>
+                        <span className="text-slate-500 block">Otomatik Bitir:</span>
+                        <span className="font-bold text-slate-200">{currentSettings.autoEndTurn ? 'Açık' : 'Kapalı'}</span>
+                      </div>
+                    </div>
+                  );
+                }
+              })()}
+            </div>
+
             {/* Player list in lobby */}
             <div className="space-y-1.5 max-h-40 overflow-y-auto">
-              {match.players.map((p) => (
-                <div key={p.id} className="flex items-center justify-between p-2 bg-black/30 border border-white/5 rounded-lg">
-                  <span className="font-bold text-xs text-slate-300">{p.username}</span>
-                  <span className="text-[8px] uppercase tracking-wider text-red-400 font-bold px-1.5 py-0.5 bg-red-500/10 rounded">
-                    {p.isBot ? 'BOT' : 'OYUNCU'}
-                  </span>
-                </div>
-              ))}
+              {match.players.map((p) => {
+                const isMe = p.id === profile.id;
+                const isHost = match.players[0]?.id === profile.id;
+                return (
+                  <div key={p.id} className="flex items-center justify-between p-2 bg-black/30 border border-white/5 rounded-lg gap-2">
+                    <div className="flex items-center gap-2">
+                      <span className="font-bold text-xs text-slate-300">{p.username}</span>
+                      {match.players[0]?.id === p.id && <span className="text-[8px] text-amber-400 font-extrabold bg-amber-500/10 px-1 py-0.5 rounded">ODA SAHİBİ</span>}
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-[8px] uppercase tracking-wider text-red-400 font-bold px-1.5 py-0.5 bg-red-500/10 rounded">
+                        {p.isBot ? 'BOT' : 'OYUNCU'}
+                      </span>
+                      {isHost && !isMe && (
+                        <button
+                          onClick={() => {
+                            if (sounds.playPlay) sounds.playPlay(profile.settings);
+                            if (isOffline) {
+                              // Offline bot kick
+                              setMatch(prev => {
+                                if (!prev) return null;
+                                return {
+                                  ...prev,
+                                  players: prev.players.filter(x => x.id !== p.id),
+                                  logs: [...prev.logs, { id: `kick-${Date.now()}`, message: `${p.username} pratik lobisinden çıkarıldı.`, timestamp: Date.now() }]
+                                };
+                              });
+                            } else {
+                              // Online kick player message
+                              socketRef.current?.send(JSON.stringify({ type: 'kick_player', roomId, userId: profile.id, targetUserId: p.id }));
+                            }
+                          }}
+                          className="text-[9px] bg-red-950/40 hover:bg-red-600 border border-red-500/25 text-red-400 hover:text-white px-2 py-0.5 rounded font-black transition-all"
+                        >
+                          AT
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
             </div>
+
+            {isOffline && (
+              <div className="space-y-2.5 p-3 bg-black/30 border border-white/5 rounded-xl text-left">
+                <div>
+                  <label className="text-[9.5px] font-black text-slate-400 block mb-1">🤖 YZ Zorluk Derecesi</label>
+                  <div className="grid grid-cols-3 gap-1">
+                    {[
+                      { id: 'easy', label: 'Kolay' },
+                      { id: 'medium', label: 'Orta' },
+                      { id: 'hard', label: 'Zor' }
+                    ].map((diff) => (
+                      <button
+                        key={diff.id}
+                        onClick={() => setSelectedDifficulty(diff.id as any)}
+                        className={`py-1 rounded-lg text-[9px] font-black border transition-all ${selectedDifficulty === diff.id
+                          ? 'bg-amber-500 border-amber-400 text-slate-950 font-black shadow-md shadow-amber-500/10'
+                          : 'bg-slate-950/60 border-white/5 text-slate-400 hover:text-white'
+                          }`}
+                      >
+                        {diff.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <div>
+                  <label className="text-[9.5px] font-black text-slate-400 block mb-1">🎭 Bot Kişilik Yapısı</label>
+                  <div className="grid grid-cols-3 gap-1">
+                    {[
+                      { id: 'strategic', label: 'Stratejik' },
+                      { id: 'aggressive', label: 'Agresif' },
+                      { id: 'banker', label: 'Tutumlu' }
+                    ].map((pers) => (
+                      <button
+                        key={pers.id}
+                        onClick={() => setSelectedPersonality(pers.id as any)}
+                        className={`py-1 rounded-lg text-[9px] font-black border transition-all ${selectedPersonality === pers.id
+                          ? 'bg-purple-600 border-purple-500 text-white font-black shadow-md shadow-purple-500/10'
+                          : 'bg-slate-950/60 border-white/5 text-slate-400 hover:text-white'
+                          }`}
+                      >
+                        {pers.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            )}
 
             <div className="flex flex-col gap-2 pt-2">
               {isOffline ? (
@@ -3058,20 +3516,38 @@ export const GameRoom: React.FC<Props> = ({ roomId, isOffline, profile, onLeaveR
                   Pratik Maçını Başlat
                 </button>
               ) : (
-                <>
-                  <button
-                    onClick={handleAddBotMultiplayer}
-                    className="w-full py-2 bg-white/5 border border-white/10 text-white font-bold rounded-xl text-xs transition-all hover:bg-white/10"
-                  >
-                    🤖 Bot Ekle
-                  </button>
-                  <button
-                    onClick={handleStartGameMultiplayer}
-                    className="w-full py-2.5 bg-gradient-to-r from-red-600 to-red-500 text-white font-black rounded-xl text-xs transition-all shadow-lg active:scale-95"
-                  >
-                    Oyunu Başlat 🚀
-                  </button>
-                </>
+                (() => {
+                  const isHost = match.players[0]?.id === profile.id;
+                  if (isHost) {
+                    return (
+                      <div className="flex flex-col gap-2">
+                        <button
+                          onClick={handleAddBotMultiplayer}
+                          className="w-full py-2 bg-white/5 border border-white/10 text-white font-bold rounded-xl text-xs transition-all hover:bg-white/10"
+                        >
+                          🤖 Bot Ekle
+                        </button>
+                        <button
+                          onClick={handleStartGameMultiplayer}
+                          className="w-full py-2.5 bg-gradient-to-r from-red-600 to-red-500 text-white font-black rounded-xl text-xs transition-all shadow-lg active:scale-95"
+                        >
+                          Oyunu Başlat 🚀
+                        </button>
+                      </div>
+                    );
+                  } else {
+                    return (
+                      <div className="py-3 px-4 bg-slate-950/60 border border-white/5 rounded-xl text-center">
+                        <span className="text-[10px] text-amber-400 font-extrabold uppercase animate-pulse block">
+                          ⌛ Kurucunun Oyunu Başlatması Bekleniyor...
+                        </span>
+                        <span className="text-[9px] text-slate-500 block mt-1">
+                          Oda kurucusu oyunu başlattığında otomatik olarak masaya bağlanacaksınız.
+                        </span>
+                      </div>
+                    );
+                  }
+                })()
               )}
             </div>
           </div>
@@ -3081,7 +3557,7 @@ export const GameRoom: React.FC<Props> = ({ roomId, isOffline, profile, onLeaveR
       {/* ACTIVE PLAYING STATE */}
       {match.status === 'playing' && (
         <div className={`flex-1 flex flex-col justify-between min-h-0 relative z-10 transition-all duration-300 ${showChatPanel ? 'lg:pr-80' : ''}`}>
-          
+
           {/* 1. Opponents & My Profile Carousel Row at the top (matches Image 4) */}
           <div className="px-3 pt-2.5 flex-shrink-0">
             <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-thin">
@@ -3102,12 +3578,20 @@ export const GameRoom: React.FC<Props> = ({ roomId, isOffline, profile, onLeaveR
                         setShowOpponentAssetsModal(true);
                       }
                     }}
-                    className={`flex-shrink-0 w-[155px] p-2 rounded-xl bg-slate-900/80 border backdrop-blur-sm transition-all cursor-pointer hover:border-purple-500/50 hover:bg-slate-850/90 ${
-                      isCurrentTurn
-                        ? 'border-amber-400 shadow-[0_0_12px_rgba(251,191,36,0.5)] ring-1 ring-amber-400/30'
-                        : 'border-white/5'
-                    }`}
+                    className={`flex-shrink-0 w-[155px] p-2 rounded-xl bg-slate-900/80 border backdrop-blur-sm transition-all cursor-pointer hover:border-purple-500/50 hover:bg-slate-850/90 relative ${isCurrentTurn
+                      ? 'border-amber-400 shadow-[0_0_12px_rgba(251,191,36,0.5)] ring-1 ring-amber-400/30'
+                      : 'border-white/5'
+                      }`}
                   >
+                    {/* Floating emoji reaction bubble */}
+                    {reactions[p.id] && (
+                      <div
+                        key={reactions[p.id].id}
+                        className="absolute -top-10 left-1/2 transform -translate-x-1/2 bg-slate-950/90 border border-amber-400/50 px-2 py-1 rounded-full text-2xl animate-float-emoji shadow-2xl z-[9999] pointer-events-none"
+                      >
+                        {reactions[p.id].emoji}
+                      </div>
+                    )}
                     {/* Player Info Line */}
                     <div className="flex items-center gap-1.5 justify-between">
                       <div className="flex items-center gap-1.5 min-w-0">
@@ -3195,9 +3679,8 @@ export const GameRoom: React.FC<Props> = ({ roomId, isOffline, profile, onLeaveR
                           return (
                             <div
                               key={col}
-                              className={`flex-shrink-0 w-[24px] h-[34px] bg-white rounded flex flex-col justify-between p-0.5 relative overflow-hidden shadow-sm border ${
-                                isCompleted ? 'border-amber-400 ring-1 ring-amber-400/30 shadow-[0_0_4px_rgba(251,191,36,0.5)]' : 'border-slate-300'
-                              }`}
+                              className={`flex-shrink-0 w-[24px] h-[34px] bg-white rounded flex flex-col justify-between p-0.5 relative overflow-hidden shadow-sm border ${isCompleted ? 'border-amber-400 ring-1 ring-amber-400/30 shadow-[0_0_4px_rgba(251,191,36,0.5)]' : 'border-slate-300'
+                                }`}
                               title={`${COLOR_LABELS[col]}: ${set.cards.length}/${MAX_IN_SET[col]}`}
                             >
                               <div className="h-1.5 w-full rounded-t-sm flex-shrink-0" style={{ backgroundColor: COLOR_HEX[col] }} />
@@ -3218,15 +3701,13 @@ export const GameRoom: React.FC<Props> = ({ roomId, isOffline, profile, onLeaveR
           </div>
 
           {/* 2. Middle area: Piles, turn indicator timer and properties collection */}
-          <div className={`flex-1 min-h-0 flex flex-col justify-around px-2 sm:px-3 transition-all ${
-            isCompactLayout ? 'py-0.5 space-y-1' : 'py-1.5 space-y-2'
-          }`}>
-            
-            {/* Horizontal Arena Grid */}
-            <div className={`grid grid-cols-3 gap-1.5 sm:gap-2 items-center bg-black/15 border border-white/[0.04] rounded-xl transition-all ${
-              isCompactLayout ? 'p-1.5' : 'p-2.5'
+          <div className={`flex-1 min-h-0 flex flex-col justify-around px-2 sm:px-3 transition-all ${isCompactLayout ? 'py-0.5 space-y-1' : 'py-1.5 space-y-2'
             }`}>
-              
+
+            {/* Horizontal Arena Grid */}
+            <div className={`grid grid-cols-3 gap-1.5 sm:gap-2 items-center bg-black/15 border border-white/[0.04] rounded-xl transition-all ${isCompactLayout ? 'p-1.5' : 'p-2.5'
+              }`}>
+
               {/* Draw Pile (DESTE) */}
               <div className="text-center space-y-0.5">
                 <span className="text-[7.5px] text-slate-400 uppercase tracking-widest block font-bold">DESTE</span>
@@ -3248,7 +3729,7 @@ export const GameRoom: React.FC<Props> = ({ roomId, isOffline, profile, onLeaveR
               {/* Timer & Turn status block (SÜRE) */}
               <div className="text-center space-y-0.5 flex flex-col items-center">
                 <span className="text-[7.5px] text-slate-400 uppercase tracking-widest block font-bold">SÜRE</span>
-                
+
                 {/* Visual Timer ring */}
                 <div className="relative w-10 h-10 rounded-full border-2 border-slate-800 flex items-center justify-center bg-slate-950 shadow-inner">
                   {(match.activeActionRequest || activeActionCard) ? (
@@ -3258,8 +3739,14 @@ export const GameRoom: React.FC<Props> = ({ roomId, isOffline, profile, onLeaveR
                     </>
                   ) : (
                     <>
-                      <div className="absolute inset-0 rounded-full border-2 border-amber-400 border-t-transparent animate-spin opacity-50" />
-                      <span className="text-amber-400 text-[10px] font-black">{timeLeft}s</span>
+                      {match.settings?.turnDuration && match.settings.turnDuration >= 99999 ? (
+                        <span className="text-amber-400 text-[14px] font-black">∞</span>
+                      ) : (
+                        <>
+                          <div className="absolute inset-0 rounded-full border-2 border-amber-400 border-t-transparent animate-spin opacity-50" />
+                          <span className="text-amber-400 text-[10px] font-black">{timeLeft}s</span>
+                        </>
+                      )}
                     </>
                   )}
                 </div>
@@ -3270,34 +3757,40 @@ export const GameRoom: React.FC<Props> = ({ roomId, isOffline, profile, onLeaveR
                     : (match.players[match.turnIndex].id === profile.id ? 'SIRA SENDE' : match.players[match.turnIndex].username.split(' ')[0])}
                 </span>
                 <div className="flex flex-col items-center gap-0.5 mt-0.5">
-                  <div className="flex gap-1 justify-center">
-                    {[1, 2, 3].map((num) => {
-                      const isPlayed = match.actionsPlayedThisTurn >= num;
-                      const rem = 3 - match.actionsPlayedThisTurn;
-                      return (
-                        <div
-                          key={num}
-                          className={`w-1.5 h-1.5 rounded-full border transition-all duration-300 ${
-                            isPlayed
-                              ? 'bg-red-500/80 border-red-400 shadow-[0_0_8px_rgba(239,68,68,0.5)]'
-                              : rem === 1
-                                ? 'bg-amber-500/20 border-amber-400 animate-pulse'
-                                : 'bg-emerald-500/20 border-emerald-400 shadow-[0_0_4px_rgba(16,185,129,0.2)]'
-                          }`}
-                          title={isPlayed ? 'Hamle Yapıldı' : 'Kalan Hamle'}
-                        />
-                      );
-                    })}
-                  </div>
-                  <span className={`text-[6.5px] font-extrabold px-1.5 py-0.5 rounded-full tracking-wider leading-none border transition-all ${
-                    (3 - match.actionsPlayedThisTurn) === 0
-                      ? 'text-red-400 bg-red-950/60 border-red-500/30 animate-pulse'
-                      : (3 - match.actionsPlayedThisTurn) === 1
-                        ? 'text-amber-400 bg-amber-950/60 border-amber-500/30 animate-pulse font-black'
-                        : 'text-emerald-400 bg-emerald-950/60 border-emerald-500/20'
-                  }`}>
-                    {3 - match.actionsPlayedThisTurn} HAMLE
-                  </span>
+                  {match.settings?.gameMode === 'chaos' ? (
+                    <span className="text-[6.5px] font-extrabold px-1.5 py-0.5 rounded-full tracking-wider leading-none border text-purple-400 bg-purple-950/60 border-purple-500/30 animate-pulse">
+                      💥 SINIRSIZ HAMLE
+                    </span>
+                  ) : (
+                    <>
+                      <div className="flex gap-1 justify-center">
+                        {[1, 2, 3].map((num) => {
+                          const isPlayed = match.actionsPlayedThisTurn >= num;
+                          const rem = 3 - match.actionsPlayedThisTurn;
+                          return (
+                            <div
+                              key={num}
+                              className={`w-1.5 h-1.5 rounded-full border transition-all duration-300 ${isPlayed
+                                ? 'bg-red-500/80 border-red-400 shadow-[0_0_8px_rgba(239,68,68,0.5)]'
+                                : rem === 1
+                                  ? 'bg-amber-500/20 border-amber-400 animate-pulse'
+                                  : 'bg-emerald-500/20 border-emerald-400 shadow-[0_0_4px_rgba(16,185,129,0.2)]'
+                                }`}
+                              title={isPlayed ? 'Hamle Yapıldı' : 'Kalan Hamle'}
+                            />
+                          );
+                        })}
+                      </div>
+                      <span className={`text-[6.5px] font-extrabold px-1.5 py-0.5 rounded-full tracking-wider leading-none border transition-all ${(3 - match.actionsPlayedThisTurn) === 0
+                        ? 'text-red-400 bg-red-950/60 border-red-500/30 animate-pulse'
+                        : (3 - match.actionsPlayedThisTurn) === 1
+                          ? 'text-amber-400 bg-amber-950/60 border-amber-500/30 animate-pulse font-black'
+                          : 'text-emerald-400 bg-emerald-950/60 border-emerald-500/20'
+                        }`}>
+                        {3 - match.actionsPlayedThisTurn} HAMLE
+                      </span>
+                    </>
+                  )}
                 </div>
               </div>
 
@@ -3333,19 +3826,18 @@ export const GameRoom: React.FC<Props> = ({ roomId, isOffline, profile, onLeaveR
 
             {/* BENİM VARLIKLARIM (My Assets - Bank & Properties Side-by-Side) */}
             <div className="flex gap-2 items-stretch flex-1 min-h-0">
-              
+
               {/* BENİM BANKAM (My Bank - Dedicated Left Side Column with no elements above or below) */}
-              <div className={`bg-[#090C12]/40 border border-white/5 rounded-xl flex flex-col justify-between transition-all shrink-0 ${
-                isCompactLayout ? 'p-1 sm:p-1.5 space-y-1 w-[68px] sm:w-[84px] md:w-[96px]' : 'p-2 space-y-1.5 w-[84px] sm:w-[104px] md:w-[118px]'
-              }`}>
+              <div className={`bg-[#090C12]/40 border border-white/5 rounded-xl flex flex-col justify-between transition-all shrink-0 ${isCompactLayout ? 'p-1 sm:p-1.5 space-y-1 w-[68px] sm:w-[84px] md:w-[96px]' : 'p-2 space-y-1.5 w-[84px] sm:w-[104px] md:w-[118px]'
+                }`}>
                 <span className="text-[9px] text-slate-400 uppercase tracking-wider block font-bold text-center select-none truncate">
                   BANKA
                 </span>
-                
+
                 {(() => {
                   const bankTotal = localPlayer.bank.reduce((sum, c) => sum + c.value, 0);
                   const isDraggingActive = draggingCard !== null;
-                  
+
                   return (
                     <div
                       id="bank-drop-zone"
@@ -3380,32 +3872,27 @@ export const GameRoom: React.FC<Props> = ({ roomId, isOffline, profile, onLeaveR
                           setDraggingCard(null);
                         }
                       }}
-                      className={`flex-1 flex flex-col items-center justify-center p-1 rounded-xl transition-all cursor-pointer ${
-                        isDragOverBank 
-                          ? 'bg-emerald-500/20 border-2 border-emerald-400 scale-[1.03] shadow-[0_0_15px_rgba(16,185,129,0.5)] animate-pulse' 
-                          : isDraggingActive && draggingCard.type !== 'property' && draggingCard.type !== 'wildcard'
-                            ? 'bg-emerald-500/5 border border-dashed border-emerald-500/40 animate-pulse'
-                            : 'bg-slate-900/10 border border-emerald-500/10 shadow-[0_4px_12px_rgba(16,185,129,0.05)] hover:border-emerald-400 hover:scale-[1.02]'
-                      }`}
+                      className={`flex-1 flex flex-col items-center justify-center p-1 rounded-xl transition-all cursor-pointer ${isDragOverBank
+                        ? 'bg-emerald-500/20 border-2 border-emerald-400 scale-[1.03] shadow-[0_0_15px_rgba(16,185,129,0.5)] animate-pulse'
+                        : isDraggingActive && draggingCard.type !== 'property' && draggingCard.type !== 'wildcard'
+                          ? 'bg-emerald-500/5 border border-dashed border-emerald-500/40 animate-pulse'
+                          : 'bg-slate-900/10 border border-emerald-500/10 shadow-[0_4px_12px_rgba(16,185,129,0.05)] hover:border-emerald-400 hover:scale-[1.02]'
+                        }`}
                     >
-                      <span className={`text-[7px] font-black bg-emerald-950/60 border border-emerald-500/20 px-1.5 py-0.5 rounded-full leading-none mb-1.5 ${
-                        bankTotal > 0 ? 'text-emerald-400' : 'text-slate-400'
-                      }`}>
+                      <span className={`text-[7px] font-black bg-emerald-950/60 border border-emerald-500/20 px-1.5 py-0.5 rounded-full leading-none mb-1.5 ${bankTotal > 0 ? 'text-emerald-400' : 'text-slate-400'
+                        }`}>
                         🏦 {bankTotal}M
                       </span>
-                      <div className={`w-full aspect-[2/3] h-auto rounded-lg border flex flex-col justify-between p-1 sm:p-1.5 relative overflow-hidden transition-all ${
-                        bankTotal > 0 
-                          ? 'bg-gradient-to-b from-emerald-900 to-emerald-950 border-emerald-500/50 shadow-xl'
-                          : 'bg-slate-950/40 border-dashed border-slate-700'
-                      }`}>
+                      <div className={`w-full aspect-[2/3] h-auto rounded-lg border flex flex-col justify-between p-1 sm:p-1.5 relative overflow-hidden transition-all ${bankTotal > 0
+                        ? 'bg-gradient-to-b from-emerald-900 to-emerald-950 border-emerald-500/50 shadow-xl'
+                        : 'bg-slate-950/40 border-dashed border-slate-700'
+                        }`}>
                         <div className="absolute -right-2 -bottom-2 text-emerald-900/10 text-3xl font-black">💵</div>
                         <span className="text-[5px] font-black text-emerald-400 tracking-wider leading-none">BANKA</span>
-                        <span className={`text-sm my-auto text-center font-black drop-shadow ${
-                          bankTotal > 0 ? 'text-emerald-300' : 'text-slate-600'
-                        }`}>{bankTotal}M</span>
-                        <span className={`text-[4px] font-extrabold text-center uppercase tracking-wider leading-none ${
-                          bankTotal > 0 ? 'text-emerald-500' : 'text-slate-600'
-                        }`}>KASA</span>
+                        <span className={`text-sm my-auto text-center font-black drop-shadow ${bankTotal > 0 ? 'text-emerald-300' : 'text-slate-600'
+                          }`}>{bankTotal}M</span>
+                        <span className={`text-[4px] font-extrabold text-center uppercase tracking-wider leading-none ${bankTotal > 0 ? 'text-emerald-500' : 'text-slate-600'
+                          }`}>KASA</span>
                       </div>
                     </div>
                   );
@@ -3413,15 +3900,14 @@ export const GameRoom: React.FC<Props> = ({ roomId, isOffline, profile, onLeaveR
               </div>
 
               {/* BENİM ARAZİLERİM (My Property sets - matches Image 4) */}
-              <div className={`bg-[#090C12]/40 border border-white/5 rounded-xl flex-1 flex flex-col min-h-0 overflow-hidden transition-all ${
-                isCompactLayout ? 'p-1 sm:p-1.5 space-y-1' : 'p-2 space-y-1.5'
-              }`}>
+              <div className={`bg-[#090C12]/40 border border-white/5 rounded-xl flex-1 flex flex-col min-h-0 overflow-hidden transition-all ${isCompactLayout ? 'p-1 sm:p-1.5 space-y-1' : 'p-2 space-y-1.5'
+                }`}>
                 <span className="text-[9px] text-slate-400 uppercase tracking-wider block font-bold px-1">
                   BENİM ARAZİLERİM ({countCompletedSets(localPlayer.properties)}/3 SET)
                 </span>
 
                 {/* Grid of properties or empty state (matches Image 1 - medium-scale stacked layout with bank on left) */}
-                <div 
+                <div
                   id="properties-drop-zone"
                   onDragOver={(e) => {
                     if (isMyTurn && draggingCard) {
@@ -3494,141 +3980,171 @@ export const GameRoom: React.FC<Props> = ({ roomId, isOffline, profile, onLeaveR
                     }
                   }}
                   className={(() => {
-                    return `flex-1 rounded-xl transition-all flex flex-wrap overflow-y-auto items-start content-start min-h-0 ${
-                      isCompactLayout 
-                        ? 'gap-1.5 sm:gap-2 p-1' 
-                        : 'gap-2 sm:gap-3 p-1.5'
-                    } ${
-                      isDragOverProperties 
+                    return `flex-1 rounded-xl transition-all flex flex-wrap overflow-y-auto items-start content-start min-h-0 ${isCompactLayout
+                      ? 'gap-3 sm:gap-4 p-1'
+                      : 'gap-4 sm:gap-5 p-1.5'
+                      } ${isDragOverProperties
                         ? 'bg-amber-500/10 border-2 border-dashed border-amber-400 shadow-[inset_0_0_15px_rgba(245,158,11,0.2)] animate-pulse'
                         : draggingCard
                           ? 'bg-amber-500/[0.02] border border-dashed border-amber-500/30'
                           : ''
-                    }`;
+                      }`;
                   })()}
                 >
 
-                {Object.keys(localPlayer.properties).map((colorKey) => {
-                  const col = colorKey as CardColor;
-                  const set = localPlayer.properties[col];
-                  if (!set || set.cards.length === 0) return null;
-                  const isCompleted = set.cards.length >= MAX_IN_SET[col];
+                  {Object.keys(localPlayer.properties).map((colorKey) => {
+                    const col = colorKey as CardColor;
+                    const set = localPlayer.properties[col];
+                    if (!set || set.cards.length === 0) return null;
+                    const isCompleted = set.cards.length >= MAX_IN_SET[col];
+                    const overlapClass = isCompactLayout
+                      ? '-mt-[50px] sm:-mt-[66px] md:-mt-[74px]'
+                      : '-mt-[62px] sm:-mt-[78px] md:-mt-[91px]';
 
-                  const hasCompletedSet = Object.keys(localPlayer.properties).some((c) => {
-                    const s = localPlayer.properties[c as CardColor];
-                    return s && s.cards.length >= (MAX_IN_SET[c as CardColor] || 0);
-                  });
+                    const hasCompletedSet = Object.keys(localPlayer.properties).some((c) => {
+                      const s = localPlayer.properties[c as CardColor];
+                      return s && s.cards.length >= (MAX_IN_SET[c as CardColor] || 0);
+                    });
 
-                  return (
-                    <div
-                      key={col}
-                      className={`flex flex-col items-center rounded-xl transition-all w-[36px] sm:w-[48px] md:w-[56px] shrink-0 ${
-                        isCompactLayout ? 'p-0.5 space-y-0.5' : 'p-1 space-y-1'
-                      } ${
-                        isCompleted
-                          ? 'border-2 border-amber-400 bg-amber-500/10 shadow-[0_0_15px_rgba(251,191,36,0.85)] animate-pulse'
-                          : 'border-2 border-white/5 bg-slate-900/40'
-                      }`}
-                    >
-                      {/* Stack of actual medium property cards (with overlap) */}
-                      <div className={`relative flex flex-col items-center w-full transition-all ${
-                        isCompactLayout ? 'min-h-[46px] sm:min-h-[62px]' : 'min-h-[56px] sm:min-h-[74px]'
-                      }`}>
-                        {set.cards.map((card, idx) => {
-                          const isWild = card.isWildcard || card.type === 'wildcard';
-                          return (
-                            <div
-                              key={card.id}
-                              onClick={() => {
-                                playPlaySound();
-                                setFocusedCard(card);
-                                setFocusedCardZoom(window.innerWidth < 640 ? 1.4 : 1.8);
-                              }}
-                              className={`${idx > 0 ? (isCompactLayout ? '-mt-[125%]' : '-mt-[115%]') : ''} w-full transition-all hover:z-30 relative cursor-pointer hover:scale-105 animate-play-card`}
-                              title="Kartı Odakla"
-                            >
-                              <GameCard card={card} size="medium" activeEffect={cardEffects[card.id] || null} />
-                              {isWild && isMyTurn && (
-                                <div className="absolute top-1 right-1 bg-yellow-500 text-slate-950 text-[6px] font-black w-4.5 h-4.5 rounded-full flex items-center justify-center animate-bounce shadow z-10" title="Grup Değiştirebilir">
-                                  🔄
-                                </div>
-                              )}
-                            </div>
-                          );
-                        })}
-                      </div>
+                    return (
+                      <div
+                        key={col}
+                        onClick={() => {
+                          if (isMyTurn) {
+                            playPlaySound();
+                            setManagedSetColor(col);
+                          }
+                        }}
+                        className={`flex flex-col items-center rounded-lg transition-all cursor-pointer group relative shrink-0 ${isCompactLayout
+                          ? 'w-[36px] sm:w-[46px] md:w-[52px] pb-1 space-y-1'
+                          : 'w-[44px] sm:w-[54px] md:w-[62px] pb-1.5 space-y-1.5'
+                          } ${isCompleted
+                            ? 'border border-amber-400 bg-amber-500/[0.04] shadow-[0_0_12px_rgba(251,191,36,0.2)]'
+                            : 'border border-white/5 bg-slate-900/40 hover:border-white/20'
+                          }`}
+                      >
+                        {/* Interactive Gear Icon */}
+                        {isMyTurn && (
+                          <div className="absolute top-1 right-1 bg-yellow-500 hover:bg-yellow-600 text-slate-950 text-[6px] w-3 h-3 rounded-full flex items-center justify-center shadow-md z-45" title="Seti Yönet">
+                            ⚙️
+                          </div>
+                        )}
 
-                      {/* Info badges and Action Button underneath */}
-                      <div className={`flex flex-col items-center w-full ${isCompactLayout ? 'space-y-0.5' : 'space-y-1'}`}>
-                        <div className={`flex items-center justify-center w-full gap-1 ${isCompactLayout ? 'flex-row' : 'flex-col gap-0.5'}`}>
-                          <span className={`font-black px-1.5 py-0.5 rounded-full leading-none flex items-center gap-0.5 fluid-card-rent-badge ${
-                            isCompactLayout ? 'text-[5.5px]' : 'text-[6.5px]'
-                          } ${
-                            isCompleted ? 'bg-amber-400 text-slate-950 font-black' : 'bg-slate-800 text-slate-400'
+                        {/* Stack of actual medium property cards (with overlap) */}
+                        <div className={`relative flex flex-col items-center w-full transition-all ${isCompactLayout ? 'min-h-[46px] sm:min-h-[62px]' : 'min-h-[56px] sm:min-h-[74px]'
                           }`}>
-                            {isCompleted && '👑'} {set.cards.length}/{MAX_IN_SET[col]}
-                          </span>
-                          <span className="font-black text-white bg-emerald-600 border border-emerald-400/40 px-1.5 py-0.5 rounded-full shadow-sm text-center leading-none block fluid-card-rent-badge" style={{ fontSize: isCompactLayout ? '5.5px' : '6.5px', minWidth: isCompactLayout ? '32px' : '42px' }} title="Alabileceğiniz Kira Değeri">
-                            {isCompactLayout ? `${calculateSetRent(set.cards, col, set.hasHouse, set.hasHotel)}M` : `Kira: ${calculateSetRent(set.cards, col, set.hasHouse, set.hasHotel)}M`}
-                          </span>
+                          {set.cards.map((card, idx) => {
+                            const isWild = card.isWildcard || card.type === 'wildcard';
+                            return (
+                              <div
+                                key={card.id}
+                                onClick={(e) => {
+                                  playPlaySound();
+                                  if (isMyTurn) {
+                                    e.stopPropagation();
+                                    setManagedSetColor(col);
+                                  } else {
+                                    e.stopPropagation();
+                                    setFocusedCard(card);
+                                    setFocusedCardZoom(window.innerWidth < 640 ? 1.4 : 1.8);
+                                  }
+                                }}
+                                className={`${idx > 0 ? overlapClass : ''} w-full transition-all hover:z-30 relative cursor-pointer hover:scale-105 animate-play-card`}
+                                title="Seti Yönet veya Kartı Odakla"
+                              >
+                                <GameCard card={card} size="medium" className="w-full" activeEffect={cardEffects[card.id] || null} />
+                                {isWild && isMyTurn && (
+                                  <div className="absolute top-1 right-1 bg-yellow-500 text-slate-950 text-[6px] font-black w-4.5 h-4.5 rounded-full flex items-center justify-center animate-bounce shadow z-10" title="Grup Değiştirebilir">
+                                    🔄
+                                  </div>
+                                )}
+                              </div>
+                            );
+                          })}
                         </div>
 
-                        <button
-                          onClick={() => setManagedSetColor(col)}
-                          className={`w-full py-0.5 bg-yellow-500 hover:bg-yellow-600 text-slate-950 font-black rounded uppercase tracking-wider shadow-sm fluid-card-btn ${
-                            isCompactLayout ? 'text-[6px]' : 'text-[7px]'
-                          }`}
-                        >
-                          {isCompactLayout ? '⚙️' : '⚙️ YÖNET'}
-                        </button>
+                        {/* Unified Info Pill Badge - Stacked Vertically */}
+                        <div className="w-full text-center px-0.5 select-none flex flex-col gap-0.5 mt-1">
+                          <span className={`inline-block font-black px-1.5 py-0.5 rounded leading-none text-center shadow-sm whitespace-nowrap truncate w-full ${isCompleted
+                            ? 'bg-amber-400 text-slate-950 text-[6px] sm:text-[7px] font-black'
+                            : 'bg-slate-800 text-slate-300 text-[5.5px] sm:text-[6.5px] border border-white/5'
+                            }`}>
+                            {isCompleted
+                              ? (isCompactLayout ? '👑 SET' : '👑 TAM SET')
+                              : `${set.cards.length}/${MAX_IN_SET[col]}`
+                            }
+                          </span>
+                          <span className="inline-block bg-emerald-600/90 border border-emerald-500/20 text-white text-[5.5px] sm:text-[6.5px] font-black px-1.5 py-0.5 rounded leading-none text-center shadow-sm whitespace-nowrap truncate w-full">
+                            {isCompactLayout
+                              ? `${calculateSetRent(set.cards, col, set.hasHouse, set.hasHotel)}M`
+                              : `${calculateSetRent(set.cards, col, set.hasHouse, set.hasHotel)}M Kira`
+                            }
+                          </span>
+                        </div>
                       </div>
-                    </div>
-                  );
-                })}
+                    );
+                  })}
 
-                {Object.keys(localPlayer.properties).filter(k => localPlayer.properties[k as CardColor]!.cards.length > 0).length === 0 && (
-                  <div className="col-span-full flex-1 flex flex-col items-center justify-center border border-dashed border-white/5 rounded-xl py-4 text-slate-500 min-h-[130px] w-full">
-                    <div className="w-10 h-14 border border-dashed border-white/10 rounded-md flex items-center justify-center text-xs text-slate-600">
-                      BOŞ
+                  {Object.keys(localPlayer.properties).filter(k => localPlayer.properties[k as CardColor]!.cards.length > 0).length === 0 && (
+                    <div className="col-span-full flex-1 flex flex-col items-center justify-center border border-dashed border-white/5 rounded-xl py-4 text-slate-500 min-h-[130px] w-full">
+                      <div className="w-10 h-14 border border-dashed border-white/10 rounded-md flex items-center justify-center text-xs text-slate-600">
+                        BOŞ
+                      </div>
+                      <span className="text-[9px] font-bold mt-1 uppercase tracking-wide">henüz arazi yok</span>
                     </div>
-                    <span className="text-[9px] font-bold mt-1 uppercase tracking-wide">henüz arazi yok</span>
-                  </div>
-                )}
+                  )}
+                </div>
               </div>
-            </div>
             </div>
 
           </div>
 
           {/* Dynamic Spacer/Gap between properties and hand cards in Compact Mode to prevent overlaps on mobile */}
           {isCompactLayout && (
-            <div 
+            <div
               className="w-full bg-transparent flex-shrink-0 transition-all pointer-events-none"
-              style={{ 
-                height: isHandExpanded 
-                  ? `${Math.max(4, 16 - (localPlayer.hand.length * 1.2))}px` 
-                  : '4px' 
-              }} 
+              style={{
+                height: isHandExpanded
+                  ? `${Math.max(4, 16 - (localPlayer.hand.length * 1.2))}px`
+                  : '4px'
+              }}
             />
           )}
 
           {/* 3. Bottom Cards Drawer (KARTLARIM - Collapsible & matches Image 4) */}
           <div className="bg-slate-900/90 border-t border-white/10 flex-shrink-0 relative z-30">
-            
+
             {/* Drawer Header Toolbar */}
             <div className="px-3 py-1.5 bg-black/40 flex items-center justify-between border-b border-white/[0.04]">
-              
+
               {/* Hand Toggler */}
               <button
                 onClick={() => {
                   playPlaySound();
                   setIsHandExpanded(!isHandExpanded);
                 }}
-                className="flex items-center gap-1 text-[10px] font-extrabold text-slate-300 hover:text-white"
+                className="flex items-center gap-1 text-[10px] font-extrabold text-slate-300 hover:text-white flex-shrink-0"
               >
                 <span>🎴 KARTLARIM ({localPlayer.hand.length})</span>
                 <span className="text-[8px]">{isHandExpanded ? '▼' : '▲'}</span>
               </button>
+
+              {/* Quick Reactions Bar */}
+              <div className="flex items-center gap-1.5 bg-slate-950/80 border border-white/10 rounded-full px-2 py-0.5 shadow-lg select-none">
+                {['💸', '🛡️', '😂', '😠', '🎉', '🤝'].map((emoji) => (
+                  <button
+                    key={emoji}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      sendReaction(emoji);
+                    }}
+                    className="text-xs hover:scale-130 active:scale-90 transition-all p-0.5 cursor-pointer duration-150"
+                    title={`Reaksiyon Gönder: ${emoji}`}
+                  >
+                    {emoji}
+                  </button>
+                ))}
+              </div>
 
               {/* Active Action Controls */}
               <div className="flex items-center gap-1.5">
@@ -3651,11 +4167,10 @@ export const GameRoom: React.FC<Props> = ({ roomId, isOffline, profile, onLeaveR
                     <button
                       onClick={isOffline ? handleOfflineEndTurn : handleEndTurnMultiplayer}
                       disabled={!!match.activeActionRequest}
-                      className={`font-black px-3 py-1 rounded-lg text-[9px] shadow-lg flex items-center gap-0.5 ${
-                        match.activeActionRequest 
-                          ? 'bg-purple-900/50 text-purple-300 border border-purple-800/30 cursor-not-allowed opacity-50' 
-                          : 'bg-purple-600 hover:bg-purple-500 text-white'
-                      }`}
+                      className={`font-black px-3 py-1 rounded-lg text-[9px] shadow-lg flex items-center gap-0.5 ${match.activeActionRequest
+                        ? 'bg-purple-900/50 text-purple-300 border border-purple-800/30 cursor-not-allowed opacity-50'
+                        : 'bg-purple-600 hover:bg-purple-500 text-white'
+                        }`}
                     >
                       🏁 Turu Bitir
                     </button>
@@ -3705,49 +4220,48 @@ export const GameRoom: React.FC<Props> = ({ roomId, isOffline, profile, onLeaveR
                       const isSelected = selectedCard?.id === card.id;
 
                       return (
-                      <div
-                        key={card.id}
-                        draggable={isMyTurn && !match.activeActionRequest}
-                        onDragStart={() => {
-                          if (match.activeActionRequest) return;
-                          setDraggingCard(card);
-                          playPlaySound();
-                        }}
-                        onDragEnd={() => {
-                          setDraggingCard(null);
-                        }}
-                        onTouchStart={(e) => {
-                          if (match.activeActionRequest) return;
-                          handleTouchStart(e, card);
-                        }}
-                        onTouchMove={(e) => {
-                          if (match.activeActionRequest) return;
-                          handleTouchMove(e);
-                        }}
-                        onTouchEnd={(e) => {
-                          if (match.activeActionRequest) return;
-                          handleTouchEnd(e);
-                        }}
-                        className={`cursor-grab active:cursor-grabbing transition-transform hover:-translate-y-2 select-none flex-shrink-0 ${
-                          draggingCard?.id === card.id ? 'opacity-40 scale-95' : ''
-                        }`}
-                      >
-                        <GameCard
-                          card={card}
-                          size={isCompactLayout ? "medium" : "normal"}
-                          isSelected={isSelected}
-                          activeEffect={cardEffects[card.id] || null}
-                          onClick={() => {
+                        <div
+                          key={card.id}
+                          draggable={isMyTurn && !match.activeActionRequest}
+                          onDragStart={() => {
                             if (match.activeActionRequest) return;
-                            setSelectedCard(card);
-                            setShowCardMenu(true);
+                            setDraggingCard(card);
                             playPlaySound();
                           }}
-                        />
-                      </div>
-                    );
-                  });
-                })()}
+                          onDragEnd={() => {
+                            setDraggingCard(null);
+                          }}
+                          onTouchStart={(e) => {
+                            if (match.activeActionRequest) return;
+                            handleTouchStart(e, card);
+                          }}
+                          onTouchMove={(e) => {
+                            if (match.activeActionRequest) return;
+                            handleTouchMove(e);
+                          }}
+                          onTouchEnd={(e) => {
+                            if (match.activeActionRequest) return;
+                            handleTouchEnd(e);
+                          }}
+                          className={`cursor-grab active:cursor-grabbing card-hover-effect select-none flex-shrink-0 ${draggingCard?.id === card.id ? 'opacity-40 scale-95' : ''
+                            }`}
+                        >
+                          <GameCard
+                            card={card}
+                            size={isCompactLayout ? "medium" : "normal"}
+                            isSelected={isSelected}
+                            activeEffect={cardEffects[card.id] || null}
+                            onClick={() => {
+                              if (match.activeActionRequest) return;
+                              setSelectedCard(card);
+                              setShowCardMenu(true);
+                              playPlaySound();
+                            }}
+                          />
+                        </div>
+                      );
+                    });
+                  })()}
 
                   {localPlayer.hand.length === 0 && (
                     <p className="text-[9px] text-slate-500 italic py-4 text-center w-full">Elinizde hiç kart bulunmuyor.</p>
@@ -3818,7 +4332,7 @@ export const GameRoom: React.FC<Props> = ({ roomId, isOffline, profile, onLeaveR
           <div className="bg-slate-900/90 border border-white/10 backdrop-blur-lg rounded-2xl p-6 text-center space-y-4 max-w-sm w-full shadow-2xl">
             <span className="text-5xl animate-bounce block">👑</span>
             <h3 className="text-2xl font-black text-red-500">OYUN BİTTİ!</h3>
-            
+
             {(() => {
               const winner = match.players.find((p) => p.id === match.winnerId);
               return (
@@ -3849,14 +4363,14 @@ export const GameRoom: React.FC<Props> = ({ roomId, isOffline, profile, onLeaveR
         <div className="fixed inset-0 bg-black/85 backdrop-blur-md flex flex-col items-center justify-center p-4 z-[60] animate-fade-in select-none">
           {/* Main Container */}
           <div className="w-full max-w-lg flex flex-col items-center space-y-4 relative">
-            
+
             {/* Dynamic Slider and Zoom Info Panel */}
             <div className="bg-slate-900/95 border border-slate-800 rounded-2xl p-4 w-full flex flex-col sm:flex-row items-center justify-between gap-4 shadow-2xl">
               <div className="text-center sm:text-left">
                 <span className="text-[9px] font-black text-amber-400 uppercase tracking-widest block">ODAK MODU / ZOOM</span>
                 <h4 className="text-sm font-bold text-white uppercase tracking-tight">{TURKISH_NAMES[focusedCard.name] || focusedCard.name}</h4>
               </div>
-              
+
               {/* Zoom slider controls */}
               <div className="flex items-center gap-3 w-full sm:w-auto">
                 <button
@@ -3892,8 +4406,8 @@ export const GameRoom: React.FC<Props> = ({ roomId, isOffline, profile, onLeaveR
 
             {/* Centered Large Card Canvas */}
             <div className="flex-1 flex items-center justify-center overflow-auto py-8 w-full min-h-[300px]">
-              <div 
-                style={{ 
+              <div
+                style={{
                   transform: `scale(${focusedCardZoom})`,
                   transition: 'transform 100ms cubic-bezier(0.16, 1, 0.3, 1)'
                 }}
@@ -4110,23 +4624,21 @@ export const GameRoom: React.FC<Props> = ({ roomId, isOffline, profile, onLeaveR
                         }
                         setWildcardColorPick(null);
                       }}
-                      className={`p-2 rounded-xl border text-[9px] font-extrabold flex flex-col items-center gap-1.5 transition-all bg-slate-950 hover:bg-slate-900 ${
-                        isComplete
-                          ? 'border-emerald-500/40 hover:border-emerald-500/70'
-                          : count > 0
-                            ? 'border-amber-500/40 hover:border-amber-500/70'
-                            : 'border-white/10 hover:border-white/30'
-                      }`}
+                      className={`p-2 rounded-xl border text-[9px] font-extrabold flex flex-col items-center gap-1.5 transition-all bg-slate-950 hover:bg-slate-900 ${isComplete
+                        ? 'border-emerald-500/40 hover:border-emerald-500/70'
+                        : count > 0
+                          ? 'border-amber-500/40 hover:border-amber-500/70'
+                          : 'border-white/10 hover:border-white/30'
+                        }`}
                     >
                       <span className="w-4 h-4 rounded-full shadow-sm" style={{ backgroundColor: COLOR_HEX[col] }} />
                       <span className="text-white">{COLOR_LABELS[col]}</span>
-                      <span className={`text-[7.5px] px-1 py-0.2 rounded font-black ${
-                        isComplete 
-                          ? 'bg-emerald-500/10 text-emerald-400' 
-                          : count > 0 
-                            ? 'bg-amber-500/10 text-amber-400' 
-                            : 'bg-slate-800 text-slate-500'
-                      }`}>
+                      <span className={`text-[7.5px] px-1 py-0.2 rounded font-black ${isComplete
+                        ? 'bg-emerald-500/10 text-emerald-400'
+                        : count > 0
+                          ? 'bg-amber-500/10 text-amber-400'
+                          : 'bg-slate-800 text-slate-500'
+                        }`}>
                         {count > 0 ? `${count}/${max} Kart` : 'Mülk Yok'}
                       </span>
                     </button>
@@ -4200,11 +4712,10 @@ export const GameRoom: React.FC<Props> = ({ roomId, isOffline, profile, onLeaveR
                         setRentColorPick(null);
                         setUseDoubleRent(false);
                       }}
-                      className={`p-2.5 rounded-xl border text-[9px] font-extrabold flex flex-col items-center gap-1.5 transition-all text-center ${
-                        hasProp
-                          ? 'border-white/10 hover:border-amber-500 bg-slate-950 text-white cursor-pointer shadow-lg hover:bg-slate-900/60'
-                          : 'border-white/5 bg-slate-950/40 text-slate-600 cursor-not-allowed opacity-50'
-                      }`}
+                      className={`p-2.5 rounded-xl border text-[9px] font-extrabold flex flex-col items-center gap-1.5 transition-all text-center ${hasProp
+                        ? 'border-white/10 hover:border-amber-500 bg-slate-950 text-white cursor-pointer shadow-lg hover:bg-slate-900/60'
+                        : 'border-white/5 bg-slate-950/40 text-slate-600 cursor-not-allowed opacity-50'
+                        }`}
                     >
                       <span className="w-4 h-4 rounded-full shadow-sm" style={{ backgroundColor: COLOR_HEX[col], filter: hasProp ? 'none' : 'grayscale(1)' }} />
                       <div className="flex flex-col items-center">
@@ -4371,20 +4882,20 @@ export const GameRoom: React.FC<Props> = ({ roomId, isOffline, profile, onLeaveR
                               const col = colorKey as CardColor;
                               const set = op.properties[col];
                               if (!set || set.cards.length === 0) return null;
-                              
+
                               const count = set.cards.length;
                               const max = MAX_IN_SET[col];
                               const colorHex = COLOR_HEX[col];
                               const isComplete = count === max;
-                              
+
                               return (
-                                <div 
-                                  key={col} 
+                                <div
+                                  key={col}
                                   className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg text-[8.5px] font-black border shadow-sm"
-                                  style={{ 
-                                    backgroundColor: isComplete ? `${colorHex}25` : `${colorHex}10`, 
+                                  style={{
+                                    backgroundColor: isComplete ? `${colorHex}25` : `${colorHex}10`,
                                     borderColor: isComplete ? `${colorHex}70` : `${colorHex}30`,
-                                    color: colorHex 
+                                    color: colorHex
                                   }}
                                 >
                                   <span className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: colorHex }} />
@@ -4515,7 +5026,7 @@ export const GameRoom: React.FC<Props> = ({ roomId, isOffline, profile, onLeaveR
                                 setActiveActionCard(null);
                               }}
                               className="w-full p-3 rounded-2xl border border-white/5 hover:border-amber-500 bg-slate-950/80 hover:bg-slate-900 text-white transition-all text-left flex flex-col space-y-1.5 shadow-lg"
-                              style={{ 
+                              style={{
                                 borderLeft: `4px solid ${COLOR_HEX[col]}`,
                               }}
                             >
@@ -4565,7 +5076,7 @@ export const GameRoom: React.FC<Props> = ({ roomId, isOffline, profile, onLeaveR
                               setActiveActionCard(null);
                             }}
                             className="w-full p-3 rounded-2xl border border-white/5 hover:border-amber-500 bg-slate-950/80 hover:bg-slate-900 text-white transition-all text-left flex flex-col space-y-1.5 shadow-lg"
-                            style={{ 
+                            style={{
                               borderLeft: `4px solid ${COLOR_HEX[col]}`,
                             }}
                           >
@@ -4611,7 +5122,7 @@ export const GameRoom: React.FC<Props> = ({ roomId, isOffline, profile, onLeaveR
                                 key={c.id}
                                 onClick={() => setSelectedStolenCardId(c.id)}
                                 className="w-full p-3 rounded-2xl border border-white/5 hover:border-amber-500 bg-slate-950/80 hover:bg-slate-900 text-white transition-all text-left flex flex-col space-y-1.5 shadow-lg"
-                                style={{ 
+                                style={{
                                   borderLeft: `4px solid ${COLOR_HEX[col]}`,
                                 }}
                               >
@@ -4659,7 +5170,7 @@ export const GameRoom: React.FC<Props> = ({ roomId, isOffline, profile, onLeaveR
                                   setActiveActionCard(null);
                                 }}
                                 className="w-full p-3 rounded-2xl border border-white/5 hover:border-amber-500 bg-slate-950/80 hover:bg-slate-900 text-white transition-all text-left flex flex-col space-y-1.5 shadow-lg"
-                                style={{ 
+                                style={{
                                   borderLeft: `4px solid ${COLOR_HEX[col]}`,
                                 }}
                               >
@@ -4725,7 +5236,7 @@ export const GameRoom: React.FC<Props> = ({ roomId, isOffline, profile, onLeaveR
       {match.activeActionRequest && match.activeActionRequest.targetPlayerId === profile.id && (
         <div className="fixed inset-0 bg-black/85 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-fade-in">
           <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 w-full max-w-sm space-y-4 shadow-2xl">
-            
+
             {match.activeActionRequest.type === 'just-say-no' ? (
               // JSN DEFENSE INTERFACE
               <div className="space-y-4">
@@ -4740,7 +5251,7 @@ export const GameRoom: React.FC<Props> = ({ roomId, isOffline, profile, onLeaveR
                       const jsnCount = req.jsnCount || 0;
                       const sPlayer = match.players.find((p: any) => p.id === req.sourcePlayerId);
                       const actName = req.actionCard?.name || "Önemli Aksiyon";
-                      
+
                       if (jsnCount === 0) {
                         return (
                           <span>
@@ -4818,7 +5329,7 @@ export const GameRoom: React.FC<Props> = ({ roomId, isOffline, profile, onLeaveR
                     <button
                       onClick={() => {
                         const due = match.activeActionRequest?.amountDue || 0;
-                        
+
                         const bankCards = localPlayer.bank.map((c) => ({ id: c.id, value: c.value }));
                         const propertyCards: { id: string; value: number }[] = [];
                         Object.values(localPlayer.properties).forEach((set: any) => {
@@ -4832,36 +5343,36 @@ export const GameRoom: React.FC<Props> = ({ roomId, isOffline, profile, onLeaveR
                         const findBestSubset = (cards: { id: string; value: number }[], target: number): string[] => {
                           if (cards.length === 0) return [];
                           const n = cards.length;
-                          
+
                           // For small sizes (<= 16), find exact optimal solution
                           if (n <= 16) {
                             let bestSubset: string[] = [];
                             let bestSum = Infinity;
-                            
+
                             const search = (index: number, currentIds: string[], currentSum: number) => {
                               if (currentSum >= target) {
-                                  if (currentSum < bestSum) {
-                                    bestSum = currentSum;
+                                if (currentSum < bestSum) {
+                                  bestSum = currentSum;
+                                  bestSubset = [...currentIds];
+                                } else if (currentSum === bestSum) {
+                                  if (currentIds.length < bestSubset.length) {
                                     bestSubset = [...currentIds];
-                                  } else if (currentSum === bestSum) {
-                                    if (currentIds.length < bestSubset.length) {
-                                        bestSubset = [...currentIds];
-                                    }
                                   }
-                                  return;
+                                }
+                                return;
                               }
                               if (index === n) return;
-                              
+
                               // Include card
                               search(index + 1, [...currentIds, cards[index].id], currentSum + cards[index].value);
                               // Exclude card
                               search(index + 1, currentIds, currentSum);
                             };
-                            
+
                             search(0, [], 0);
                             if (bestSubset.length > 0) return bestSubset;
                           }
-                          
+
                           // Fallback: Greedy algorithm (sort ascending to try hitting target closely with small cards first)
                           const sorted = [...cards].sort((a, b) => a.value - b.value);
                           const selection: string[] = [];
@@ -4877,7 +5388,7 @@ export const GameRoom: React.FC<Props> = ({ roomId, isOffline, profile, onLeaveR
 
                         const totalBank = bankCards.reduce((s, c) => s + c.value, 0);
                         let finalSelection: string[] = [];
-                        
+
                         if (totalBank >= due) {
                           // We can pay entirely using bank cards! Never touch properties.
                           finalSelection = findBestSubset(bankCards, due);
@@ -4944,11 +5455,10 @@ export const GameRoom: React.FC<Props> = ({ roomId, isOffline, profile, onLeaveR
                                     setPaymentSelection((prev) => [...prev, c.id]);
                                   }
                                 }}
-                                className={`p-1.5 rounded-lg border text-left transition-all flex flex-col justify-between ${
-                                  isSelected
-                                    ? 'border-amber-400 bg-amber-500/10 shadow-[0_0_8px_rgba(245,158,11,0.25)]'
-                                    : 'border-slate-800 bg-slate-850 hover:border-slate-700'
-                                }`}
+                                className={`p-1.5 rounded-lg border text-left transition-all flex flex-col justify-between ${isSelected
+                                  ? 'border-amber-400 bg-amber-500/10 shadow-[0_0_8px_rgba(245,158,11,0.25)]'
+                                  : 'border-slate-800 bg-slate-850 hover:border-slate-700'
+                                  }`}
                               >
                                 <span className="font-extrabold text-[8px] block text-slate-200 truncate">{c.name}</span>
                                 <span className="text-[8px] text-amber-300 block font-black mt-0.5">{c.value}M</span>
@@ -4984,11 +5494,10 @@ export const GameRoom: React.FC<Props> = ({ roomId, isOffline, profile, onLeaveR
                                       setPaymentSelection((prev) => [...prev, c.id]);
                                     }
                                   }}
-                                  className={`p-1.5 rounded-lg border text-left transition-all ${
-                                    isSelected
-                                      ? 'border-emerald-400 bg-emerald-500/10 shadow-[0_0_8px_rgba(16,185,129,0.25)]'
-                                      : 'border-slate-800 bg-slate-850 hover:border-slate-700'
-                                  }`}
+                                  className={`p-1.5 rounded-lg border text-left transition-all ${isSelected
+                                    ? 'border-emerald-400 bg-emerald-500/10 shadow-[0_0_8px_rgba(16,185,129,0.25)]'
+                                    : 'border-slate-800 bg-slate-850 hover:border-slate-700'
+                                    }`}
                                 >
                                   <span className="font-extrabold text-[8px] block text-slate-200 flex items-center gap-1 truncate">
                                     <span className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: COLOR_HEX[col] }} />
@@ -5287,7 +5796,7 @@ export const GameRoom: React.FC<Props> = ({ roomId, isOffline, profile, onLeaveR
                             timestamp: Date.now(),
                           };
                           match.logs.push(newLog);
-                          
+
                           // Bot response if offline
                           if (isOffline) {
                             setTimeout(() => {
@@ -5297,7 +5806,7 @@ export const GameRoom: React.FC<Props> = ({ roomId, isOffline, profile, onLeaveR
                               else if (item.emoji === '🔥') botReply = 'Masa yanıyor! 🔥';
                               else if (item.emoji === '🤝') botReply = 'Güzel bir anlaşmaya her zaman varım!';
                               else if (item.emoji === '💸') botReply = 'Buralarda paranın sözü geçmez!';
-                              
+
                               match.logs.push({
                                 id: `emoji-bot-reply-${Date.now()}`,
                                 playerName: opponent.username,
@@ -5404,10 +5913,10 @@ export const GameRoom: React.FC<Props> = ({ roomId, isOffline, profile, onLeaveR
                     {Object.keys(opponent.properties).filter(
                       (col) => opponent.properties[col as CardColor]!.cards.length > 0
                     ).length === 0 && (
-                      <span className="col-span-2 text-center py-6 text-[9px] text-slate-500 italic bg-black/15 rounded-xl border border-dashed border-white/5">
-                        Sahada mülkü bulunmuyor.
-                      </span>
-                    )}
+                        <span className="col-span-2 text-center py-6 text-[9px] text-slate-500 italic bg-black/15 rounded-xl border border-dashed border-white/5">
+                          Sahada mülkü bulunmuyor.
+                        </span>
+                      )}
                   </div>
                 </div>
               </div>
@@ -5420,7 +5929,7 @@ export const GameRoom: React.FC<Props> = ({ roomId, isOffline, profile, onLeaveR
       {showChatOverlay && (
         <div className="fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex justify-end animate-fade-in">
           <div className="w-full max-w-sm bg-slate-900 border-l border-white/10 h-full p-4 flex flex-col justify-between shadow-2xl relative animate-slide-left">
-            
+
             <div className="border-b border-white/5 pb-2 mb-2 flex items-center justify-between flex-shrink-0">
               <div className="flex items-center gap-1.5">
                 <span className="text-lg">💬</span>
@@ -5672,17 +6181,15 @@ export const GameRoom: React.FC<Props> = ({ roomId, isOffline, profile, onLeaveR
                         }
                         setPropertyWildcardColorPick(null);
                       }}
-                      className={`p-3 rounded-2xl border transition-all cursor-pointer flex flex-col space-y-1.5 ${
-                        isCurrent
-                          ? 'border-yellow-500 bg-yellow-500/[0.04] shadow-[0_0_12px_rgba(234,179,8,0.15)] animate-pulse'
-                          : 'border-white/5 bg-slate-950/40 hover:border-white/20 hover:bg-slate-900/60'
-                      }`}
+                      className={`p-3 rounded-2xl border transition-all cursor-pointer flex flex-col space-y-1.5 ${isCurrent
+                        ? 'border-yellow-500 bg-yellow-500/[0.04] shadow-[0_0_12px_rgba(234,179,8,0.15)] animate-pulse'
+                        : 'border-white/5 bg-slate-950/40 hover:border-white/20 hover:bg-slate-900/60'
+                        }`}
                     >
                       <div className="flex justify-between items-center">
                         <div className="flex items-center gap-2">
-                          <div className={`w-3.5 h-3.5 rounded-full border flex items-center justify-center ${
-                            isCurrent ? 'border-yellow-500' : 'border-slate-600'
-                          }`}>
+                          <div className={`w-3.5 h-3.5 rounded-full border flex items-center justify-center ${isCurrent ? 'border-yellow-500' : 'border-slate-600'
+                            }`}>
                             {isCurrent && (
                               <div className="w-1.5 h-1.5 rounded-full" style={{ backgroundColor: COLOR_HEX[col] }} />
                             )}
@@ -5694,13 +6201,12 @@ export const GameRoom: React.FC<Props> = ({ roomId, isOffline, profile, onLeaveR
                               const count = localPlayer.properties[col]?.cards.length || 0;
                               const max = MAX_IN_SET[col] || 0;
                               return (
-                                <span className={`text-[7.5px] px-1 py-0.2 rounded font-black ${
-                                  count === max && max > 0 
-                                    ? 'bg-emerald-500/15 text-emerald-400' 
-                                    : count > 0 
-                                      ? 'bg-amber-500/15 text-amber-400' 
-                                      : 'bg-slate-850 text-slate-500'
-                                }`}>
+                                <span className={`text-[7.5px] px-1 py-0.2 rounded font-black ${count === max && max > 0
+                                  ? 'bg-emerald-500/15 text-emerald-400'
+                                  : count > 0
+                                    ? 'bg-amber-500/15 text-amber-400'
+                                    : 'bg-slate-850 text-slate-500'
+                                  }`}>
                                   {count > 0 ? `${count}/${max} Kartınız Var` : 'Sizde Yok'}
                                 </span>
                               );

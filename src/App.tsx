@@ -13,6 +13,43 @@ export default function App() {
   // Navigation states
   const [currentRoom, setCurrentRoom] = React.useState<{ roomId: string; isOffline: boolean } | null>(null);
 
+  // Auto-login and Reconnection Check on Mount
+  React.useEffect(() => {
+    const storedUsername = localStorage.getItem('deal_master_username');
+    if (storedUsername) {
+      setLoading(true);
+      fetch('/api/auth', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username: storedUsername }),
+      })
+        .then((res) => {
+          if (res.ok) return res.json();
+          throw new Error();
+        })
+        .then((user) => {
+          setProfile(user);
+          // Check for active room after login
+          const activeRoom = localStorage.getItem('deal_master_active_room');
+          if (activeRoom) {
+            try {
+              const { roomId, isOffline } = JSON.parse(activeRoom);
+              setCurrentRoom({ roomId, isOffline });
+            } catch (e) {
+              localStorage.removeItem('deal_master_active_room');
+            }
+          }
+        })
+        .catch(() => {
+          localStorage.removeItem('deal_master_username');
+          localStorage.removeItem('deal_master_active_room');
+        })
+        .finally(() => {
+          setLoading(false);
+        });
+    }
+  }, []);
+
   // Authenticate user on startup or after input
   const handleAuth = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -31,6 +68,7 @@ export default function App() {
       if (response.ok) {
         const user = await response.json();
         setProfile(user);
+        localStorage.setItem('deal_master_username', user.username);
         
         // Play welcome sound!
         sounds.playCoin(user.settings);
@@ -51,10 +89,12 @@ export default function App() {
 
   const handleJoinRoom = (roomId: string, isOffline: boolean) => {
     setCurrentRoom({ roomId, isOffline });
+    localStorage.setItem('deal_master_active_room', JSON.stringify({ roomId, isOffline }));
   };
 
   const handleLeaveRoom = () => {
     setCurrentRoom(null);
+    localStorage.removeItem('deal_master_active_room');
     // Refresh user profile stats on game completion
     if (profile) {
       fetch('/api/auth', {

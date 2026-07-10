@@ -5,6 +5,7 @@ import { ProfilePanel } from './ProfilePanel';
 import { CustomizationPanel } from './CustomizationPanel';
 import { sounds } from '../lib/SoundSystem';
 import { AvatarWithFrame } from './AvatarWithFrame';
+import { AdminPanel } from './AdminPanel';
 
 interface Props {
   profile: UserProfile;
@@ -13,7 +14,7 @@ interface Props {
 }
 
 export const MainMenu: React.FC<Props> = ({ profile, onUpdateProfile, onJoinRoom }) => {
-  const [activeTab, setActiveTab] = React.useState<'play' | 'bot_practice' | 'tournaments' | 'shop' | 'customization' | 'profile' | 'rules'>('play');
+  const [activeTab, setActiveTab] = React.useState<'play' | 'bot_practice' | 'tournaments' | 'shop' | 'customization' | 'profile' | 'rules' | 'admin'>('play');
   const [rooms, setRooms] = React.useState<any[]>([]);
   const [customRoomId, setCustomRoomId] = React.useState('');
   const [tournamentJoined, setTournamentJoined] = React.useState(false);
@@ -133,31 +134,39 @@ export const MainMenu: React.FC<Props> = ({ profile, onUpdateProfile, onJoinRoom
         
         {/* Navigation Sidebar */}
         <nav className="lg:col-span-1 bg-black/20 border border-white/5 rounded-2xl p-2 sm:p-4 flex flex-row lg:flex-col gap-2 overflow-x-auto lg:overflow-x-visible pb-3 lg:pb-0 whitespace-nowrap scrollbar-none">
-          {[
-            { id: 'play', label: '🎮 Çok Oyunculu', color: 'hover:text-red-500' },
-            { id: 'bot_practice', label: '🤖 Bot Pratik', color: 'hover:text-red-500' },
-            { id: 'tournaments', label: '🏆 Turnuvalar', color: 'hover:text-red-500' },
-            { id: 'shop', label: '🛒 Mağaza', color: 'hover:text-red-500' },
-            { id: 'customization', label: '🎨 Özelleştir', color: 'hover:text-red-500' },
-            { id: 'profile', label: '👤 Profil & İstatistik', color: 'hover:text-red-500' },
-            { id: 'rules', label: '📜 Kurallar', color: 'hover:text-red-500' },
-          ].map((tab) => (
-            <button
-              key={tab.id}
-              onClick={() => {
-                setActiveTab(tab.id as any);
-                sounds.playPlay(profile.settings);
-              }}
-              className={`flex-shrink-0 lg:w-full text-left px-3.5 py-2 rounded-xl font-semibold text-xs sm:text-sm transition-all flex items-center justify-between gap-4 ${
-                activeTab === tab.id
-                  ? 'bg-gradient-to-r from-red-600/15 to-transparent border-l-4 border-red-500 text-red-400 font-bold shadow-lg shadow-red-600/5'
-                  : `text-slate-400 ${tab.color} hover:bg-white/5`
-              }`}
-            >
-              <span>{tab.label}</span>
-              {activeTab === tab.id && <span className="text-red-500 text-xs hidden lg:inline">●</span>}
-            </button>
-          ))}
+          {(() => {
+            const tabs = [
+              { id: 'play', label: '🎮 Çok Oyunculu', color: 'hover:text-red-500' },
+              { id: 'bot_practice', label: '🤖 Bot Pratik', color: 'hover:text-red-500' },
+              { id: 'tournaments', label: '🏆 Turnuvalar', color: 'hover:text-red-500' },
+              { id: 'shop', label: '🛒 Mağaza', color: 'hover:text-red-500' },
+              { id: 'customization', label: '🎨 Özelleştir', color: 'hover:text-red-500' },
+              { id: 'profile', label: '👤 Profil & İstatistik', color: 'hover:text-red-500' },
+              { id: 'rules', label: '📜 Kurallar', color: 'hover:text-red-500' },
+            ];
+            
+            if (profile.username.toLowerCase() === 'admin') {
+              tabs.push({ id: 'admin', label: '🛡️ Yönetim Paneli', color: 'hover:text-red-500' });
+            }
+
+            return tabs.map((tab) => (
+              <button
+                key={tab.id}
+                onClick={() => {
+                  setActiveTab(tab.id as any);
+                  sounds.playPlay(profile.settings);
+                }}
+                className={`flex-shrink-0 lg:w-full text-left px-3.5 py-2 rounded-xl font-semibold text-xs sm:text-sm transition-all flex items-center justify-between gap-4 ${
+                  activeTab === tab.id
+                    ? 'bg-gradient-to-r from-red-600/15 to-transparent border-l-4 border-red-500 text-red-400 font-bold shadow-lg shadow-red-600/5'
+                    : `text-slate-400 ${tab.color} hover:bg-white/5`
+                }`}
+              >
+                <span>{tab.label}</span>
+                {activeTab === tab.id && <span className="text-red-500 text-xs hidden lg:inline">●</span>}
+              </button>
+            ));
+          })()}
         </nav>
 
         {/* Content Panel Area */}
@@ -404,6 +413,11 @@ export const MainMenu: React.FC<Props> = ({ profile, onUpdateProfile, onJoinRoom
                 </div>
               </div>
             </div>
+          )}
+
+          {/* TAB 8: Admin Panel */}
+          {activeTab === 'admin' && profile.username.toLowerCase() === 'admin' && (
+            <AdminPanel profile={profile} onUpdateProfile={onUpdateProfile} />
           )}
 
         </div>

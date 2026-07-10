@@ -1,19 +1,19 @@
 {
-  "user-lf162rilx": {
-    "id": "user-lf162rilx",
-    "username": "red",
-    "coins": 750,
+  "user-soi3e9wjj": {
+    "id": "user-soi3e9wjj",
+    "username": "admin",
+    "coins": 500,
     "level": 1,
-    "xp": 200,
+    "xp": 0,
     "avatarId": "avatar_classic",
     "stats": {
-      "gamesPlayed": 2,
-      "gamesWon": 1,
-      "gamesLost": 1,
+      "gamesPlayed": 0,
+      "gamesWon": 0,
+      "gamesLost": 0,
       "winRate": 0,
       "totalRentCollected": 0,
       "totalCardsStolen": 0,
-      "totalSetsCompleted": 3,
+      "totalSetsCompleted": 0,
       "totalMoneyBanked": 0
     },
     "settings": {
@@ -80,8 +80,220 @@
         "id": "q-1",
         "description": "Pratik Modunda botu yen.",
         "targetValue": 1,
-        "currentValue": 1,
-        "completed": true,
+        "currentValue": 0,
+        "completed": false,
+        "claimed": false,
+        "rewardCoins": 50
+      },
+      {
+        "id": "q-2",
+        "description": "Bankaya 5M para yerleştir.",
+        "targetValue": 5,
+        "currentValue": 0,
+        "completed": false,
+        "claimed": false,
+        "rewardCoins": 40
+      },
+      {
+        "id": "q-3",
+        "description": "Toplam 3 kira kartı oyna.",
+        "targetValue": 3,
+        "currentValue": 0,
+        "completed": false,
+        "claimed": false,
+        "rewardCoins": 60
+      }
+    ]
+  },
+  "user-vikb86bu7": {
+    "id": "user-vikb86bu7",
+    "username": "Logar",
+    "coins": 500,
+    "level": 1,
+    "xp": 0,
+    "avatarId": "avatar_classic",
+    "stats": {
+      "gamesPlayed": 0,
+      "gamesWon": 0,
+      "gamesLost": 0,
+      "winRate": 0,
+      "totalRentCollected": 0,
+      "totalCardsStolen": 0,
+      "totalSetsCompleted": 0,
+      "totalMoneyBanked": 0
+    },
+    "settings": {
+      "soundVolume": 70,
+      "soundPitch": 1,
+      "synthType": "sine",
+      "cardBack": "back_classic",
+      "boardTheme": "theme_slate",
+      "avatarId": "avatar_classic",
+      "clothesId": "clothes_none",
+      "profileFrame": "frame_none"
+    },
+    "unlockedItems": [
+      "avatar_classic",
+      "back_classic",
+      "theme_slate",
+      "frame_none"
+    ],
+    "friends": [
+      {
+        "id": "bot-memo",
+        "username": "Bot Memo",
+        "status": "online",
+        "avatarId": "avatar_skater"
+      },
+      {
+        "id": "bot-can",
+        "username": "Bot Can",
+        "status": "offline",
+        "avatarId": "avatar_classic"
+      }
+    ],
+    "achievements": [
+      {
+        "id": "ach-1",
+        "title": "İlk Adım",
+        "description": "Bir maç oyna.",
+        "targetValue": 1,
+        "currentValue": 0,
+        "completed": false,
+        "rewardCoins": 100
+      },
+      {
+        "id": "ach-2",
+        "title": "Milyoner",
+        "description": "Bankaya toplam 20M para ekle.",
+        "targetValue": 20,
+        "currentValue": 0,
+        "completed": false,
+        "rewardCoins": 150
+      },
+      {
+        "id": "ach-3",
+        "title": "Sinsi Hırsız",
+        "description": "Rakiplerinden 5 kez arsa çal.",
+        "targetValue": 5,
+        "currentValue": 0,
+        "completed": false,
+        "rewardCoins": 200
+      }
+    ],
+    "dailyQuests": [
+      {
+        "id": "q-1",
+        "description": "Pratik Modunda botu yen.",
+        "targetValue": 1,
+        "currentValue": 0,
+        "completed": false,
+        "claimed": false,
+        "rewardCoins": 50
+      },
+      {
+        "id": "q-2",
+        "description": "Bankaya 5M para yerleştir.",
+        "targetValue": 5,
+        "currentValue": 0,
+        "completed": false,
+        "claimed": false,
+        "rewardCoins": 40
+      },
+      {
+        "id": "q-3",
+        "description": "Toplam 3 kira kartı oyna.",
+        "targetValue": 3,
+        "currentValue": 0,
+        "completed": false,
+        "claimed": false,
+        "rewardCoins": 60
+      }
+    ]
+  },
+  "user-5g693bz16": {
+    "id": "user-5g693bz16",
+    "username": "a",
+    "coins": 500,
+    "level": 1,
+    "xp": 0,
+    "avatarId": "avatar_classic",
+    "stats": {
+      "gamesPlayed": 0,
+      "gamesWon": 0,
+      "gamesLost": 0,
+      "winRate": 0,
+      "totalRentCollected": 0,
+      "totalCardsStolen": 0,
+      "totalSetsCompleted": 0,
+      "totalMoneyBanked": 0
+    },
+    "settings": {
+      "soundVolume": 70,
+      "soundPitch": 1,
+      "synthType": "sine",
+      "cardBack": "back_classic",
+      "boardTheme": "theme_slate",
+      "avatarId": "avatar_classic",
+      "clothesId": "clothes_none",
+      "profileFrame": "frame_none"
+    },
+    "unlockedItems": [
+      "avatar_classic",
+      "back_classic",
+      "theme_slate",
+      "frame_none"
+    ],
+    "friends": [
+      {
+        "id": "bot-memo",
+        "username": "Bot Memo",
+        "status": "online",
+        "avatarId": "avatar_skater"
+      },
+      {
+        "id": "bot-can",
+        "username": "Bot Can",
+        "status": "offline",
+        "avatarId": "avatar_classic"
+      }
+    ],
+    "achievements": [
+      {
+        "id": "ach-1",
+        "title": "İlk Adım",
+        "description": "Bir maç oyna.",
+        "targetValue": 1,
+        "currentValue": 0,
+        "completed": false,
+        "rewardCoins": 100
+      },
+      {
+        "id": "ach-2",
+        "title": "Milyoner",
+        "description": "Bankaya toplam 20M para ekle.",
+        "targetValue": 20,
+        "currentValue": 0,
+        "completed": false,
+        "rewardCoins": 150
+      },
+      {
+        "id": "ach-3",
+        "title": "Sinsi Hırsız",
+        "description": "Rakiplerinden 5 kez arsa çal.",
+        "targetValue": 5,
+        "currentValue": 0,
+        "completed": false,
+        "rewardCoins": 200
+      }
+    ],
+    "dailyQuests": [
+      {
+        "id": "q-1",
+        "description": "Pratik Modunda botu yen.",
+        "targetValue": 1,
+        "currentValue": 0,
+        "completed": false,
         "claimed": false,
         "rewardCoins": 50
       },

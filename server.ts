@@ -4,9 +4,14 @@ import path from 'path';
 import fs from 'fs';
 import { WebSocketServer, WebSocket } from 'ws';
 import { createServer as createViteServer } from 'vite';
+import dotenv from 'dotenv';
+import { createClient } from '@supabase/supabase-js';
 import { generateDeck, shuffleDeck, checkWinner, MAX_IN_SET } from './src/lib/deck';
 import { BotEngine } from './src/lib/BotEngine';
 import { UserProfile, MatchState, GamePlayer, Card, CardColor, GameLog, Friend, FriendRequest, Tournament } from './src/types';
+
+// Load environment variables
+dotenv.config();
 
 // Create data directory if not exists
 const DATA_DIR = path.join(process.cwd(), 'data');
@@ -15,6 +20,349 @@ if (!fs.existsSync(DATA_DIR)) {
 }
 
 const USERS_FILE = path.join(DATA_DIR, 'users.json');
+
+// Supabase Configuration
+const supabaseUrl = process.env.SUPABASE_URL || '';
+const supabaseAnonKey = process.env.SUPABASE_ANON_KEY || '';
+
+let supabase: any = null;
+if (supabaseUrl && supabaseAnonKey && supabaseUrl !== 'YOUR_SUPABASE_URL') {
+  try {
+    supabase = createClient(supabaseUrl, supabaseAnonKey);
+    console.log('🔌 Supabase veritabanı bağlantısı kuruldu!');
+  } catch (err) {
+    console.error('Supabase bağlantı hatası:', err);
+  }
+} else {
+  console.log('📁 Supabase yapılandırılmamış, yerel JSON veritabanı (data/users.json) kullanılıyor.');
+}
+
+// Helper to load/save users locally (as fallback)
+function loadUsers(): Record<string, UserProfile> {
+  if (fs.existsSync(USERS_FILE)) {
+    try {
+      return JSON.parse(fs.readFileSync(USERS_FILE, 'utf8'));
+    } catch (e) {
+      console.error('Error reading users file', e);
+      return {};
+    }
+  }
+  return {};
+}
+
+function saveUsers(users: Record<string, UserProfile>) {
+  try {
+    fs.writeFileSync(USERS_FILE, JSON.stringify(users, null, 2), 'utf8');
+  } catch (e) {
+    console.error('Error saving users file', e);
+  }
+}
+
+const ADMIN_SETTINGS_FILE = path.join(DATA_DIR, 'admin_settings.json');
+
+// Default Admin Settings values
+interface AdminSettings {
+  turnDuration: number;
+  botDelay: number;
+  extraTimeEnabled: boolean;
+  unlimitedDoubleRent: boolean;
+  winCoins: number;
+  xpLevelRate: number;
+  winSetsTarget: number;
+  autoEndTurn: boolean;
+  gameMode: string;
+}
+
+let cachedAdminSettings: AdminSettings = {
+  turnDuration: 30,
+  botDelay: 1800,
+  extraTimeEnabled: true,
+  unlimitedDoubleRent: false,
+  winCoins: 200,
+  xpLevelRate: 500,
+  winSetsTarget: 3,
+  autoEndTurn: false,
+  gameMode: 'classic',
+};
+
+async function loadAdminSettings(): Promise<AdminSettings> {
+  if (supabase) {
+    try {
+      const { data, error } = await supabase
+        .from('admin_settings')
+        .select('*')
+        .eq('id', 1)
+        .maybeSingle();
+      if (error) throw error;
+      if (data) {
+        cachedAdminSettings = {
+          turnDuration: data.turn_duration,
+          botDelay: data.bot_delay,
+          extraTimeEnabled: data.extra_time_enabled,
+          unlimitedDoubleRent: data.unlimited_double_rent,
+          winCoins: data.win_coins,
+          xpLevelRate: data.xp_level_rate,
+          winSetsTarget: data.win_sets_target !== undefined ? data.win_sets_target : 3,
+          autoEndTurn: data.auto_end_turn !== undefined ? data.auto_end_turn : false,
+          gameMode: data.game_mode || 'classic',
+        };
+        return cachedAdminSettings;
+      }
+      
+      // If table exists but row is missing, insert defaults
+      await supabase.from('admin_settings').insert({
+        id: 1,
+        turn_duration: cachedAdminSettings.turnDuration,
+        bot_delay: cachedAdminSettings.botDelay,
+        extra_time_enabled: cachedAdminSettings.extraTimeEnabled,
+        unlimited_double_rent: cachedAdminSettings.unlimitedDoubleRent,
+        win_coins: cachedAdminSettings.winCoins,
+        xp_level_rate: cachedAdminSettings.xpLevelRate,
+        win_sets_target: cachedAdminSettings.winSetsTarget,
+        auto_end_turn: cachedAdminSettings.autoEndTurn,
+        game_mode: cachedAdminSettings.gameMode,
+      });
+    } catch (e) {
+      console.error('Supabase loadAdminSettings error, using local fallback:', e);
+    }
+  }
+
+  // Local file fallback
+  if (fs.existsSync(ADMIN_SETTINGS_FILE)) {
+    try {
+      const parsed = JSON.parse(fs.readFileSync(ADMIN_SETTINGS_FILE, 'utf8'));
+      cachedAdminSettings = {
+        ...cachedAdminSettings,
+        ...parsed
+      };
+    } catch (e) {
+      console.error('Error reading admin settings file, using memory cache:', e);
+    }
+  } else {
+    try {
+      fs.writeFileSync(ADMIN_SETTINGS_FILE, JSON.stringify(cachedAdminSettings, null, 2), 'utf8');
+    } catch (e) {
+      console.error('Error saving default admin settings:', e);
+    }
+  }
+  return cachedAdminSettings;
+}
+
+async function saveAdminSettings(settings: AdminSettings): Promise<void> {
+  cachedAdminSettings = { ...settings };
+  if (supabase) {
+    try {
+      const { error } = await supabase
+        .from('admin_settings')
+        .upsert({
+          id: 1,
+          turn_duration: settings.turnDuration,
+          bot_delay: settings.botDelay,
+          extra_time_enabled: settings.extraTimeEnabled,
+          unlimited_double_rent: settings.unlimitedDoubleRent,
+          win_coins: settings.winCoins,
+          xp_level_rate: settings.xpLevelRate,
+          win_sets_target: settings.winSetsTarget,
+          auto_end_turn: settings.autoEndTurn,
+          game_mode: settings.gameMode,
+        });
+      if (error) throw error;
+      return;
+    } catch (e) {
+      console.error('Supabase saveAdminSettings error, using local fallback:', e);
+    }
+  }
+
+  // Local file fallback
+  try {
+    fs.writeFileSync(ADMIN_SETTINGS_FILE, JSON.stringify(settings, null, 2), 'utf8');
+  } catch (e) {
+    console.error('Error saving admin settings file:', e);
+  }
+}
+
+function getWinSetsTarget(match: any): number {
+  if (match?.settings?.gameMode === 'speed') return 2;
+  return match?.settings?.winSetsTarget || 3;
+}
+
+// UserProfile factories and store queries (with Supabase dynamic support)
+function createNewUserProfile(username: string): UserProfile {
+  const newId = `user-${Math.random().toString(36).substr(2, 9)}`;
+  return {
+    id: newId,
+    username: username.trim(),
+    coins: 500, // starting coins
+    level: 1,
+    xp: 0,
+    avatarId: 'avatar_classic',
+    stats: {
+      gamesPlayed: 0,
+      gamesWon: 0,
+      gamesLost: 0,
+      winRate: 0,
+      totalRentCollected: 0,
+      totalCardsStolen: 0,
+      totalSetsCompleted: 0,
+      totalMoneyBanked: 0,
+    },
+    settings: {
+      soundVolume: 70,
+      soundPitch: 1.0,
+      synthType: 'sine',
+      cardBack: 'back_classic',
+      boardTheme: 'theme_slate',
+      avatarId: 'avatar_classic',
+      clothesId: 'clothes_none',
+      profileFrame: 'frame_none',
+    },
+    unlockedItems: ['avatar_classic', 'back_classic', 'theme_slate', 'frame_none'],
+    friends: [
+      { id: 'bot-memo', username: 'Bot Memo', status: 'online', avatarId: 'avatar_skater' },
+      { id: 'bot-can', username: 'Bot Can', status: 'offline', avatarId: 'avatar_classic' },
+    ],
+    achievements: [
+      { id: 'ach-1', title: 'İlk Adım', description: 'Bir maç oyna.', targetValue: 1, currentValue: 0, completed: false, rewardCoins: 100 },
+      { id: 'ach-2', title: 'Milyoner', description: 'Bankaya toplam 20M para ekle.', targetValue: 20, currentValue: 0, completed: false, rewardCoins: 150 },
+      { id: 'ach-3', title: 'Sinsi Hırsız', description: 'Rakiplerinden 5 kez arsa çal.', targetValue: 5, currentValue: 0, completed: false, rewardCoins: 200 },
+    ],
+    dailyQuests: [
+      { id: 'q-1', description: 'Pratik Modunda botu yen.', targetValue: 1, currentValue: 0, completed: false, claimed: false, rewardCoins: 50 },
+      { id: 'q-2', description: 'Bankaya 5M para yerleştir.', targetValue: 5, currentValue: 0, completed: false, claimed: false, rewardCoins: 40 },
+      { id: 'q-3', description: 'Toplam 3 kira kartı oyna.', targetValue: 3, currentValue: 0, completed: false, claimed: false, rewardCoins: 60 },
+    ],
+  };
+}
+
+async function getUserProfile(username: string): Promise<UserProfile> {
+  if (supabase) {
+    try {
+      const { data, error } = await supabase
+        .from('users')
+        .select('*')
+        .eq('username', username)
+        .maybeSingle();
+
+      if (error) throw error;
+      if (data) {
+        return {
+          id: data.id,
+          username: data.username,
+          coins: data.coins,
+          level: data.level,
+          xp: data.xp,
+          avatarId: data.avatar_id,
+          stats: data.stats,
+          settings: data.settings,
+          unlockedItems: data.unlocked_items,
+          friends: data.friends || [],
+          achievements: data.achievements || [],
+          dailyQuests: data.daily_quests || [],
+        };
+      }
+
+      const newUser = createNewUserProfile(username);
+      const { error: insertError } = await supabase
+        .from('users')
+        .insert({
+          id: newUser.id,
+          username: newUser.username,
+          coins: newUser.coins,
+          level: newUser.level,
+          xp: newUser.xp,
+          avatar_id: newUser.avatarId,
+          stats: newUser.stats,
+          settings: newUser.settings,
+          unlocked_items: newUser.unlockedItems,
+          friends: newUser.friends,
+          achievements: newUser.achievements,
+          daily_quests: newUser.dailyQuests,
+        });
+
+      if (insertError) throw insertError;
+      return newUser;
+    } catch (e) {
+      console.error('Supabase getUserProfile error, falling back to memory/file:', e);
+    }
+  }
+
+  const users = loadUsers();
+  let user = Object.values(users).find(u => u.username.toLowerCase() === username.toLowerCase());
+  if (!user) {
+    user = createNewUserProfile(username);
+    users[user.id] = user;
+    saveUsers(users);
+  }
+  return user;
+}
+
+async function getUserProfileById(userId: string): Promise<UserProfile | null> {
+  if (supabase) {
+    try {
+      const { data, error } = await supabase
+        .from('users')
+        .select('*')
+        .eq('id', userId)
+        .maybeSingle();
+
+      if (error) throw error;
+      if (data) {
+        return {
+          id: data.id,
+          username: data.username,
+          coins: data.coins,
+          level: data.level,
+          xp: data.xp,
+          avatarId: data.avatar_id,
+          stats: data.stats,
+          settings: data.settings,
+          unlockedItems: data.unlocked_items,
+          friends: data.friends || [],
+          achievements: data.achievements || [],
+          dailyQuests: data.daily_quests || [],
+        };
+      }
+      return null;
+    } catch (e) {
+      console.error('Supabase getUserProfileById error, falling back to memory/file:', e);
+    }
+  }
+
+  const users = loadUsers();
+  return users[userId] || null;
+}
+
+async function saveUserProfile(profile: UserProfile): Promise<void> {
+  if (supabase) {
+    try {
+      const { error } = await supabase
+        .from('users')
+        .upsert({
+          id: profile.id,
+          username: profile.username,
+          coins: profile.coins,
+          level: profile.level,
+          xp: profile.xp,
+          avatar_id: profile.avatarId,
+          stats: profile.stats,
+          settings: profile.settings,
+          unlocked_items: profile.unlockedItems,
+          friends: profile.friends,
+          achievements: profile.achievements,
+          daily_quests: profile.dailyQuests,
+        });
+
+      if (error) throw error;
+      return;
+    } catch (e) {
+      console.error('Supabase saveUserProfile error, falling back to memory/file:', e);
+    }
+  }
+
+  const users = loadUsers();
+  users[profile.id] = profile;
+  saveUsers(users);
+}
 
 // Initial/default shop products
 const DEFAULT_SHOP_ITEMS = [
@@ -39,27 +387,6 @@ const DEFAULT_SHOP_ITEMS = [
   { id: 'frame_fire', name: 'Volkanik Ateş', category: 'profile_frame', price: 200, description: 'Kızıl lav efektli ateşli profil çerçevesi.', isUnlocked: false },
   { id: 'frame_royal', name: 'Kraliyet Elması', category: 'profile_frame', price: 450, description: 'Lüks mavi elmas süslemeli şampiyon çerçevesi.', isUnlocked: false },
 ];
-
-// Helper to load/save users
-function loadUsers(): Record<string, UserProfile> {
-  if (fs.existsSync(USERS_FILE)) {
-    try {
-      return JSON.parse(fs.readFileSync(USERS_FILE, 'utf8'));
-    } catch (e) {
-      console.error('Error reading users file', e);
-      return {};
-    }
-  }
-  return {};
-}
-
-function saveUsers(users: Record<string, UserProfile>) {
-  try {
-    fs.writeFileSync(USERS_FILE, JSON.stringify(users, null, 2), 'utf8');
-  } catch (e) {
-    console.error('Error saving users file', e);
-  }
-}
 
 // In-Memory active rooms and tournaments state
 const activeMatches: Record<string, MatchState> = {};
@@ -88,185 +415,195 @@ async function startServer() {
 
   app.use(express.json());
 
+  // Load admin settings at startup
+  await loadAdminSettings();
+
   // --- API ROUTES ---
 
   // Auth / Get Profile
-  app.post('/api/auth', (req, res) => {
+  app.post('/api/auth', async (req, res) => {
     const { username } = req.body;
     if (!username || username.trim() === '') {
       return res.status(400).json({ error: 'Kullanıcı adı geçerli olmalıdır.' });
     }
 
-    const users = loadUsers();
-    let user = Object.values(users).find((u) => u.username.toLowerCase() === username.toLowerCase());
-
-    if (!user) {
-      // Create new profile
-      const newId = `user-${Math.random().toString(36).substr(2, 9)}`;
-      user = {
-        id: newId,
-        username: username.trim(),
-        coins: 500, // starting coins
-        level: 1,
-        xp: 0,
-        avatarId: 'avatar_classic',
-        stats: {
-          gamesPlayed: 0,
-          gamesWon: 0,
-          gamesLost: 0,
-          winRate: 0,
-          totalRentCollected: 0,
-          totalCardsStolen: 0,
-          totalSetsCompleted: 0,
-          totalMoneyBanked: 0,
-        },
-        settings: {
-          soundVolume: 70,
-          soundPitch: 1.0,
-          synthType: 'sine',
-          cardBack: 'back_classic',
-          boardTheme: 'theme_slate',
-          avatarId: 'avatar_classic',
-          clothesId: 'clothes_none',
-          profileFrame: 'frame_none',
-        },
-        unlockedItems: ['avatar_classic', 'back_classic', 'theme_slate', 'frame_none'],
-        friends: [
-          { id: 'bot-memo', username: 'Bot Memo', status: 'online', avatarId: 'avatar_skater' },
-          { id: 'bot-can', username: 'Bot Can', status: 'offline', avatarId: 'avatar_classic' },
-        ],
-        achievements: [
-          { id: 'ach-1', title: 'İlk Adım', description: 'Bir maç oyna.', targetValue: 1, currentValue: 0, completed: false, rewardCoins: 100 },
-          { id: 'ach-2', title: 'Milyoner', description: 'Bankaya toplam 20M para ekle.', targetValue: 20, currentValue: 0, completed: false, rewardCoins: 150 },
-          { id: 'ach-3', title: 'Sinsi Hırsız', description: 'Rakiplerinden 5 kez arsa çal.', targetValue: 5, currentValue: 0, completed: false, rewardCoins: 200 },
-        ],
-        dailyQuests: [
-          { id: 'q-1', description: 'Pratik Modunda botu yen.', targetValue: 1, currentValue: 0, completed: false, claimed: false, rewardCoins: 50 },
-          { id: 'q-2', description: 'Bankaya 5M para yerleştir.', targetValue: 5, currentValue: 0, completed: false, claimed: false, rewardCoins: 40 },
-          { id: 'q-3', description: 'Toplam 3 kira kartı oyna.', targetValue: 3, currentValue: 0, completed: false, claimed: false, rewardCoins: 60 },
-        ],
-      };
-      users[newId] = user;
-      saveUsers(users);
+    try {
+      const user = await getUserProfile(username);
+      res.json(user);
+    } catch (e) {
+      console.error(e);
+      res.status(500).json({ error: 'Veritabanı hatası.' });
     }
-
-    res.json(user);
   });
 
   // Shop purchase
-  app.post('/api/shop/buy', (req, res) => {
+  app.post('/api/shop/buy', async (req, res) => {
     const { userId, itemId } = req.body;
-    const users = loadUsers();
-    const user = users[userId];
+    try {
+      const user = await getUserProfileById(userId);
+      if (!user) {
+        return res.status(404).json({ error: 'Kullanıcı bulunamadı.' });
+      }
 
-    if (!user) {
-      return res.status(404).json({ error: 'Kullanıcı bulunamadı.' });
+      const item = DEFAULT_SHOP_ITEMS.find((i) => i.id === itemId);
+      if (!item) {
+        return res.status(404).json({ error: 'Ürün bulunamadı.' });
+      }
+
+      if (user.unlockedItems.includes(itemId)) {
+        return res.status(400).json({ error: 'Bu ürün zaten satın alınmış.' });
+      }
+
+      if (user.coins < item.price) {
+        return res.status(400).json({ error: 'Yetersiz altın.' });
+      }
+
+      user.coins -= item.price;
+      user.unlockedItems.push(itemId);
+      await saveUserProfile(user);
+
+      res.json({ success: true, coins: user.coins, unlockedItems: user.unlockedItems });
+    } catch (e) {
+      console.error(e);
+      res.status(500).json({ error: 'Veritabanı hatası.' });
     }
-
-    const item = DEFAULT_SHOP_ITEMS.find((i) => i.id === itemId);
-    if (!item) {
-      return res.status(404).json({ error: 'Ürün bulunamadı.' });
-    }
-
-    if (user.unlockedItems.includes(itemId)) {
-      return res.status(400).json({ error: 'Bu ürün zaten satın alınmış.' });
-    }
-
-    if (user.coins < item.price) {
-      return res.status(400).json({ error: 'Yetersiz altın.' });
-    }
-
-    user.coins -= item.price;
-    user.unlockedItems.push(itemId);
-    users[userId] = user;
-    saveUsers(users);
-
-    res.json({ success: true, coins: user.coins, unlockedItems: user.unlockedItems });
   });
 
   // Save customization settings
-  app.post('/api/settings/save', (req, res) => {
+  app.post('/api/settings/save', async (req, res) => {
     const { userId, settings } = req.body;
-    const users = loadUsers();
-    const user = users[userId];
+    try {
+      const user = await getUserProfileById(userId);
+      if (!user) {
+        return res.status(404).json({ error: 'Kullanıcı bulunamadı.' });
+      }
 
-    if (!user) {
-      return res.status(404).json({ error: 'Kullanıcı bulunamadı.' });
+      user.settings = { ...user.settings, ...settings };
+      
+      // Equip avatar if changed
+      if (settings.avatarId) {
+        user.avatarId = settings.avatarId;
+      }
+
+      await saveUserProfile(user);
+      res.json({ success: true, settings: user.settings, avatarId: user.avatarId });
+    } catch (e) {
+      console.error(e);
+      res.status(500).json({ error: 'Veritabanı hatası.' });
     }
-
-    user.settings = { ...user.settings, ...settings };
-    
-    // Equip avatar if changed
-    if (settings.avatarId) {
-      user.avatarId = settings.avatarId;
-    }
-
-    users[userId] = user;
-    saveUsers(users);
-
-    res.json({ success: true, settings: user.settings, avatarId: user.avatarId });
   });
 
   // Claim Daily Quest
-  app.post('/api/quests/claim', (req, res) => {
+  app.post('/api/quests/claim', async (req, res) => {
     const { userId, questId } = req.body;
-    const users = loadUsers();
-    const user = users[userId];
+    try {
+      const user = await getUserProfileById(userId);
+      if (!user) return res.status(404).json({ error: 'Kullanıcı bulunamadı.' });
 
-    if (!user) return res.status(404).json({ error: 'Kullanıcı bulunamadı.' });
+      const quest = user.dailyQuests.find((q) => q.id === questId);
+      if (!quest) return res.status(404).json({ error: 'Görev bulunamadı.' });
+      if (!quest.completed || quest.claimed) {
+        return res.status(400).json({ error: 'Görev ödülü zaten alınmış veya tamamlanmamış.' });
+      }
 
-    const quest = user.dailyQuests.find((q) => q.id === questId);
-    if (!quest) return res.status(404).json({ error: 'Görev bulunamadı.' });
-    if (!quest.completed || quest.claimed) {
-      return res.status(400).json({ error: 'Görev ödülü zaten alınmış veya tamamlanmamış.' });
+      quest.claimed = true;
+      user.coins += quest.rewardCoins;
+      await saveUserProfile(user);
+
+      res.json({ success: true, coins: user.coins, dailyQuests: user.dailyQuests });
+    } catch (e) {
+      console.error(e);
+      res.status(500).json({ error: 'Veritabanı hatası.' });
     }
+  });
 
-    quest.claimed = true;
-    user.coins += quest.rewardCoins;
-    users[userId] = user;
-    saveUsers(users);
+  // Update achievements
+  app.post('/api/achievements/update', async (req, res) => {
+    const { userId, achievementId, amount } = req.body;
+    try {
+      const user = await getUserProfileById(userId);
+      if (!user) return res.status(404).json({ error: 'Kullanıcı bulunamadı.' });
 
-    res.json({ success: true, coins: user.coins, dailyQuests: user.dailyQuests });
+      const ach = user.achievements.find((a) => a.id === achievementId);
+      if (!ach) return res.status(404).json({ error: 'Başarım bulunamadı.' });
+      if (ach.completed) return res.json({ success: true, achievements: user.achievements, coins: user.coins });
+
+      ach.currentValue = Math.min(ach.targetValue, ach.currentValue + (amount || 1));
+      if (ach.currentValue >= ach.targetValue) {
+        ach.completed = true;
+        user.coins += ach.rewardCoins;
+      }
+      await saveUserProfile(user);
+
+      res.json({ success: true, coins: user.coins, achievements: user.achievements });
+    } catch (e) {
+      console.error(e);
+      res.status(500).json({ error: 'Veritabanı hatası.' });
+    }
   });
 
   // Friend Request system
-  app.post('/api/friends/add', (req, res) => {
+  app.post('/api/friends/add', async (req, res) => {
     const { userId, targetUsername } = req.body;
-    const users = loadUsers();
-    const user = users[userId];
-    const targetUser = Object.values(users).find(
-      (u) => u.username.toLowerCase() === targetUsername.trim().toLowerCase()
-    );
+    try {
+      const user = await getUserProfileById(userId);
+      if (!user) return res.status(404).json({ error: 'Kullanıcı bulunamadı.' });
 
-    if (!user) return res.status(404).json({ error: 'Kullanıcı bulunamadı.' });
-    if (!targetUser) return res.status(444).json({ error: 'Böyle bir kullanıcı bulunamadı.' });
-    if (user.id === targetUser.id) return res.status(400).json({ error: 'Kendinize arkadaşlık isteği gönderemezsiniz.' });
+      const usersLocal = loadUsers();
+      let targetUser = Object.values(usersLocal).find(
+        (u) => u.username.toLowerCase() === targetUsername.trim().toLowerCase()
+      );
+      if (!targetUser && supabase) {
+        const { data } = await supabase.from('users').select('*').eq('username', targetUsername.trim()).maybeSingle();
+        if (data) {
+          targetUser = {
+            id: data.id,
+            username: data.username,
+            coins: data.coins,
+            level: data.level,
+            xp: data.xp,
+            avatarId: data.avatar_id,
+            stats: data.stats,
+            settings: data.settings,
+            unlockedItems: data.unlocked_items,
+            friends: data.friends || [],
+            achievements: data.achievements || [],
+            dailyQuests: data.daily_quests || [],
+          };
+        }
+      }
 
-    // Check if already friends
-    if (user.friends.some((f) => f.id === targetUser.id)) {
-      return res.status(400).json({ error: 'Bu kullanıcıyla zaten arkadaşsınız.' });
+      if (!targetUser) return res.status(444).json({ error: 'Böyle bir kullanıcı bulunamadı.' });
+      if (user.id === targetUser.id) return res.status(400).json({ error: 'Kendinize arkadaşlık isteği gönderemezsiniz.' });
+
+      // Check if already friends
+      if (user.friends.some((f) => f.id === targetUser.id)) {
+        return res.status(400).json({ error: 'Bu kullanıcıyla zaten arkadaşsınız.' });
+      }
+
+      // Connect immediately for beautiful gameplay demo flow
+      user.friends.push({
+        id: targetUser.id,
+        username: targetUser.username,
+        status: 'online',
+        avatarId: targetUser.avatarId,
+      });
+
+      targetUser.friends.push({
+        id: user.id,
+        username: user.username,
+        status: 'online',
+        avatarId: user.avatarId,
+      });
+
+      await saveUserProfile(user);
+      await saveUserProfile(targetUser);
+
+      res.json({ success: true, friends: user.friends });
+    } catch (e) {
+      console.error(e);
+      res.status(500).json({ error: 'Veritabanı hatası.' });
     }
-
-    // Connect immediately for beautiful gameplay demo flow
-    user.friends.push({
-      id: targetUser.id,
-      username: targetUser.username,
-      status: 'online',
-      avatarId: targetUser.avatarId,
-    });
-
-    targetUser.friends.push({
-      id: user.id,
-      username: user.username,
-      status: 'online',
-      avatarId: user.avatarId,
-    });
-
-    users[userId] = user;
-    users[targetUser.id] = targetUser;
-    saveUsers(users);
-
-    res.json({ success: true, friends: user.friends });
   });
 
   // Fetch active rooms lists
@@ -278,6 +615,100 @@ async function startServer() {
       players: m.players.map((p) => p.username),
     }));
     res.json(list);
+  });
+
+  // --- ADMIN PANEL API ENDPOINTS ---
+
+  // Get Admin Settings
+  app.get('/api/admin/settings', async (req, res) => {
+    try {
+      const settings = await loadAdminSettings();
+      res.json(settings);
+    } catch (e) {
+      console.error(e);
+      res.status(500).json({ error: 'Ayarlar yüklenemedi.' });
+    }
+  });
+
+  // Save Admin Settings
+  app.post('/api/admin/settings', async (req, res) => {
+    try {
+      const { settings } = req.body;
+      if (!settings) return res.status(400).json({ error: 'Geçersiz ayar verisi.' });
+      await saveAdminSettings(settings);
+      res.json({ success: true, settings: cachedAdminSettings });
+    } catch (e) {
+      console.error(e);
+      res.status(500).json({ error: 'Ayarlar kaydedilemedi.' });
+    }
+  });
+
+  // Get All Registered Users (Admin only / convenient list)
+  app.get('/api/admin/users', async (req, res) => {
+    try {
+      if (supabase) {
+        const { data, error } = await supabase.from('users').select('*').order('created_at', { ascending: false });
+        if (error) throw error;
+        const list = data.map((d: any) => ({
+          id: d.id,
+          username: d.username,
+          coins: d.coins,
+          level: d.level,
+          xp: d.xp,
+          avatarId: d.avatar_id,
+          stats: d.stats,
+          settings: d.settings,
+        }));
+        return res.json(list);
+      }
+      
+      const localUsers = loadUsers();
+      res.json(Object.values(localUsers));
+    } catch (e) {
+      console.error(e);
+      res.status(500).json({ error: 'Kullanıcılar yüklenemedi.' });
+    }
+  });
+
+  // Update Specific User (Modify coins/xp/level)
+  app.post('/api/admin/users/update', async (req, res) => {
+    try {
+      const { userId, coins, level, xp } = req.body;
+      const user = await getUserProfileById(userId);
+      if (!user) return res.status(404).json({ error: 'Kullanıcı bulunamadı.' });
+
+      if (coins !== undefined) user.coins = Number(coins);
+      if (level !== undefined) user.level = Number(level);
+      if (xp !== undefined) user.xp = Number(xp);
+
+      await saveUserProfile(user);
+      res.json({ success: true, user });
+    } catch (e) {
+      console.error(e);
+      res.status(500).json({ error: 'Kullanıcı güncellenemedi.' });
+    }
+  });
+
+  // Reset or Delete User
+  app.post('/api/admin/users/delete', async (req, res) => {
+    try {
+      const { userId } = req.body;
+      if (supabase) {
+        const { error } = await supabase.from('users').delete().eq('id', userId);
+        if (error) throw error;
+        return res.json({ success: true });
+      }
+
+      const localUsers = loadUsers();
+      if (localUsers[userId]) {
+        delete localUsers[userId];
+        saveUsers(localUsers);
+      }
+      res.json({ success: true });
+    } catch (e) {
+      console.error(e);
+      res.status(500).json({ error: 'Kullanıcı silinemedi.' });
+    }
   });
 
   // --- WEBSOCKET SERVICES ---
@@ -294,7 +725,7 @@ async function startServer() {
   wss.on('connection', (ws) => {
     let clientId = `client-${Math.random().toString(36).substr(2, 5)}`;
 
-    ws.on('message', (messageStr: string) => {
+    ws.on('message', async (messageStr: string) => {
       try {
         const payload = JSON.parse(messageStr);
         const { type, userId, roomId } = payload;
@@ -307,13 +738,11 @@ async function startServer() {
             break;
 
           case 'join_room': {
-            const users = loadUsers();
-            const user = users[userId];
+            const user = await getUserProfileById(userId);
             if (!user) break;
 
             clients[clientId].roomId = roomId;
 
-            // Find or create room
             let match = activeMatches[roomId];
             if (!match) {
               match = {
@@ -326,6 +755,12 @@ async function startServer() {
                 actionsPlayedThisTurn: 0,
                 logs: [{ id: 'l-init', message: `${user.username} odayı kurdu.`, timestamp: Date.now() }],
                 isOffline: false,
+                settings: {
+                  gameMode: cachedAdminSettings.gameMode || 'classic',
+                  turnDuration: cachedAdminSettings.turnDuration || 30,
+                  winSetsTarget: cachedAdminSettings.winSetsTarget || 3,
+                  autoEndTurn: cachedAdminSettings.autoEndTurn || false,
+                }
               };
               activeMatches[roomId] = match;
             }
@@ -369,6 +804,12 @@ async function startServer() {
             const match = activeMatches[roomId];
             if (!match) break;
 
+            // Enforce host only
+            if (match.players[0]?.id !== userId) {
+              ws.send(JSON.stringify({ type: 'alert', message: 'Sadece oda kurucusu oyunu başlatabilir!' }));
+              break;
+            }
+
             // Generate full deck
             let fullDeck = shuffleDeck(generateDeck());
 
@@ -402,21 +843,100 @@ async function startServer() {
             break;
           }
 
+          case 'update_lobby_settings': {
+            const match = activeMatches[roomId];
+            if (!match || match.status !== 'lobby') break;
+
+            // Enforce host only
+            if (match.players[0]?.id !== userId) break;
+
+            const { settings } = payload;
+            if (settings) {
+              match.settings = {
+                ...match.settings,
+                ...settings
+              };
+
+              match.logs.push({
+                id: `lobby-settings-${Date.now()}`,
+                message: `🔧 Oda kurucusu oyun ayarlarını güncelledi.`,
+                timestamp: Date.now(),
+              });
+
+              broadcastToRoom(roomId, {
+                type: 'room_update',
+                matchState: match,
+              });
+            }
+            break;
+          }
+
+          case 'kick_player': {
+            const match = activeMatches[roomId];
+            if (!match || match.status !== 'lobby') break;
+
+            // Enforce host only
+            if (match.players[0]?.id !== userId) break;
+
+            const { targetUserId } = payload;
+            const kickedPlayer = match.players.find((p) => p.id === targetUserId);
+            if (kickedPlayer) {
+              // Remove player
+              match.players = match.players.filter((p) => p.id !== targetUserId);
+              match.logs.push({
+                id: `kick-${Date.now()}`,
+                message: `${kickedPlayer.username} lobiden atıldı.`,
+                timestamp: Date.now(),
+              });
+
+              // Send kick notification to the target player if online
+              if (!kickedPlayer.isBot) {
+                const targetClient = Object.values(clients).find((c) => c.userId === targetUserId && c.roomId === roomId);
+                if (targetClient) {
+                  targetClient.ws.send(JSON.stringify({ type: 'kicked', message: 'Oda kurucusu tarafından lobiden atıldınız!' }));
+                }
+              }
+
+              broadcastToRoom(roomId, {
+                type: 'room_update',
+                matchState: match,
+              });
+            }
+            break;
+          }
+
           case 'add_bot': {
             const match = activeMatches[roomId];
             if (!match || match.status !== 'lobby') break;
+
+            // Enforce host only
+            if (match.players[0]?.id !== userId) {
+              ws.send(JSON.stringify({ type: 'alert', message: 'Sadece oda kurucusu bot ekleyebilir!' }));
+              break;
+            }
 
             const botNames = ['Bot Memo', 'Bot Can', 'Bot Defne', 'Milyoner Bot'];
             const usedNames = match.players.map((p) => p.username);
             const availableNames = botNames.filter((n) => !usedNames.includes(n));
             const botName = availableNames[0] || `Bot ${match.players.length + 1}`;
 
+            const personalities: ('aggressive' | 'banker' | 'strategic')[] = ['aggressive', 'banker', 'strategic'];
+            const randomPersonality = personalities[Math.floor(Math.random() * personalities.length)];
+            const difficulties: ('easy' | 'medium' | 'hard')[] = ['easy', 'medium', 'hard'];
+            const randomDifficulty = difficulties[Math.floor(Math.random() * difficulties.length)];
+
+            let personalityLabel = 'Stratejik';
+            if (randomPersonality === 'aggressive') personalityLabel = 'Agresif 🥷';
+            if (randomPersonality === 'banker') personalityLabel = 'Tutumlu 🏦';
+
             match.players.push({
               id: `bot-${Math.random().toString(36).substr(2, 5)}`,
-              username: botName,
+              username: `${botName} (${personalityLabel} - ${randomDifficulty === 'easy' ? 'Kolay' : randomDifficulty === 'medium' ? 'Orta' : 'Zor'})`,
               avatarId: 'avatar_skater',
               profileFrame: 'frame_none',
               isBot: true,
+              botPersonality: randomPersonality,
+              difficulty: randomDifficulty,
               hand: [],
               bank: [],
               properties: {},
@@ -505,7 +1025,7 @@ async function startServer() {
               match.actionsPlayedThisTurn++;
 
               // Check if they won!
-              if (checkWinner(player.properties)) {
+              if (checkWinner(player.properties, getWinSetsTarget(match))) {
                 handleMatchWinner(match, player.id);
               }
             } else if (targetZone === 'action') {
@@ -516,6 +1036,24 @@ async function startServer() {
               // Process different action card mechanics
               processActionCard(match, player, card, payload);
               match.actionsPlayedThisTurn++;
+            }
+
+            // Check auto end turn setting
+            const actionLimit = (match.settings?.gameMode === 'chaos') ? 99 : 3;
+            if (match.settings?.autoEndTurn && match.actionsPlayedThisTurn >= actionLimit && match.status === 'playing' && !match.activeActionRequest) {
+              // End turn automatically
+              match.turnIndex = (match.turnIndex + 1) % match.players.length;
+              match.actionsPlayedThisTurn = 0;
+              const nextPlayer = match.players[match.turnIndex];
+              match.logs.push({
+                id: `auto-turn-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
+                message: `🤖 Otomatik Hamle Sınırı: ${player.username} hamle limitine ulaştı. Sıra ${nextPlayer.username} oyuncusunda.`,
+                timestamp: Date.now(),
+              });
+              triggerDrawForActivePlayer(match);
+              if (nextPlayer.isBot || nextPlayer.isDisconnected) {
+                setTimeout(() => handleBotTurn(match), 1000);
+              }
             }
 
             broadcastToRoom(roomId, {
@@ -577,7 +1115,7 @@ async function startServer() {
               });
 
               // Check if player won after reorganization
-              if (checkWinner(player.properties)) {
+              if (checkWinner(player.properties, getWinSetsTarget(match))) {
                 match.status = 'finished';
                 match.winnerId = player.id;
                 match.logs.push({
@@ -631,7 +1169,7 @@ async function startServer() {
                 let newTarget = match.players.find((p) => p.id === req.targetPlayerId);
                 if (newTarget && (newTarget.isBot || newTarget.isDisconnected)) {
                   const botHasJsn = newTarget.hand.some((c) => c.actionType === 'just-say-no');
-                  if (botHasJsn) {
+                  if (botHasJsn && BotEngine.shouldPlayJustSayNo(newTarget)) {
                     const botJsnIdx = newTarget.hand.findIndex((c) => c.actionType === 'just-say-no');
                     const botJsnCard = newTarget.hand.splice(botJsnIdx, 1)[0];
                     match.discardPile.push(botJsnCard);
@@ -824,6 +1362,16 @@ async function startServer() {
             break;
           }
 
+          case 'quick_reaction': {
+            const { emoji } = payload;
+            broadcastToRoom(roomId, {
+              type: 'quick_reaction',
+              userId: userId,
+              emoji: emoji,
+            });
+            break;
+          }
+
           case 'end_turn': {
             const match = activeMatches[roomId];
             if (!match || match.status !== 'playing') break;
@@ -951,12 +1499,22 @@ async function startServer() {
             // Find player and flag them as disconnected
             const disconnectedPlayer = match.players.find(p => p.id === c.userId);
             if (disconnectedPlayer) {
-              disconnectedPlayer.isDisconnected = true;
-              match.logs.push({
-                id: `leave-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
-                message: `${disconnectedPlayer.username} bağlantısını kaybetti. Yapay zeka devralıyor.`,
-                timestamp: Date.now(),
-              });
+              if (match.status === 'lobby') {
+                // Completely remove them from the lobby list!
+                match.players = match.players.filter(p => p.id !== c.userId);
+                match.logs.push({
+                  id: `leave-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
+                  message: `${disconnectedPlayer.username} lobiden ayrıldı.`,
+                  timestamp: Date.now(),
+                });
+              } else {
+                disconnectedPlayer.isDisconnected = true;
+                match.logs.push({
+                  id: `leave-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
+                  message: `${disconnectedPlayer.username} bağlantısını kaybetti. Yapay zeka devralıyor.`,
+                  timestamp: Date.now(),
+                });
+              }
 
               // If there was an active action request for them, resolve it automatically
               if (match.activeActionRequest && match.activeActionRequest.targetPlayerId === disconnectedPlayer.id) {
@@ -1009,8 +1567,11 @@ async function startServer() {
       });
     }
 
-    // Drawing rule: if player has 0 cards, draw 5, else draw 2.
-    const drawCount = activePlayer.hand.length === 0 ? 5 : 2;
+    // Drawing rule: if player has 0 cards, draw 5, else draw 2 (or 4 in Chaos Mode).
+    let drawCount = activePlayer.hand.length === 0 ? 5 : 2;
+    if (match.settings?.gameMode === 'chaos' && activePlayer.hand.length > 0) {
+      drawCount = 4;
+    }
     const drawn = serverDeck.splice(0, drawCount);
     activePlayer.hand.push(...drawn);
 
@@ -1606,7 +2167,7 @@ function executeOriginalActionServer(match: any, req: any) {
         timestamp: Date.now(),
       });
 
-      if (checkWinner(sourcePlayer.properties)) {
+      if (checkWinner(sourcePlayer.properties, getWinSetsTarget(match))) {
         handleMatchWinner(match, sourcePlayer.id);
       }
     }
@@ -1625,7 +2186,7 @@ function executeOriginalActionServer(match: any, req: any) {
           timestamp: Date.now(),
         });
 
-        if (checkWinner(sourcePlayer.properties)) {
+        if (checkWinner(sourcePlayer.properties, getWinSetsTarget(match))) {
           handleMatchWinner(match, sourcePlayer.id);
         }
       }
@@ -1691,10 +2252,10 @@ function executeOriginalActionServer(match: any, req: any) {
         timestamp: Date.now(),
       });
 
-      if (checkWinner(sourcePlayer.properties)) {
+      if (checkWinner(sourcePlayer.properties, getWinSetsTarget(match))) {
         handleMatchWinner(match, sourcePlayer.id);
       }
-      if (checkWinner(targetPlayer.properties)) {
+      if (checkWinner(targetPlayer.properties, getWinSetsTarget(match))) {
         handleMatchWinner(match, targetPlayer.id);
       }
     }
@@ -1706,7 +2267,7 @@ startServer().catch((err) => {
 });
 
 // Handle Match Win State on Server
-function handleMatchWinner(match: any, winnerId: string) {
+async function handleMatchWinner(match: any, winnerId: string) {
   match.status = 'finished';
   match.winnerId = winnerId;
 
@@ -1717,44 +2278,39 @@ function handleMatchWinner(match: any, winnerId: string) {
     timestamp: Date.now(),
   });
 
-  // Award XP/Coins to the winner securely
-  const users = loadUsers();
-  const winnerUser = users[winnerId];
-  if (winnerUser) {
-    winnerUser.coins += 200; // 200 coins win bonus
-    winnerUser.xp += 150;
-    winnerUser.stats.gamesPlayed++;
-    winnerUser.stats.gamesWon++;
-    winnerUser.stats.totalSetsCompleted += 3;
-
-    // Check level up (every 500 XP is 1 level)
-    winnerUser.level = Math.floor(winnerUser.xp / 500) + 1;
-
-    // Update quests
-    winnerUser.dailyQuests.forEach((q: any) => {
-      if (q.description.includes('yen') || q.description.includes('maç')) {
-        q.currentValue = Math.min(q.targetValue, q.currentValue + 1);
-        if (q.currentValue >= q.targetValue) q.completed = true;
+  // Securely update profiles in parallel
+  const updatePromises = match.players.map(async (p: any) => {
+    if (p.isBot) return;
+    const isWinner = p.id === winnerId;
+    const user = await getUserProfileById(p.id);
+    if (user) {
+      if (isWinner) {
+        user.coins += (cachedAdminSettings.winCoins || 200); // Admin settings win coins
+        user.xp += 150;
+        user.stats.gamesPlayed++;
+        user.stats.gamesWon++;
+        user.stats.totalSetsCompleted += 3;
+        
+        // Check level up based on Admin settings rate
+        user.level = Math.floor(user.xp / (cachedAdminSettings.xpLevelRate || 500)) + 1;
+        
+        // Update quests
+        user.dailyQuests.forEach((q: any) => {
+          if (q.description.includes('yen') || q.description.includes('maç')) {
+            q.currentValue = Math.min(q.targetValue, q.currentValue + 1);
+            if (q.currentValue >= q.targetValue) q.completed = true;
+          }
+        });
+      } else {
+        user.coins += 50; // loser participation bonus
+        user.xp += 50;
+        user.stats.gamesPlayed++;
+        user.stats.gamesLost++;
+        user.level = Math.floor(user.xp / (cachedAdminSettings.xpLevelRate || 500)) + 1;
       }
-    });
-
-    users[winnerId] = winnerUser;
-  }
-
-  // Update losers
-  match.players.forEach((p: any) => {
-    if (p.id !== winnerId && !p.isBot) {
-      const loserUser = users[p.id];
-      if (loserUser) {
-        loserUser.coins += 50; // loser participation bonus
-        loserUser.xp += 50;
-        loserUser.stats.gamesPlayed++;
-        loserUser.stats.gamesLost++;
-        loserUser.level = Math.floor(loserUser.xp / 500) + 1;
-        users[p.id] = loserUser;
-      }
+      await saveUserProfile(user);
     }
   });
 
-  saveUsers(users);
+  await Promise.all(updatePromises);
 }

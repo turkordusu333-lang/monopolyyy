@@ -357,8 +357,8 @@ export function shuffleDeck(cards: Card[]): Card[] {
   return result;
 }
 
-// Check if a player has won (3 complete property sets of different colors)
-export function checkWinner(properties: GamePlayer['properties']): boolean {
+// Check if a player has won (configurable complete property sets of different colors)
+export function checkWinner(properties: GamePlayer['properties'], target: number = 3): boolean {
   let completedSetsCount = 0;
   const completedColors: CardColor[] = [];
 
@@ -376,5 +376,5 @@ export function checkWinner(properties: GamePlayer['properties']): boolean {
     }
   }
 
-  return completedSetsCount >= 3;
+  return completedSetsCount >= target;
 }
