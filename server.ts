@@ -4,14 +4,13 @@ import path from 'path';
 import fs from 'fs';
 import { WebSocketServer, WebSocket } from 'ws';
 import { createServer as createViteServer } from 'vite';
-import dotenv from 'dotenv';
-import { createClient } from '@supabase/supabase-js';
 import { generateDeck, shuffleDeck, checkWinner, MAX_IN_SET } from './src/lib/deck';
 import { BotEngine } from './src/lib/BotEngine';
-import { UserProfile, MatchState, GamePlayer, Card, CardColor, GameLog, Friend, FriendRequest, Tournament } from './src/types';
+import { UserProfile, MatchState, GamePlayer, Card, CardColor, GameLog, Friend, FriendRequest, Tournament, ActionRequest } from './src/types';
 
-// Load environment variables
-dotenv.config();
+function checkWinnerForMatch(match: MatchState, player: GamePlayer): boolean {
+  return checkWinner(player.properties, match.settings?.targetSets || 3);
+}
 
 // Create data directory if not exists
 const DATA_DIR = path.join(process.cwd(), 'data');
@@ -21,27 +20,111 @@ if (!fs.existsSync(DATA_DIR)) {
 
 const USERS_FILE = path.join(DATA_DIR, 'users.json');
 
-// Supabase Configuration
-const supabaseUrl = process.env.SUPABASE_URL || '';
-const supabaseAnonKey = process.env.SUPABASE_ANON_KEY || '';
+// Initial/default shop products
+const DEFAULT_SHOP_ITEMS = [
+  { id: 'avatar_classic', name: 'Klasik Deal Master PRO Kralı', category: 'avatar', price: 0, description: 'Klasik şapkalı zengin lord avatarı.', isUnlocked: true },
+  { id: 'avatar_skater', name: 'Kaykaycı Çocuk', category: 'avatar', price: 100, description: 'Cool şapkalı kaykaycı tasarımı.', isUnlocked: false },
+  { id: 'avatar_neon', name: 'Cyberpunk Neon', category: 'avatar', price: 250, description: 'Neon parıltılı fütüristik tasarım.', isUnlocked: false },
+  { id: 'avatar_golden', name: 'Altın Kral', category: 'avatar', price: 500, description: 'Zenginlik ve ihtişam simgesi.', isUnlocked: false },
 
-let supabase: any = null;
-if (supabaseUrl && supabaseAnonKey && supabaseUrl !== 'YOUR_SUPABASE_URL') {
-  try {
-    supabase = createClient(supabaseUrl, supabaseAnonKey);
-    console.log('🔌 Supabase veritabanı bağlantısı kuruldu!');
-  } catch (err) {
-    console.error('Supabase bağlantı hatası:', err);
-  }
-} else {
-  console.log('📁 Supabase yapılandırılmamış, yerel JSON veritabanı (data/users.json) kullanılıyor.');
-}
+  { id: 'back_classic', name: 'Klasik Kırmızı', category: 'card_back', price: 0, description: 'Geleneksel kırmızı desenli kart arkalığı.', isUnlocked: true },
+  { id: 'back_cosmic', name: 'Kozmik Siyah', category: 'card_back', price: 150, description: 'Samanyolu yıldızlı derin uzay tasarımı.', isUnlocked: false },
+  { id: 'back_gold', name: 'V.I.P Altın', category: 'card_back', price: 300, description: 'Altın işlemeli ultra lüks kart arkalığı.', isUnlocked: false },
+  { id: 'back_neon', name: 'Retro Dalga', category: 'card_back', price: 200, description: '80\'ler neon ve mor ızgara çizgileri.', isUnlocked: false },
 
-// Helper to load/save users locally (as fallback)
+  { id: 'theme_slate', name: 'Kozmik Slate', category: 'board_theme', price: 0, description: 'Göz yormayan koyu gri minimalist masa.', isUnlocked: true },
+  { id: 'theme_green', name: 'Nane Yeşili', category: 'board_theme', price: 100, description: 'Geleneksel yeşil masası.', isUnlocked: false },
+  { id: 'theme_purple', name: 'Kraliyet Moru', category: 'board_theme', price: 250, description: 'Altın detaylı zengin mor masa teması.', isUnlocked: false },
+  { id: 'theme_cyberpunk', name: 'Siber Izgara', category: 'board_theme', price: 400, description: 'Yüksek kontrastlı siberpunk masa gridi.', isUnlocked: false },
+
+  { id: 'frame_none', name: 'Klasik Sınır', category: 'profile_frame', price: 0, description: 'Sıradan, ince beyaz çerçeve.', isUnlocked: true },
+  { id: 'frame_neon', name: 'Neon Aura', category: 'profile_frame', price: 150, description: 'Siberpunk parlayan pembe neon çerçeve.', isUnlocked: false },
+  { id: 'frame_gold', name: 'V.I.P Altın Çerçeve', category: 'profile_frame', price: 300, description: 'Elit oyuncular için saf altın varaklı çerçeve.', isUnlocked: false },
+  { id: 'frame_fire', name: 'Volkanik Ateş', category: 'profile_frame', price: 200, description: 'Kızıl lav efektli ateşli profil çerçevesi.', isUnlocked: false },
+  { id: 'frame_royal', name: 'Kraliyet Elması', category: 'profile_frame', price: 450, description: 'Lüks mavi elmas süslemeli şampiyon çerçevesi.', isUnlocked: false },
+
+  { id: 'sound_classic', name: 'Klasik Melodi', category: 'celebration_sound', price: 0, description: 'Klasik retro tınılı zafer melodisi.', isUnlocked: true },
+  { id: 'sound_applause', name: 'Coşkulu Alkış', category: 'celebration_sound', price: 100, description: 'Kritik hamlelerinizde ve zaferlerinizde çalan coşkulu alkış efekti.', isUnlocked: false },
+  { id: 'sound_fireworks', name: 'Havai Fişek', category: 'celebration_sound', price: 180, description: 'Gökyüzünde patlayan renkli ve heyecanlı şenlik efekti.', isUnlocked: false },
+  { id: 'sound_laser', name: 'Siber Lazer', category: 'celebration_sound', price: 150, description: 'Cyberpunk arenalara özel fütüristik retro lazer şovu.', isUnlocked: false },
+  { id: 'sound_fanfare', name: 'Şampiyon Fanfarı', category: 'celebration_sound', price: 250, description: 'Zafere ulaştığınızda çalacak asil ve muhteşem şampiyon melodisi.', isUnlocked: false },
+];
+
+// Helper to load/save users
 function loadUsers(): Record<string, UserProfile> {
   if (fs.existsSync(USERS_FILE)) {
     try {
-      return JSON.parse(fs.readFileSync(USERS_FILE, 'utf8'));
+      const users = JSON.parse(fs.readFileSync(USERS_FILE, 'utf8'));
+      let changed = false;
+      for (const id in users) {
+        const u = users[id];
+        if (!u.achievements) {
+          u.achievements = [];
+          changed = true;
+        }
+
+        // Calculate streak from gamesHistory
+        let currentStreak = 0;
+        if (u.gamesHistory) {
+          for (const matchHistory of u.gamesHistory) {
+            if (matchHistory.result === 'won') {
+              currentStreak++;
+            } else {
+              break;
+            }
+          }
+        }
+
+        // Calculate collector unlocked count (total cosmetics minus 5 starting defaults)
+        const unlockedCount = u.unlockedItems ? Math.max(0, u.unlockedItems.length - 5) : 0;
+
+        const defaultAchievements = [
+          { id: 'ach-1', title: 'İlk Adım', description: 'Bir maç oyna.', targetValue: 1, currentValue: u.stats?.gamesPlayed || 0, completed: (u.stats?.gamesPlayed || 0) >= 1, rewardCoins: 100 },
+          { id: 'ach-2', title: 'Milyoner', description: 'Bankaya toplam 20M para ekle.', targetValue: 20, currentValue: u.stats?.totalMoneyBanked || 0, completed: (u.stats?.totalMoneyBanked || 0) >= 20, rewardCoins: 150 },
+          { id: 'ach-3', title: 'Sinsi Hırsız', description: 'Rakiplerinden 5 kez arsa çal.', targetValue: 5, currentValue: u.stats?.totalCardsStolen || 0, completed: (u.stats?.totalCardsStolen || 0) >= 5, rewardCoins: 200 },
+          { id: 'ach-streak', title: 'Galibiyet Serisi', description: 'Arka arkaya 10 maç kazan.', targetValue: 10, currentValue: currentStreak, completed: currentStreak >= 10, rewardCoins: 500 },
+          { id: 'ach-collector', title: 'Koleksiyoncu', description: 'Mağazadan 5 farklı kozmetik eşya aç.', targetValue: 5, currentValue: unlockedCount, completed: unlockedCount >= 5, rewardCoins: 300 },
+          { id: 'ach-fast', title: 'Hızlı Oyuncu', description: 'Bir turu 15 saniyeden kısa sürede bitir.', targetValue: 1, currentValue: u.achievements.find((a: any) => a.id === 'ach-fast')?.currentValue || 0, completed: !!u.achievements.find((a: any) => a.id === 'ach-fast')?.completed, rewardCoins: 150 }
+        ];
+
+        defaultAchievements.forEach(defAch => {
+          const existing = u.achievements.find((a: any) => a.id === defAch.id);
+          if (!existing) {
+            u.achievements.push(defAch);
+            changed = true;
+          } else {
+            existing.currentValue = defAch.currentValue;
+            if (defAch.completed && !existing.completed) {
+              existing.completed = true;
+              u.coins += defAch.rewardCoins;
+              changed = true;
+            }
+          }
+        });
+
+        if (!u.dailyQuests || u.dailyQuests.length === 0) {
+          u.dailyQuests = [
+            { id: 'q-1', description: 'Pratik Modunda botu yen.', targetValue: 1, currentValue: 0, completed: false, claimed: false, rewardCoins: 50, rewardXp: 40 },
+            { id: 'q-2', description: 'Bankaya 5M para yerleştir.', targetValue: 5, currentValue: 0, completed: false, claimed: false, rewardCoins: 40, rewardXp: 30 },
+            { id: 'q-3', description: 'Toplam 3 kira kartı oyna.', targetValue: 3, currentValue: 0, completed: false, claimed: false, rewardCoins: 60, rewardXp: 50 },
+          ];
+          changed = true;
+        } else {
+          u.dailyQuests.forEach((q: any) => {
+            if (q.rewardXp === undefined) {
+              if (q.id === 'q-1') q.rewardXp = 40;
+              else if (q.id === 'q-2') q.rewardXp = 30;
+              else if (q.id === 'q-3') q.rewardXp = 50;
+              else q.rewardXp = 30;
+              changed = true;
+            }
+          });
+        }
+      }
+      if (changed) {
+        fs.writeFileSync(USERS_FILE, JSON.stringify(users, null, 2), 'utf8');
+      }
+      return users;
     } catch (e) {
       console.error('Error reading users file', e);
       return {};
@@ -57,336 +140,6 @@ function saveUsers(users: Record<string, UserProfile>) {
     console.error('Error saving users file', e);
   }
 }
-
-const ADMIN_SETTINGS_FILE = path.join(DATA_DIR, 'admin_settings.json');
-
-// Default Admin Settings values
-interface AdminSettings {
-  turnDuration: number;
-  botDelay: number;
-  extraTimeEnabled: boolean;
-  unlimitedDoubleRent: boolean;
-  winCoins: number;
-  xpLevelRate: number;
-  winSetsTarget: number;
-  autoEndTurn: boolean;
-  gameMode: string;
-}
-
-let cachedAdminSettings: AdminSettings = {
-  turnDuration: 30,
-  botDelay: 1800,
-  extraTimeEnabled: true,
-  unlimitedDoubleRent: false,
-  winCoins: 200,
-  xpLevelRate: 500,
-  winSetsTarget: 3,
-  autoEndTurn: false,
-  gameMode: 'classic',
-};
-
-async function loadAdminSettings(): Promise<AdminSettings> {
-  if (supabase) {
-    try {
-      const { data, error } = await supabase
-        .from('admin_settings')
-        .select('*')
-        .eq('id', 1)
-        .maybeSingle();
-      if (error) throw error;
-      if (data) {
-        cachedAdminSettings = {
-          turnDuration: data.turn_duration,
-          botDelay: data.bot_delay,
-          extraTimeEnabled: data.extra_time_enabled,
-          unlimitedDoubleRent: data.unlimited_double_rent,
-          winCoins: data.win_coins,
-          xpLevelRate: data.xp_level_rate,
-          winSetsTarget: data.win_sets_target !== undefined ? data.win_sets_target : 3,
-          autoEndTurn: data.auto_end_turn !== undefined ? data.auto_end_turn : false,
-          gameMode: data.game_mode || 'classic',
-        };
-        return cachedAdminSettings;
-      }
-      
-      // If table exists but row is missing, insert defaults
-      await supabase.from('admin_settings').insert({
-        id: 1,
-        turn_duration: cachedAdminSettings.turnDuration,
-        bot_delay: cachedAdminSettings.botDelay,
-        extra_time_enabled: cachedAdminSettings.extraTimeEnabled,
-        unlimited_double_rent: cachedAdminSettings.unlimitedDoubleRent,
-        win_coins: cachedAdminSettings.winCoins,
-        xp_level_rate: cachedAdminSettings.xpLevelRate,
-        win_sets_target: cachedAdminSettings.winSetsTarget,
-        auto_end_turn: cachedAdminSettings.autoEndTurn,
-        game_mode: cachedAdminSettings.gameMode,
-      });
-    } catch (e) {
-      console.error('Supabase loadAdminSettings error, using local fallback:', e);
-    }
-  }
-
-  // Local file fallback
-  if (fs.existsSync(ADMIN_SETTINGS_FILE)) {
-    try {
-      const parsed = JSON.parse(fs.readFileSync(ADMIN_SETTINGS_FILE, 'utf8'));
-      cachedAdminSettings = {
-        ...cachedAdminSettings,
-        ...parsed
-      };
-    } catch (e) {
-      console.error('Error reading admin settings file, using memory cache:', e);
-    }
-  } else {
-    try {
-      fs.writeFileSync(ADMIN_SETTINGS_FILE, JSON.stringify(cachedAdminSettings, null, 2), 'utf8');
-    } catch (e) {
-      console.error('Error saving default admin settings:', e);
-    }
-  }
-  return cachedAdminSettings;
-}
-
-async function saveAdminSettings(settings: AdminSettings): Promise<void> {
-  cachedAdminSettings = { ...settings };
-  if (supabase) {
-    try {
-      const { error } = await supabase
-        .from('admin_settings')
-        .upsert({
-          id: 1,
-          turn_duration: settings.turnDuration,
-          bot_delay: settings.botDelay,
-          extra_time_enabled: settings.extraTimeEnabled,
-          unlimited_double_rent: settings.unlimitedDoubleRent,
-          win_coins: settings.winCoins,
-          xp_level_rate: settings.xpLevelRate,
-          win_sets_target: settings.winSetsTarget,
-          auto_end_turn: settings.autoEndTurn,
-          game_mode: settings.gameMode,
-        });
-      if (error) throw error;
-      return;
-    } catch (e) {
-      console.error('Supabase saveAdminSettings error, using local fallback:', e);
-    }
-  }
-
-  // Local file fallback
-  try {
-    fs.writeFileSync(ADMIN_SETTINGS_FILE, JSON.stringify(settings, null, 2), 'utf8');
-  } catch (e) {
-    console.error('Error saving admin settings file:', e);
-  }
-}
-
-function getWinSetsTarget(match: any): number {
-  if (match?.settings?.gameMode === 'speed') return 2;
-  return match?.settings?.winSetsTarget || 3;
-}
-
-// UserProfile factories and store queries (with Supabase dynamic support)
-function createNewUserProfile(username: string): UserProfile {
-  const newId = `user-${Math.random().toString(36).substr(2, 9)}`;
-  return {
-    id: newId,
-    username: username.trim(),
-    coins: 500, // starting coins
-    level: 1,
-    xp: 0,
-    avatarId: 'avatar_classic',
-    stats: {
-      gamesPlayed: 0,
-      gamesWon: 0,
-      gamesLost: 0,
-      winRate: 0,
-      totalRentCollected: 0,
-      totalCardsStolen: 0,
-      totalSetsCompleted: 0,
-      totalMoneyBanked: 0,
-    },
-    settings: {
-      soundVolume: 70,
-      soundPitch: 1.0,
-      synthType: 'sine',
-      cardBack: 'back_classic',
-      boardTheme: 'theme_slate',
-      avatarId: 'avatar_classic',
-      clothesId: 'clothes_none',
-      profileFrame: 'frame_none',
-    },
-    unlockedItems: ['avatar_classic', 'back_classic', 'theme_slate', 'frame_none'],
-    friends: [
-      { id: 'bot-memo', username: 'Bot Memo', status: 'online', avatarId: 'avatar_skater' },
-      { id: 'bot-can', username: 'Bot Can', status: 'offline', avatarId: 'avatar_classic' },
-    ],
-    achievements: [
-      { id: 'ach-1', title: 'İlk Adım', description: 'Bir maç oyna.', targetValue: 1, currentValue: 0, completed: false, rewardCoins: 100 },
-      { id: 'ach-2', title: 'Milyoner', description: 'Bankaya toplam 20M para ekle.', targetValue: 20, currentValue: 0, completed: false, rewardCoins: 150 },
-      { id: 'ach-3', title: 'Sinsi Hırsız', description: 'Rakiplerinden 5 kez arsa çal.', targetValue: 5, currentValue: 0, completed: false, rewardCoins: 200 },
-    ],
-    dailyQuests: [
-      { id: 'q-1', description: 'Pratik Modunda botu yen.', targetValue: 1, currentValue: 0, completed: false, claimed: false, rewardCoins: 50 },
-      { id: 'q-2', description: 'Bankaya 5M para yerleştir.', targetValue: 5, currentValue: 0, completed: false, claimed: false, rewardCoins: 40 },
-      { id: 'q-3', description: 'Toplam 3 kira kartı oyna.', targetValue: 3, currentValue: 0, completed: false, claimed: false, rewardCoins: 60 },
-    ],
-  };
-}
-
-async function getUserProfile(username: string): Promise<UserProfile> {
-  if (supabase) {
-    try {
-      const { data, error } = await supabase
-        .from('users')
-        .select('*')
-        .eq('username', username)
-        .maybeSingle();
-
-      if (error) throw error;
-      if (data) {
-        return {
-          id: data.id,
-          username: data.username,
-          coins: data.coins,
-          level: data.level,
-          xp: data.xp,
-          avatarId: data.avatar_id,
-          stats: data.stats,
-          settings: data.settings,
-          unlockedItems: data.unlocked_items,
-          friends: data.friends || [],
-          achievements: data.achievements || [],
-          dailyQuests: data.daily_quests || [],
-        };
-      }
-
-      const newUser = createNewUserProfile(username);
-      const { error: insertError } = await supabase
-        .from('users')
-        .insert({
-          id: newUser.id,
-          username: newUser.username,
-          coins: newUser.coins,
-          level: newUser.level,
-          xp: newUser.xp,
-          avatar_id: newUser.avatarId,
-          stats: newUser.stats,
-          settings: newUser.settings,
-          unlocked_items: newUser.unlockedItems,
-          friends: newUser.friends,
-          achievements: newUser.achievements,
-          daily_quests: newUser.dailyQuests,
-        });
-
-      if (insertError) throw insertError;
-      return newUser;
-    } catch (e) {
-      console.error('Supabase getUserProfile error, falling back to memory/file:', e);
-    }
-  }
-
-  const users = loadUsers();
-  let user = Object.values(users).find(u => u.username.toLowerCase() === username.toLowerCase());
-  if (!user) {
-    user = createNewUserProfile(username);
-    users[user.id] = user;
-    saveUsers(users);
-  }
-  return user;
-}
-
-async function getUserProfileById(userId: string): Promise<UserProfile | null> {
-  if (supabase) {
-    try {
-      const { data, error } = await supabase
-        .from('users')
-        .select('*')
-        .eq('id', userId)
-        .maybeSingle();
-
-      if (error) throw error;
-      if (data) {
-        return {
-          id: data.id,
-          username: data.username,
-          coins: data.coins,
-          level: data.level,
-          xp: data.xp,
-          avatarId: data.avatar_id,
-          stats: data.stats,
-          settings: data.settings,
-          unlockedItems: data.unlocked_items,
-          friends: data.friends || [],
-          achievements: data.achievements || [],
-          dailyQuests: data.daily_quests || [],
-        };
-      }
-      return null;
-    } catch (e) {
-      console.error('Supabase getUserProfileById error, falling back to memory/file:', e);
-    }
-  }
-
-  const users = loadUsers();
-  return users[userId] || null;
-}
-
-async function saveUserProfile(profile: UserProfile): Promise<void> {
-  if (supabase) {
-    try {
-      const { error } = await supabase
-        .from('users')
-        .upsert({
-          id: profile.id,
-          username: profile.username,
-          coins: profile.coins,
-          level: profile.level,
-          xp: profile.xp,
-          avatar_id: profile.avatarId,
-          stats: profile.stats,
-          settings: profile.settings,
-          unlocked_items: profile.unlockedItems,
-          friends: profile.friends,
-          achievements: profile.achievements,
-          daily_quests: profile.dailyQuests,
-        });
-
-      if (error) throw error;
-      return;
-    } catch (e) {
-      console.error('Supabase saveUserProfile error, falling back to memory/file:', e);
-    }
-  }
-
-  const users = loadUsers();
-  users[profile.id] = profile;
-  saveUsers(users);
-}
-
-// Initial/default shop products
-const DEFAULT_SHOP_ITEMS = [
-  { id: 'avatar_classic', name: 'Klasik Monopoly', category: 'avatar', price: 0, description: 'Klasik şapkalı zengin lord avatarı.', isUnlocked: true },
-  { id: 'avatar_skater', name: 'Kaykaycı Çocuk', category: 'avatar', price: 100, description: 'Cool şapkalı kaykaycı tasarımı.', isUnlocked: false },
-  { id: 'avatar_neon', name: 'Cyberpunk Neon', category: 'avatar', price: 250, description: 'Neon parıltılı fütüristik tasarım.', isUnlocked: false },
-  { id: 'avatar_golden', name: 'Altın Kral', category: 'avatar', price: 500, description: 'Zenginlik ve ihtişam simgesi.', isUnlocked: false },
-  
-  { id: 'back_classic', name: 'Klasik Kırmızı', category: 'card_back', price: 0, description: 'Geleneksel kırmızı desenli kart arkalığı.', isUnlocked: true },
-  { id: 'back_cosmic', name: 'Kozmik Siyah', category: 'card_back', price: 150, description: 'Samanyolu yıldızlı derin uzay tasarımı.', isUnlocked: false },
-  { id: 'back_gold', name: 'V.I.P Altın', category: 'card_back', price: 300, description: 'Altın işlemeli ultra lüks kart arkalığı.', isUnlocked: false },
-  { id: 'back_neon', name: 'Retro Dalga', category: 'card_back', price: 200, description: '80\'ler neon ve mor ızgara çizgileri.', isUnlocked: false },
-
-  { id: 'theme_slate', name: 'Kozmik Slate', category: 'board_theme', price: 0, description: 'Göz yormayan koyu gri minimalist masa.', isUnlocked: true },
-  { id: 'theme_green', name: 'Nane Yeşili', category: 'board_theme', price: 100, description: 'Geleneksel Monopoly yeşil masası.', isUnlocked: false },
-  { id: 'theme_purple', name: 'Kraliyet Moru', category: 'board_theme', price: 250, description: 'Altın detaylı zengin mor masa teması.', isUnlocked: false },
-  { id: 'theme_cyberpunk', name: 'Siber Izgara', category: 'board_theme', price: 400, description: 'Yüksek kontrastlı siberpunk masa gridi.', isUnlocked: false },
-
-  { id: 'frame_none', name: 'Klasik Sınır', category: 'profile_frame', price: 0, description: 'Sıradan, ince beyaz çerçeve.', isUnlocked: true },
-  { id: 'frame_neon', name: 'Neon Aura', category: 'profile_frame', price: 150, description: 'Siberpunk parlayan pembe neon çerçeve.', isUnlocked: false },
-  { id: 'frame_gold', name: 'V.I.P Altın Çerçeve', category: 'profile_frame', price: 300, description: 'Elit oyuncular için saf altın varaklı çerçeve.', isUnlocked: false },
-  { id: 'frame_fire', name: 'Volkanik Ateş', category: 'profile_frame', price: 200, description: 'Kızıl lav efektli ateşli profil çerçevesi.', isUnlocked: false },
-  { id: 'frame_royal', name: 'Kraliyet Elması', category: 'profile_frame', price: 450, description: 'Lüks mavi elmas süslemeli şampiyon çerçevesi.', isUnlocked: false },
-];
 
 // In-Memory active rooms and tournaments state
 const activeMatches: Record<string, MatchState> = {};
@@ -415,195 +168,286 @@ async function startServer() {
 
   app.use(express.json());
 
-  // Load admin settings at startup
-  await loadAdminSettings();
-
   // --- API ROUTES ---
 
   // Auth / Get Profile
-  app.post('/api/auth', async (req, res) => {
+  app.post('/api/auth', (req, res) => {
     const { username } = req.body;
     if (!username || username.trim() === '') {
       return res.status(400).json({ error: 'Kullanıcı adı geçerli olmalıdır.' });
     }
 
-    try {
-      const user = await getUserProfile(username);
-      res.json(user);
-    } catch (e) {
-      console.error(e);
-      res.status(500).json({ error: 'Veritabanı hatası.' });
+    const users = loadUsers();
+    let user = Object.values(users).find((u) => u.username.toLowerCase() === username.toLowerCase());
+
+    if (!user) {
+      // Create new profile
+      const newId = `user-${Math.random().toString(36).substr(2, 9)}`;
+      user = {
+        id: newId,
+        username: username.trim(),
+        coins: 500, // starting coins
+        level: 1,
+        xp: 0,
+        avatarId: 'avatar_classic',
+        avatarUrl: '',
+        stats: {
+          gamesPlayed: 0,
+          gamesWon: 0,
+          gamesLost: 0,
+          winRate: 0,
+          totalRentCollected: 0,
+          totalCardsStolen: 0,
+          totalSetsCompleted: 0,
+          totalMoneyBanked: 0,
+        },
+        settings: {
+          soundVolume: 70,
+          soundPitch: 1.0,
+          synthType: 'sine',
+          cardBack: 'back_classic',
+          boardTheme: 'theme_slate',
+          avatarId: 'avatar_classic',
+          clothesId: 'clothes_none',
+          profileFrame: 'frame_none',
+          celebrationSound: 'sound_classic',
+        },
+        unlockedItems: ['avatar_classic', 'back_classic', 'theme_slate', 'frame_none', 'sound_classic'],
+        friends: [
+          { id: 'bot-memo', username: 'Bot Memo', status: 'online', avatarId: 'avatar_skater' },
+          { id: 'bot-can', username: 'Bot Can', status: 'offline', avatarId: 'avatar_classic' },
+        ],
+        achievements: [
+          { id: 'ach-1', title: 'İlk Adım', description: 'Bir maç oyna.', targetValue: 1, currentValue: 0, completed: false, rewardCoins: 100 },
+          { id: 'ach-2', title: 'Milyoner', description: 'Bankaya toplam 20M para ekle.', targetValue: 20, currentValue: 0, completed: false, rewardCoins: 150 },
+          { id: 'ach-3', title: 'Sinsi Hırsız', description: 'Rakiplerinden 5 kez arsa çal.', targetValue: 5, currentValue: 0, completed: false, rewardCoins: 200 },
+        ],
+        dailyQuests: [
+          { id: 'q-1', description: 'Pratik Modunda botu yen.', targetValue: 1, currentValue: 0, completed: false, claimed: false, rewardCoins: 50, rewardXp: 30 },
+          { id: 'q-2', description: 'Bankaya 5M para yerleştir.', targetValue: 5, currentValue: 0, completed: false, claimed: false, rewardCoins: 40, rewardXp: 20 },
+          { id: 'q-3', description: 'Toplam 3 kira kartı oyna.', targetValue: 3, currentValue: 0, completed: false, claimed: false, rewardCoins: 60, rewardXp: 40 },
+        ],
+        gamesHistory: [],
+      };
+      users[newId] = user;
+      saveUsers(users);
+    } else {
+      // Ensure gamesHistory exists for legacy profiles
+      if (!user.gamesHistory) {
+        user.gamesHistory = [];
+        users[user.id] = user;
+        saveUsers(users);
+      }
     }
+
+    res.json(user);
   });
 
   // Shop purchase
-  app.post('/api/shop/buy', async (req, res) => {
+  app.post('/api/shop/buy', (req, res) => {
     const { userId, itemId } = req.body;
-    try {
-      const user = await getUserProfileById(userId);
-      if (!user) {
-        return res.status(404).json({ error: 'Kullanıcı bulunamadı.' });
-      }
+    const users = loadUsers();
+    const user = users[userId];
 
-      const item = DEFAULT_SHOP_ITEMS.find((i) => i.id === itemId);
-      if (!item) {
-        return res.status(404).json({ error: 'Ürün bulunamadı.' });
-      }
-
-      if (user.unlockedItems.includes(itemId)) {
-        return res.status(400).json({ error: 'Bu ürün zaten satın alınmış.' });
-      }
-
-      if (user.coins < item.price) {
-        return res.status(400).json({ error: 'Yetersiz altın.' });
-      }
-
-      user.coins -= item.price;
-      user.unlockedItems.push(itemId);
-      await saveUserProfile(user);
-
-      res.json({ success: true, coins: user.coins, unlockedItems: user.unlockedItems });
-    } catch (e) {
-      console.error(e);
-      res.status(500).json({ error: 'Veritabanı hatası.' });
+    if (!user) {
+      return res.status(404).json({ error: 'Kullanıcı bulunamadı.' });
     }
+
+    const item = DEFAULT_SHOP_ITEMS.find((i) => i.id === itemId);
+    if (!item) {
+      return res.status(404).json({ error: 'Ürün bulunamadı.' });
+    }
+
+    if (user.unlockedItems.includes(itemId)) {
+      return res.status(400).json({ error: 'Bu ürün zaten satın alınmış.' });
+    }
+
+    if (user.coins < item.price) {
+      return res.status(400).json({ error: 'Yetersiz altın.' });
+    }
+
+    user.coins -= item.price;
+    user.unlockedItems.push(itemId);
+
+    // Update achievements
+    if (user.achievements) {
+      const unlockedCount = Math.max(0, user.unlockedItems.length - 5);
+      const achCollector = user.achievements.find((a: any) => a.id === 'ach-collector');
+      if (achCollector) {
+        achCollector.currentValue = unlockedCount;
+        if (unlockedCount >= 5 && !achCollector.completed) {
+          achCollector.completed = true;
+          user.coins += achCollector.rewardCoins;
+        }
+      }
+    }
+
+    users[userId] = user;
+    saveUsers(users);
+
+    res.json({
+      success: true,
+      coins: user.coins,
+      unlockedItems: user.unlockedItems,
+      achievements: user.achievements
+    });
   });
 
   // Save customization settings
-  app.post('/api/settings/save', async (req, res) => {
+  app.post('/api/settings/save', (req, res) => {
     const { userId, settings } = req.body;
-    try {
-      const user = await getUserProfileById(userId);
-      if (!user) {
-        return res.status(404).json({ error: 'Kullanıcı bulunamadı.' });
-      }
+    const users = loadUsers();
+    const user = users[userId];
 
-      user.settings = { ...user.settings, ...settings };
-      
-      // Equip avatar if changed
-      if (settings.avatarId) {
-        user.avatarId = settings.avatarId;
-      }
-
-      await saveUserProfile(user);
-      res.json({ success: true, settings: user.settings, avatarId: user.avatarId });
-    } catch (e) {
-      console.error(e);
-      res.status(500).json({ error: 'Veritabanı hatası.' });
+    if (!user) {
+      return res.status(404).json({ error: 'Kullanıcı bulunamadı.' });
     }
+
+    user.settings = { ...user.settings, ...settings };
+
+    // Equip avatar if changed
+    if (settings.avatarId) {
+      user.avatarId = settings.avatarId;
+    }
+
+    users[userId] = user;
+    saveUsers(users);
+
+    res.json({ success: true, settings: user.settings, avatarId: user.avatarId, avatarUrl: user.avatarUrl });
+  });
+
+  // World Leaderboard endpoint
+  app.get('/api/leaderboard', (req, res) => {
+    const users = loadUsers();
+
+    // Convert to array of leaderboard items
+    const realUsers = Object.values(users).map((u) => ({
+      username: u.username,
+      level: u.level,
+      xp: u.xp,
+      coins: u.coins,
+      gamesWon: u.stats.gamesWon,
+      gamesPlayed: u.stats.gamesPlayed,
+      avatarId: u.avatarId,
+      avatarUrl: u.avatarUrl,
+    }));
+
+    // Competitors: Add default bots to the leaderboard to make it look rich, professional and lively!
+    const bots = [
+      { username: 'Milyoner Bot', level: 19, xp: 9550, coins: 8900, gamesWon: 68, gamesPlayed: 92, avatarId: 'avatar_golden', avatarUrl: 'https://images.unsplash.com/photo-1570295999919-56ceb5ecca61?auto=format&fit=crop&w=150&q=80' },
+      { username: 'Bot Memo', level: 14, xp: 7120, coins: 4120, gamesWon: 42, gamesPlayed: 60, avatarId: 'avatar_skater', avatarUrl: 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?auto=format&fit=crop&w=150&q=80' },
+      { username: 'Hızlı Zar Bot', level: 11, xp: 5850, coins: 2100, gamesWon: 29, gamesPlayed: 50, avatarId: 'avatar_skater', avatarUrl: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=150&q=80' },
+      { username: 'Bot Defne', level: 8, xp: 4100, coins: 1250, gamesWon: 18, gamesPlayed: 32, avatarId: 'avatar_neon', avatarUrl: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?auto=format&fit=crop&w=150&q=80' },
+      { username: 'Bot Can', level: 5, xp: 2200, coins: 820, gamesWon: 10, gamesPlayed: 25, avatarId: 'avatar_classic', avatarUrl: 'https://images.unsplash.com/photo-1628157582853-a796fa650a6a?auto=format&fit=crop&w=150&q=80' },
+    ];
+
+    const allPlayers = [...realUsers, ...bots];
+
+    // De-duplicate if names clash
+    const uniquePlayers = allPlayers.filter((p, index, self) =>
+      index === self.findIndex((t) => t.username.toLowerCase() === p.username.toLowerCase())
+    );
+
+    // Sort by gamesWon descending, then level descending, then coins descending
+    uniquePlayers.sort((a, b) => {
+      if (b.gamesWon !== a.gamesWon) return b.gamesWon - a.gamesWon;
+      if (b.level !== a.level) return b.level - a.level;
+      return b.coins - a.coins;
+    });
+
+    res.json(uniquePlayers.slice(0, 10)); // return top 10
+  });
+
+  // Custom profile updater endpoint
+  app.post('/api/profile/update', (req, res) => {
+    const { userId, avatarUrl, gamesHistory, coins, xp, stats, dailyQuests, achievements } = req.body;
+    const users = loadUsers();
+    const user = users[userId];
+
+    if (!user) {
+      return res.status(404).json({ error: 'Kullanıcı bulunamadı.' });
+    }
+
+    if (avatarUrl !== undefined) user.avatarUrl = avatarUrl;
+    if (gamesHistory !== undefined) user.gamesHistory = gamesHistory;
+    if (coins !== undefined) user.coins = coins;
+    if (xp !== undefined) {
+      user.xp = xp;
+      user.level = Math.floor(xp / 500) + 1;
+    }
+    if (stats !== undefined) user.stats = { ...user.stats, ...stats };
+    if (dailyQuests !== undefined) user.dailyQuests = dailyQuests;
+    if (achievements !== undefined) user.achievements = achievements;
+
+    users[userId] = user;
+    saveUsers(users);
+
+    res.json(user);
   });
 
   // Claim Daily Quest
-  app.post('/api/quests/claim', async (req, res) => {
+  app.post('/api/quests/claim', (req, res) => {
     const { userId, questId } = req.body;
-    try {
-      const user = await getUserProfileById(userId);
-      if (!user) return res.status(404).json({ error: 'Kullanıcı bulunamadı.' });
+    const users = loadUsers();
+    const user = users[userId];
 
-      const quest = user.dailyQuests.find((q) => q.id === questId);
-      if (!quest) return res.status(404).json({ error: 'Görev bulunamadı.' });
-      if (!quest.completed || quest.claimed) {
-        return res.status(400).json({ error: 'Görev ödülü zaten alınmış veya tamamlanmamış.' });
-      }
+    if (!user) return res.status(404).json({ error: 'Kullanıcı bulunamadı.' });
 
-      quest.claimed = true;
-      user.coins += quest.rewardCoins;
-      await saveUserProfile(user);
-
-      res.json({ success: true, coins: user.coins, dailyQuests: user.dailyQuests });
-    } catch (e) {
-      console.error(e);
-      res.status(500).json({ error: 'Veritabanı hatası.' });
+    const quest = user.dailyQuests.find((q) => q.id === questId);
+    if (!quest) return res.status(404).json({ error: 'Görev bulunamadı.' });
+    if (!quest.completed || quest.claimed) {
+      return res.status(400).json({ error: 'Görev ödülü zaten alınmış veya tamamlanmamış.' });
     }
-  });
 
-  // Update achievements
-  app.post('/api/achievements/update', async (req, res) => {
-    const { userId, achievementId, amount } = req.body;
-    try {
-      const user = await getUserProfileById(userId);
-      if (!user) return res.status(404).json({ error: 'Kullanıcı bulunamadı.' });
+    quest.claimed = true;
+    user.coins += quest.rewardCoins;
+    const xpReward = quest.rewardXp !== undefined ? quest.rewardXp : 30;
+    user.xp += xpReward;
+    user.level = Math.floor(user.xp / 500) + 1;
+    users[userId] = user;
+    saveUsers(users);
 
-      const ach = user.achievements.find((a) => a.id === achievementId);
-      if (!ach) return res.status(404).json({ error: 'Başarım bulunamadı.' });
-      if (ach.completed) return res.json({ success: true, achievements: user.achievements, coins: user.coins });
-
-      ach.currentValue = Math.min(ach.targetValue, ach.currentValue + (amount || 1));
-      if (ach.currentValue >= ach.targetValue) {
-        ach.completed = true;
-        user.coins += ach.rewardCoins;
-      }
-      await saveUserProfile(user);
-
-      res.json({ success: true, coins: user.coins, achievements: user.achievements });
-    } catch (e) {
-      console.error(e);
-      res.status(500).json({ error: 'Veritabanı hatası.' });
-    }
+    res.json({ success: true, coins: user.coins, xp: user.xp, level: user.level, dailyQuests: user.dailyQuests });
   });
 
   // Friend Request system
-  app.post('/api/friends/add', async (req, res) => {
+  app.post('/api/friends/add', (req, res) => {
     const { userId, targetUsername } = req.body;
-    try {
-      const user = await getUserProfileById(userId);
-      if (!user) return res.status(404).json({ error: 'Kullanıcı bulunamadı.' });
+    const users = loadUsers();
+    const user = users[userId];
+    const targetUser = Object.values(users).find(
+      (u) => u.username.toLowerCase() === targetUsername.trim().toLowerCase()
+    );
 
-      const usersLocal = loadUsers();
-      let targetUser = Object.values(usersLocal).find(
-        (u) => u.username.toLowerCase() === targetUsername.trim().toLowerCase()
-      );
-      if (!targetUser && supabase) {
-        const { data } = await supabase.from('users').select('*').eq('username', targetUsername.trim()).maybeSingle();
-        if (data) {
-          targetUser = {
-            id: data.id,
-            username: data.username,
-            coins: data.coins,
-            level: data.level,
-            xp: data.xp,
-            avatarId: data.avatar_id,
-            stats: data.stats,
-            settings: data.settings,
-            unlockedItems: data.unlocked_items,
-            friends: data.friends || [],
-            achievements: data.achievements || [],
-            dailyQuests: data.daily_quests || [],
-          };
-        }
-      }
+    if (!user) return res.status(404).json({ error: 'Kullanıcı bulunamadı.' });
+    if (!targetUser) return res.status(444).json({ error: 'Böyle bir kullanıcı bulunamadı.' });
+    if (user.id === targetUser.id) return res.status(400).json({ error: 'Kendinize arkadaşlık isteği gönderemezsiniz.' });
 
-      if (!targetUser) return res.status(444).json({ error: 'Böyle bir kullanıcı bulunamadı.' });
-      if (user.id === targetUser.id) return res.status(400).json({ error: 'Kendinize arkadaşlık isteği gönderemezsiniz.' });
-
-      // Check if already friends
-      if (user.friends.some((f) => f.id === targetUser.id)) {
-        return res.status(400).json({ error: 'Bu kullanıcıyla zaten arkadaşsınız.' });
-      }
-
-      // Connect immediately for beautiful gameplay demo flow
-      user.friends.push({
-        id: targetUser.id,
-        username: targetUser.username,
-        status: 'online',
-        avatarId: targetUser.avatarId,
-      });
-
-      targetUser.friends.push({
-        id: user.id,
-        username: user.username,
-        status: 'online',
-        avatarId: user.avatarId,
-      });
-
-      await saveUserProfile(user);
-      await saveUserProfile(targetUser);
-
-      res.json({ success: true, friends: user.friends });
-    } catch (e) {
-      console.error(e);
-      res.status(500).json({ error: 'Veritabanı hatası.' });
+    // Check if already friends
+    if (user.friends.some((f) => f.id === targetUser.id)) {
+      return res.status(400).json({ error: 'Bu kullanıcıyla zaten arkadaşsınız.' });
     }
+
+    // Connect immediately for beautiful gameplay demo flow
+    user.friends.push({
+      id: targetUser.id,
+      username: targetUser.username,
+      status: 'online',
+      avatarId: targetUser.avatarId,
+    });
+
+    targetUser.friends.push({
+      id: user.id,
+      username: user.username,
+      status: 'online',
+      avatarId: user.avatarId,
+    });
+
+    users[userId] = user;
+    users[targetUser.id] = targetUser;
+    saveUsers(users);
+
+    res.json({ success: true, friends: user.friends });
   });
 
   // Fetch active rooms lists
@@ -615,100 +459,6 @@ async function startServer() {
       players: m.players.map((p) => p.username),
     }));
     res.json(list);
-  });
-
-  // --- ADMIN PANEL API ENDPOINTS ---
-
-  // Get Admin Settings
-  app.get('/api/admin/settings', async (req, res) => {
-    try {
-      const settings = await loadAdminSettings();
-      res.json(settings);
-    } catch (e) {
-      console.error(e);
-      res.status(500).json({ error: 'Ayarlar yüklenemedi.' });
-    }
-  });
-
-  // Save Admin Settings
-  app.post('/api/admin/settings', async (req, res) => {
-    try {
-      const { settings } = req.body;
-      if (!settings) return res.status(400).json({ error: 'Geçersiz ayar verisi.' });
-      await saveAdminSettings(settings);
-      res.json({ success: true, settings: cachedAdminSettings });
-    } catch (e) {
-      console.error(e);
-      res.status(500).json({ error: 'Ayarlar kaydedilemedi.' });
-    }
-  });
-
-  // Get All Registered Users (Admin only / convenient list)
-  app.get('/api/admin/users', async (req, res) => {
-    try {
-      if (supabase) {
-        const { data, error } = await supabase.from('users').select('*').order('created_at', { ascending: false });
-        if (error) throw error;
-        const list = data.map((d: any) => ({
-          id: d.id,
-          username: d.username,
-          coins: d.coins,
-          level: d.level,
-          xp: d.xp,
-          avatarId: d.avatar_id,
-          stats: d.stats,
-          settings: d.settings,
-        }));
-        return res.json(list);
-      }
-      
-      const localUsers = loadUsers();
-      res.json(Object.values(localUsers));
-    } catch (e) {
-      console.error(e);
-      res.status(500).json({ error: 'Kullanıcılar yüklenemedi.' });
-    }
-  });
-
-  // Update Specific User (Modify coins/xp/level)
-  app.post('/api/admin/users/update', async (req, res) => {
-    try {
-      const { userId, coins, level, xp } = req.body;
-      const user = await getUserProfileById(userId);
-      if (!user) return res.status(404).json({ error: 'Kullanıcı bulunamadı.' });
-
-      if (coins !== undefined) user.coins = Number(coins);
-      if (level !== undefined) user.level = Number(level);
-      if (xp !== undefined) user.xp = Number(xp);
-
-      await saveUserProfile(user);
-      res.json({ success: true, user });
-    } catch (e) {
-      console.error(e);
-      res.status(500).json({ error: 'Kullanıcı güncellenemedi.' });
-    }
-  });
-
-  // Reset or Delete User
-  app.post('/api/admin/users/delete', async (req, res) => {
-    try {
-      const { userId } = req.body;
-      if (supabase) {
-        const { error } = await supabase.from('users').delete().eq('id', userId);
-        if (error) throw error;
-        return res.json({ success: true });
-      }
-
-      const localUsers = loadUsers();
-      if (localUsers[userId]) {
-        delete localUsers[userId];
-        saveUsers(localUsers);
-      }
-      res.json({ success: true });
-    } catch (e) {
-      console.error(e);
-      res.status(500).json({ error: 'Kullanıcı silinemedi.' });
-    }
   });
 
   // --- WEBSOCKET SERVICES ---
@@ -725,7 +475,7 @@ async function startServer() {
   wss.on('connection', (ws) => {
     let clientId = `client-${Math.random().toString(36).substr(2, 5)}`;
 
-    ws.on('message', async (messageStr: string) => {
+    ws.on('message', (messageStr: string) => {
       try {
         const payload = JSON.parse(messageStr);
         const { type, userId, roomId } = payload;
@@ -738,11 +488,13 @@ async function startServer() {
             break;
 
           case 'join_room': {
-            const user = await getUserProfileById(userId);
+            const users = loadUsers();
+            const user = users[userId];
             if (!user) break;
 
             clients[clientId].roomId = roomId;
 
+            // Find or create room
             let match = activeMatches[roomId];
             if (!match) {
               match = {
@@ -755,12 +507,6 @@ async function startServer() {
                 actionsPlayedThisTurn: 0,
                 logs: [{ id: 'l-init', message: `${user.username} odayı kurdu.`, timestamp: Date.now() }],
                 isOffline: false,
-                settings: {
-                  gameMode: cachedAdminSettings.gameMode || 'classic',
-                  turnDuration: cachedAdminSettings.turnDuration || 30,
-                  winSetsTarget: cachedAdminSettings.winSetsTarget || 3,
-                  autoEndTurn: cachedAdminSettings.autoEndTurn || false,
-                }
               };
               activeMatches[roomId] = match;
             }
@@ -804,12 +550,6 @@ async function startServer() {
             const match = activeMatches[roomId];
             if (!match) break;
 
-            // Enforce host only
-            if (match.players[0]?.id !== userId) {
-              ws.send(JSON.stringify({ type: 'alert', message: 'Sadece oda kurucusu oyunu başlatabilir!' }));
-              break;
-            }
-
             // Generate full deck
             let fullDeck = shuffleDeck(generateDeck());
 
@@ -843,100 +583,21 @@ async function startServer() {
             break;
           }
 
-          case 'update_lobby_settings': {
-            const match = activeMatches[roomId];
-            if (!match || match.status !== 'lobby') break;
-
-            // Enforce host only
-            if (match.players[0]?.id !== userId) break;
-
-            const { settings } = payload;
-            if (settings) {
-              match.settings = {
-                ...match.settings,
-                ...settings
-              };
-
-              match.logs.push({
-                id: `lobby-settings-${Date.now()}`,
-                message: `🔧 Oda kurucusu oyun ayarlarını güncelledi.`,
-                timestamp: Date.now(),
-              });
-
-              broadcastToRoom(roomId, {
-                type: 'room_update',
-                matchState: match,
-              });
-            }
-            break;
-          }
-
-          case 'kick_player': {
-            const match = activeMatches[roomId];
-            if (!match || match.status !== 'lobby') break;
-
-            // Enforce host only
-            if (match.players[0]?.id !== userId) break;
-
-            const { targetUserId } = payload;
-            const kickedPlayer = match.players.find((p) => p.id === targetUserId);
-            if (kickedPlayer) {
-              // Remove player
-              match.players = match.players.filter((p) => p.id !== targetUserId);
-              match.logs.push({
-                id: `kick-${Date.now()}`,
-                message: `${kickedPlayer.username} lobiden atıldı.`,
-                timestamp: Date.now(),
-              });
-
-              // Send kick notification to the target player if online
-              if (!kickedPlayer.isBot) {
-                const targetClient = Object.values(clients).find((c) => c.userId === targetUserId && c.roomId === roomId);
-                if (targetClient) {
-                  targetClient.ws.send(JSON.stringify({ type: 'kicked', message: 'Oda kurucusu tarafından lobiden atıldınız!' }));
-                }
-              }
-
-              broadcastToRoom(roomId, {
-                type: 'room_update',
-                matchState: match,
-              });
-            }
-            break;
-          }
-
           case 'add_bot': {
             const match = activeMatches[roomId];
             if (!match || match.status !== 'lobby') break;
-
-            // Enforce host only
-            if (match.players[0]?.id !== userId) {
-              ws.send(JSON.stringify({ type: 'alert', message: 'Sadece oda kurucusu bot ekleyebilir!' }));
-              break;
-            }
 
             const botNames = ['Bot Memo', 'Bot Can', 'Bot Defne', 'Milyoner Bot'];
             const usedNames = match.players.map((p) => p.username);
             const availableNames = botNames.filter((n) => !usedNames.includes(n));
             const botName = availableNames[0] || `Bot ${match.players.length + 1}`;
 
-            const personalities: ('aggressive' | 'banker' | 'strategic')[] = ['aggressive', 'banker', 'strategic'];
-            const randomPersonality = personalities[Math.floor(Math.random() * personalities.length)];
-            const difficulties: ('easy' | 'medium' | 'hard')[] = ['easy', 'medium', 'hard'];
-            const randomDifficulty = difficulties[Math.floor(Math.random() * difficulties.length)];
-
-            let personalityLabel = 'Stratejik';
-            if (randomPersonality === 'aggressive') personalityLabel = 'Agresif 🥷';
-            if (randomPersonality === 'banker') personalityLabel = 'Tutumlu 🏦';
-
             match.players.push({
               id: `bot-${Math.random().toString(36).substr(2, 5)}`,
-              username: `${botName} (${personalityLabel} - ${randomDifficulty === 'easy' ? 'Kolay' : randomDifficulty === 'medium' ? 'Orta' : 'Zor'})`,
+              username: botName,
               avatarId: 'avatar_skater',
               profileFrame: 'frame_none',
               isBot: true,
-              botPersonality: randomPersonality,
-              difficulty: randomDifficulty,
               hand: [],
               bank: [],
               properties: {},
@@ -955,6 +616,113 @@ async function startServer() {
             break;
           }
 
+          case 'kick_player': {
+            const match = activeMatches[roomId];
+            if (!match || match.status !== 'lobby') break;
+
+            if (match.players[0] && match.players[0].id === userId) {
+              const { targetPlayerId } = payload;
+              const idx = match.players.findIndex((p) => p.id === targetPlayerId);
+              if (idx !== -1) {
+                const kickedPlayer = match.players[idx];
+
+                const targetClient = Object.values(clients).find((c) => c.userId === targetPlayerId && c.roomId === roomId);
+                if (targetClient) {
+                  try {
+                    targetClient.ws.send(JSON.stringify({ type: 'kicked' }));
+                  } catch (e) {
+                    console.error('Error sending kicked notice to client', e);
+                  }
+                  targetClient.roomId = undefined;
+                }
+
+                match.players.splice(idx, 1);
+                match.logs.push({
+                  id: `kick-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
+                  message: `${kickedPlayer.username} odadan atıldı.`,
+                  timestamp: Date.now(),
+                });
+
+                broadcastToRoom(roomId, {
+                  type: 'room_update',
+                  matchState: match,
+                });
+              }
+            }
+            break;
+          }
+
+          case 'leave_room': {
+            const match = activeMatches[roomId];
+            if (!match) break;
+
+            const idx = match.players.findIndex((p) => p.id === userId);
+            if (idx !== -1) {
+              const leavingPlayer = match.players.splice(idx, 1)[0];
+              match.logs.push({
+                id: `leave-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
+                message: `${leavingPlayer.username} odadan ayrıldı.`,
+                timestamp: Date.now(),
+              });
+            }
+
+            const c = clients[clientId];
+            if (c) {
+              c.roomId = undefined;
+            }
+
+            const hasActiveHumans = match.players.some((p) => !p.isBot);
+            if (!hasActiveHumans) {
+              delete activeMatches[roomId];
+            } else {
+              broadcastToRoom(roomId, {
+                type: 'room_update',
+                matchState: match,
+              });
+            }
+            break;
+          }
+
+          case 'update_match_settings': {
+            const match = activeMatches[roomId];
+            if (!match || match.status !== 'lobby') break;
+
+            if (match.players[0] && match.players[0].id === userId) {
+              const { settings } = payload;
+              match.settings = {
+                targetSets: 3,
+                turnLimit: 'unlimited',
+                autoEndTurn: false,
+                gameMode: 'classic',
+                ...match.settings,
+                ...settings
+              };
+
+              if (settings.gameMode === 'chaos') {
+                match.settings.targetSets = 4;
+                match.settings.turnLimit = 'unlimited';
+                match.settings.autoEndTurn = false;
+              } else if (settings.gameMode === 'speed') {
+                match.settings.targetSets = 2;
+                match.settings.turnLimit = '15s';
+                match.settings.autoEndTurn = true;
+              }
+
+              const modeLabel = match.settings.gameMode === 'chaos' ? 'Kaos Modu 🌀' : match.settings.gameMode === 'speed' ? 'Speed Deal Master PRO ⚡' : 'Klasik Mod 🎲';
+              match.logs.push({
+                id: `settings-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
+                message: `Oda ayarları güncellendi: [${modeLabel}] - Hedef: ${match.settings.targetSets} Set, Tur Süresi: ${match.settings.turnLimit === 'unlimited' ? 'Sınırsız' : match.settings.turnLimit}, Otomatik Tur Sonu: ${match.settings.autoEndTurn ? 'Açık' : 'Kapalı'}`,
+                timestamp: Date.now(),
+              });
+
+              broadcastToRoom(roomId, {
+                type: 'room_update',
+                matchState: match,
+              });
+            }
+            break;
+          }
+
           case 'play_card': {
             const match = activeMatches[roomId];
             if (!match || match.status !== 'playing') break;
@@ -963,7 +731,8 @@ async function startServer() {
             const player = match.players[match.turnIndex];
 
             if (player.id !== userId) break; // Not their turn
-            if (match.actionsPlayedThisTurn >= 3) break; // Max 3 actions
+            const isChaos = match.settings?.gameMode === 'chaos';
+            if (!isChaos && match.actionsPlayedThisTurn >= 3) break; // Max 3 actions unless Chaos Mode
             if (match.activeActionRequest) {
               ws.send(JSON.stringify({ type: 'alert', message: 'Şu an aktif bir ödeme veya hamle talebi var, bu talep çözülene kadar yeni kart oynayamazsınız!' }));
               break;
@@ -991,8 +760,8 @@ async function startServer() {
             } else if (targetZone === 'property') {
               // Add to collection
               player.hand.splice(cardIdx, 1);
-              
-              let colorToUse: CardColor = card.color || extraColor || 'brown';
+
+              let colorToUse: CardColor = (card.isWildcard && extraColor) ? extraColor : (card.color || extraColor || 'brown');
 
               if (!player.properties[colorToUse]) {
                 player.properties[colorToUse] = { cards: [], hasHouse: false, hasHotel: false };
@@ -1025,7 +794,7 @@ async function startServer() {
               match.actionsPlayedThisTurn++;
 
               // Check if they won!
-              if (checkWinner(player.properties, getWinSetsTarget(match))) {
+              if (checkWinnerForMatch(match, player)) {
                 handleMatchWinner(match, player.id);
               }
             } else if (targetZone === 'action') {
@@ -1036,24 +805,6 @@ async function startServer() {
               // Process different action card mechanics
               processActionCard(match, player, card, payload);
               match.actionsPlayedThisTurn++;
-            }
-
-            // Check auto end turn setting
-            const actionLimit = (match.settings?.gameMode === 'chaos') ? 99 : 3;
-            if (match.settings?.autoEndTurn && match.actionsPlayedThisTurn >= actionLimit && match.status === 'playing' && !match.activeActionRequest) {
-              // End turn automatically
-              match.turnIndex = (match.turnIndex + 1) % match.players.length;
-              match.actionsPlayedThisTurn = 0;
-              const nextPlayer = match.players[match.turnIndex];
-              match.logs.push({
-                id: `auto-turn-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
-                message: `🤖 Otomatik Hamle Sınırı: ${player.username} hamle limitine ulaştı. Sıra ${nextPlayer.username} oyuncusunda.`,
-                timestamp: Date.now(),
-              });
-              triggerDrawForActivePlayer(match);
-              if (nextPlayer.isBot || nextPlayer.isDisconnected) {
-                setTimeout(() => handleBotTurn(match), 1000);
-              }
             }
 
             broadcastToRoom(roomId, {
@@ -1082,7 +833,7 @@ async function startServer() {
                 const idx = propSet.cards.findIndex((c) => c.id === cardId);
                 if (idx !== -1) {
                   foundCard = propSet.cards.splice(idx, 1)[0];
-                  
+
                   // Clean up set if empty
                   if (propSet.cards.length === 0) {
                     delete player.properties[col];
@@ -1115,7 +866,7 @@ async function startServer() {
               });
 
               // Check if player won after reorganization
-              if (checkWinner(player.properties, getWinSetsTarget(match))) {
+              if (checkWinnerForMatch(match, player)) {
                 match.status = 'finished';
                 match.winnerId = player.id;
                 match.logs.push({
@@ -1139,12 +890,30 @@ async function startServer() {
             if (!match) break;
 
             const { actionRequestId, decision, paymentCardIds } = payload;
-            const req = match.activeActionRequest;
-            if (!req || req.id !== actionRequestId) break;
+            let req = match.activeActionRequest;
+            let isMulti = false;
+
+            if (req && req.id === actionRequestId) {
+              // Single active action request
+            } else if (match.activeActionRequests) {
+              req = match.activeActionRequests.find((r) => r.id === actionRequestId);
+              isMulti = true;
+            }
+
+            if (!req) break;
 
             const targetPlayer = match.players.find((p) => p.id === req.targetPlayerId);
             const sourcePlayer = match.players.find((p) => p.id === req.sourcePlayerId);
             if (!targetPlayer || !sourcePlayer) break;
+
+            // Helper to resolve request (either single or multi-request)
+            const resolveRequest = (m: MatchState, rId: string) => {
+              if (isMulti && m.activeActionRequests) {
+                m.activeActionRequests = m.activeActionRequests.filter((r) => r.id !== rId);
+              } else {
+                resolveActiveActionRequest(m);
+              }
+            };
 
             if (decision === 'just-say-no') {
               // Target player played Just Say No!
@@ -1164,44 +933,6 @@ async function startServer() {
                 req.sourcePlayerId = req.targetPlayerId;
                 req.targetPlayerId = prevSourceId;
                 req.jsnCount = (req.jsnCount || 0) + 1;
-
-                // Auto-resolve if the new target is a bot or disconnected
-                let newTarget = match.players.find((p) => p.id === req.targetPlayerId);
-                if (newTarget && (newTarget.isBot || newTarget.isDisconnected)) {
-                  const botHasJsn = newTarget.hand.some((c) => c.actionType === 'just-say-no');
-                  if (botHasJsn && BotEngine.shouldPlayJustSayNo(newTarget)) {
-                    const botJsnIdx = newTarget.hand.findIndex((c) => c.actionType === 'just-say-no');
-                    const botJsnCard = newTarget.hand.splice(botJsnIdx, 1)[0];
-                    match.discardPile.push(botJsnCard);
-                    match.logs.push({
-                      id: `jsn-bot-${Date.now()}`,
-                      message: `🛡️ ${newTarget.username} 'Hayır Teşekkürler' diyerek senin savunmanı engelledi!`,
-                      timestamp: Date.now(),
-                    });
-                    // Swap back to Human
-                    const prevSource2 = req.sourcePlayerId;
-                    req.sourcePlayerId = req.targetPlayerId;
-                    req.targetPlayerId = prevSource2;
-                    req.jsnCount = (req.jsnCount || 0) + 1;
-                  } else {
-                    // Bot has no JSN! Check if defense succeeds or fails
-                    const finalJsnCount = req.jsnCount || 0;
-                    if (finalJsnCount % 2 === 0) {
-                      // Even count: original action succeeds!
-                      if (req.originalAction) {
-                        executeOriginalActionServer(match, req);
-                      }
-                    } else {
-                      // Odd count: defense succeeds, action is blocked!
-                      match.logs.push({
-                        id: `jsn-win-bot-${Date.now()}`,
-                        message: `🛡️ Savunma başarılı oldu! Hamle engellendi.`,
-                        timestamp: Date.now(),
-                      });
-                    }
-                    match.activeActionRequest = undefined;
-                  }
-                }
               }
             } else if (decision === 'decline') {
               const jsnCount = req.jsnCount || 0;
@@ -1212,23 +943,23 @@ async function startServer() {
                   message: `🛡️ Savunma başarılı oldu! Hamle engellendi.`,
                   timestamp: Date.now(),
                 });
-                match.activeActionRequest = undefined;
+                resolveRequest(match, req.id);
               } else {
                 // Even number of JSNs: original action succeeds!
                 if (req.originalAction) {
                   executeOriginalActionServer(match, req);
                 }
-                match.activeActionRequest = undefined;
+                resolveRequest(match, req.id);
               }
             } else if (decision === 'pay') {
               // If it is a property-steal action (originalAction), execute it. Otherwise, handle standard payment.
               if (req.originalAction) {
                 executeOriginalActionServer(match, req);
-                match.activeActionRequest = undefined;
+                resolveRequest(match, req.id);
               } else {
                 // Process payment selection
                 const amountDue = req.amountDue;
-                
+
                 let totalBankValue = 0;
                 targetPlayer.bank.forEach((c) => totalBankValue += c.value);
 
@@ -1263,7 +994,7 @@ async function startServer() {
                   // If they have enough total assets but didn't select enough, or paid with properties when they had enough bank, or didn't select all bank when bank was insufficient:
                   // We enforce/auto-correct on the server so the game state remains valid
                   if (totalBankValue >= amountDue) {
-                    const hasSelectedProperty = paymentCardIds.some((cid: string) => 
+                    const hasSelectedProperty = paymentCardIds.some((cid: string) =>
                       Object.values(targetPlayer.properties).some((set) => set?.cards.some((c) => c.id === cid))
                     );
                     if (hasSelectedProperty || totalSelectedValue < amountDue) {
@@ -1343,31 +1074,13 @@ async function startServer() {
                   timestamp: Date.now(),
                 });
 
-                match.activeActionRequest = undefined;
-              }
-            }
-
-            // If activeActionRequest was resolved (is undefined), check if we need to resume bot's turn
-            if (!match.activeActionRequest) {
-              const currentTurnPlayer = match.players[match.turnIndex];
-              if (currentTurnPlayer && (currentTurnPlayer.isBot || currentTurnPlayer.isDisconnected)) {
-                setTimeout(() => handleBotTurn(match), 1000);
+                resolveRequest(match, req.id);
               }
             }
 
             broadcastToRoom(roomId, {
               type: 'room_update',
               matchState: match,
-            });
-            break;
-          }
-
-          case 'quick_reaction': {
-            const { emoji } = payload;
-            broadcastToRoom(roomId, {
-              type: 'quick_reaction',
-              userId: userId,
-              emoji: emoji,
             });
             break;
           }
@@ -1489,50 +1202,58 @@ async function startServer() {
     });
 
     ws.on('close', () => {
-      // Find client details
       const c = clients[clientId];
       if (c) {
         updateFriendStatus(c.userId, 'offline');
         if (c.roomId) {
           const match = activeMatches[c.roomId];
           if (match) {
-            // Find player and flag them as disconnected
-            const disconnectedPlayer = match.players.find(p => p.id === c.userId);
-            if (disconnectedPlayer) {
-              if (match.status === 'lobby') {
-                // Completely remove them from the lobby list!
-                match.players = match.players.filter(p => p.id !== c.userId);
+            if (match.status === 'lobby') {
+              const pIdx = match.players.findIndex((p) => p.id === c.userId);
+              if (pIdx !== -1) {
+                const removedPlayer = match.players.splice(pIdx, 1)[0];
                 match.logs.push({
                   id: `leave-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
-                  message: `${disconnectedPlayer.username} lobiden ayrıldı.`,
+                  message: `${removedPlayer.username} lobiden ayrıldı.`,
                   timestamp: Date.now(),
                 });
-              } else {
+              }
+            } else {
+              const disconnectedPlayer = match.players.find(p => p.id === c.userId);
+              if (disconnectedPlayer) {
                 disconnectedPlayer.isDisconnected = true;
                 match.logs.push({
                   id: `leave-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
                   message: `${disconnectedPlayer.username} bağlantısını kaybetti. Yapay zeka devralıyor.`,
                   timestamp: Date.now(),
                 });
-              }
 
-              // If there was an active action request for them, resolve it automatically
-              if (match.activeActionRequest && match.activeActionRequest.targetPlayerId === disconnectedPlayer.id) {
-                const req = match.activeActionRequest;
-                const sourcePlayer = match.players.find(p => p.id === req.sourcePlayerId);
-                if (sourcePlayer && req.amountDue) {
-                  processBotPayment(match, disconnectedPlayer, sourcePlayer, req.amountDue);
+                if (match.activeActionRequest && match.activeActionRequest.targetPlayerId === disconnectedPlayer.id) {
+                  const req = match.activeActionRequest;
+                  const sourcePlayer = match.players.find(p => p.id === req.sourcePlayerId);
+                  if (sourcePlayer && req.amountDue) {
+                    processBotPayment(match, disconnectedPlayer, sourcePlayer, req.amountDue);
+                  }
+                  resolveActiveActionRequest(match);
                 }
-                match.activeActionRequest = undefined;
-              }
 
-              // If it's their turn, run bot turn automatically
-              if (match.status === 'playing' && match.players[match.turnIndex]?.id === disconnectedPlayer.id) {
-                setTimeout(() => handleBotTurn(match), 1000);
+                if (match.activeActionRequests) {
+                  const reqsToResolve = match.activeActionRequests.filter(r => r.targetPlayerId === disconnectedPlayer.id);
+                  reqsToResolve.forEach(req => {
+                    const sourcePlayer = match.players.find(p => p.id === req.sourcePlayerId);
+                    if (sourcePlayer && req.amountDue) {
+                      processBotPayment(match, disconnectedPlayer, sourcePlayer, req.amountDue);
+                    }
+                  });
+                  match.activeActionRequests = match.activeActionRequests.filter(r => r.targetPlayerId !== disconnectedPlayer.id);
+                }
+
+                if (match.status === 'playing' && match.players[match.turnIndex]?.id === disconnectedPlayer.id) {
+                  setTimeout(() => handleBotTurn(match), 1000);
+                }
               }
             }
 
-            // Cleanup room if no active humans remain
             const hasActiveHumans = match.players.some((p) => !p.isBot && !p.isDisconnected);
             if (!hasActiveHumans) {
               delete activeMatches[c.roomId];
@@ -1567,11 +1288,9 @@ async function startServer() {
       });
     }
 
-    // Drawing rule: if player has 0 cards, draw 5, else draw 2 (or 4 in Chaos Mode).
-    let drawCount = activePlayer.hand.length === 0 ? 5 : 2;
-    if (match.settings?.gameMode === 'chaos' && activePlayer.hand.length > 0) {
-      drawCount = 4;
-    }
+    // Drawing rule: if player has 0 cards, draw 5, else draw 2 (or 4 in Chaos mode).
+    const isChaos = match.settings?.gameMode === 'chaos';
+    const drawCount = activePlayer.hand.length === 0 ? 5 : (isChaos ? 4 : 2);
     const drawn = serverDeck.splice(0, drawCount);
     activePlayer.hand.push(...drawn);
 
@@ -1583,6 +1302,17 @@ async function startServer() {
       message: `${activePlayer.username} desteden ${drawCount} kart çekti.`,
       timestamp: Date.now(),
     });
+  }
+
+  // Helper to resolve the active action request by moving to the next pending request if any
+  function resolveActiveActionRequest(match: MatchState) {
+    const pending = (match as any).pendingActionRequests || [];
+    if (pending.length > 0) {
+      match.activeActionRequest = pending.shift();
+      (match as any).pendingActionRequests = pending;
+    } else {
+      match.activeActionRequest = undefined;
+    }
   }
 
   // Handle action cards execution on server
@@ -1600,22 +1330,25 @@ async function startServer() {
     } else if (card.actionType === 'birthday') {
       // Demand 2M from all other players
       const targetPlayers = match.players.filter((p) => p.id !== player.id);
+      const pending: ActionRequest[] = [];
       targetPlayers.forEach((tp) => {
         // Create action request
         if (tp.isBot || tp.isDisconnected) {
           // Bots or disconnected players respond instantly
           processBotPayment(match, tp, player, 2);
         } else {
-          match.activeActionRequest = {
+          pending.push({
             id: `req-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
             type: 'make-payment',
             sourcePlayerId: player.id,
             targetPlayerId: tp.id,
             actionCard: card,
             amountDue: 2,
-          };
+          });
         }
       });
+      match.activeActionRequests = pending;
+      match.activeActionRequest = undefined;
       match.logs.push({
         id: `birthday-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
         message: `${player.username} Bugün Benim Doğum Günüm kartını oynadı! Herkesten 2M talep ediyor.`,
@@ -1663,27 +1396,59 @@ async function startServer() {
           rentVal *= 2;
         }
 
-        const targetPlayers = match.players.filter((p) => p.id !== player.id);
-        targetPlayers.forEach((tp) => {
-          if (tp.isBot || tp.isDisconnected) {
-            processBotPayment(match, tp, player, rentVal);
-          } else {
-            match.activeActionRequest = {
-              id: `req-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
-              type: 'make-payment',
-              sourcePlayerId: player.id,
-              targetPlayerId: tp.id,
-              actionCard: card,
-              amountDue: rentVal,
-            };
+        const isWildRent = card.name === 'Her Renk Kira Kartı' || !card.color;
+        if (isWildRent) {
+          // Collect from ONLY one player
+          const targetId = payload.targetPlayerId || match.players.find((p) => p.id !== player.id)?.id;
+          if (targetId) {
+            const tp = match.players.find((p) => p.id === targetId);
+            if (tp) {
+              if (tp.isBot || tp.isDisconnected) {
+                processBotPayment(match, tp, player, rentVal);
+                match.activeActionRequest = undefined;
+              } else {
+                match.activeActionRequest = {
+                  id: `req-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
+                  type: 'make-payment',
+                  sourcePlayerId: player.id,
+                  targetPlayerId: targetId,
+                  actionCard: card,
+                  amountDue: rentVal,
+                };
+              }
+              match.logs.push({
+                id: `rent-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
+                message: `${player.username}, ${COLOR_LABELS[chosenColor]} mülkleri için ${tp.username} oyuncusundan ${rentVal}M kira talep etti!`,
+                timestamp: Date.now(),
+              });
+            }
           }
-        });
-
-        match.logs.push({
-          id: `rent-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
-          message: `${player.username}, ${COLOR_LABELS[chosenColor]} mülkleri için herkesten ${rentVal}M kira talep etti!`,
-          timestamp: Date.now(),
-        });
+        } else {
+          // Collect from EVERYONE (standard dual-color rent)
+          const targetPlayers = match.players.filter((p) => p.id !== player.id);
+          const pending: ActionRequest[] = [];
+          targetPlayers.forEach((tp) => {
+            if (tp.isBot || tp.isDisconnected) {
+              processBotPayment(match, tp, player, rentVal);
+            } else {
+              pending.push({
+                id: `req-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
+                type: 'make-payment',
+                sourcePlayerId: player.id,
+                targetPlayerId: tp.id,
+                actionCard: card,
+                amountDue: rentVal,
+              });
+            }
+          });
+          match.activeActionRequests = pending;
+          match.activeActionRequest = undefined;
+          match.logs.push({
+            id: `rent-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
+            message: `${player.username}, ${COLOR_LABELS[chosenColor]} mülkleri için herkesten ${rentVal}M kira talep etti!`,
+            timestamp: Date.now(),
+          });
+        }
       } else {
         match.logs.push({
           id: `rent-fail-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
@@ -1726,7 +1491,7 @@ async function startServer() {
               message: `${player.username}, ${targetPlayer.username}'den ${stolenCard.name} mülkünü sinsi anlaşma ile çaldı!`,
               timestamp: Date.now(),
             });
-            if (checkWinner(player.properties)) {
+            if (checkWinnerForMatch(match, player)) {
               handleMatchWinner(match, player.id);
             }
           }
@@ -1770,7 +1535,7 @@ async function startServer() {
               message: `${player.username}, ${targetPlayer.username} adlı oyuncunun tamamlanmış ${COLOR_LABELS[targetColor]} setini Anlaşma Bozan kartı ile çaldı!`,
               timestamp: Date.now(),
             });
-            if (checkWinner(player.properties)) {
+            if (checkWinnerForMatch(match, player)) {
               handleMatchWinner(match, player.id);
             }
           }
@@ -1863,10 +1628,10 @@ async function startServer() {
               timestamp: Date.now(),
             });
 
-            if (checkWinner(player.properties)) {
+            if (checkWinnerForMatch(match, player)) {
               handleMatchWinner(match, player.id);
             }
-            if (checkWinner(targetPlayer.properties)) {
+            if (checkWinnerForMatch(match, targetPlayer)) {
               handleMatchWinner(match, targetPlayer.id);
             }
           }
@@ -1998,7 +1763,7 @@ async function startServer() {
           timestamp: Date.now(),
         });
 
-        if (checkWinner(bot.properties)) {
+        if (checkWinnerForMatch(match, bot)) {
           handleMatchWinner(match, bot.id);
           broadcastToRoom(match.roomId, { type: 'room_update', matchState: match });
           return;
@@ -2095,7 +1860,7 @@ async function startServer() {
   }
 
   server.listen(PORT, '0.0.0.0', () => {
-    console.log(`[Server] Monopoly Deal running on http://0.0.0.0:${PORT}`);
+    console.log(`[Server] Deal Master PRO Deal running on http://0.0.0.0:${PORT}`);
   });
 }
 
@@ -2167,7 +1932,7 @@ function executeOriginalActionServer(match: any, req: any) {
         timestamp: Date.now(),
       });
 
-      if (checkWinner(sourcePlayer.properties, getWinSetsTarget(match))) {
+      if (checkWinnerForMatch(match, sourcePlayer)) {
         handleMatchWinner(match, sourcePlayer.id);
       }
     }
@@ -2186,7 +1951,7 @@ function executeOriginalActionServer(match: any, req: any) {
           timestamp: Date.now(),
         });
 
-        if (checkWinner(sourcePlayer.properties, getWinSetsTarget(match))) {
+        if (checkWinnerForMatch(match, sourcePlayer)) {
           handleMatchWinner(match, sourcePlayer.id);
         }
       }
@@ -2195,7 +1960,7 @@ function executeOriginalActionServer(match: any, req: any) {
   } else if (type === 'forced-deal') {
     const cardIdToSteal = req.targetCardId;
     const myCardIdToGive = req.myCardId;
-    
+
     let stolenCard: Card | null = null;
     let givenCard: Card | null = null;
     let stolenColor: CardColor | null = null;
@@ -2252,10 +2017,10 @@ function executeOriginalActionServer(match: any, req: any) {
         timestamp: Date.now(),
       });
 
-      if (checkWinner(sourcePlayer.properties, getWinSetsTarget(match))) {
+      if (checkWinnerForMatch(match, sourcePlayer)) {
         handleMatchWinner(match, sourcePlayer.id);
       }
-      if (checkWinner(targetPlayer.properties, getWinSetsTarget(match))) {
+      if (checkWinnerForMatch(match, targetPlayer)) {
         handleMatchWinner(match, targetPlayer.id);
       }
     }
@@ -2267,7 +2032,7 @@ startServer().catch((err) => {
 });
 
 // Handle Match Win State on Server
-async function handleMatchWinner(match: any, winnerId: string) {
+function handleMatchWinner(match: any, winnerId: string) {
   match.status = 'finished';
   match.winnerId = winnerId;
 
@@ -2278,39 +2043,69 @@ async function handleMatchWinner(match: any, winnerId: string) {
     timestamp: Date.now(),
   });
 
-  // Securely update profiles in parallel
-  const updatePromises = match.players.map(async (p: any) => {
-    if (p.isBot) return;
-    const isWinner = p.id === winnerId;
-    const user = await getUserProfileById(p.id);
-    if (user) {
-      if (isWinner) {
-        user.coins += (cachedAdminSettings.winCoins || 200); // Admin settings win coins
-        user.xp += 150;
-        user.stats.gamesPlayed++;
-        user.stats.gamesWon++;
-        user.stats.totalSetsCompleted += 3;
-        
-        // Check level up based on Admin settings rate
-        user.level = Math.floor(user.xp / (cachedAdminSettings.xpLevelRate || 500)) + 1;
-        
-        // Update quests
-        user.dailyQuests.forEach((q: any) => {
-          if (q.description.includes('yen') || q.description.includes('maç')) {
-            q.currentValue = Math.min(q.targetValue, q.currentValue + 1);
-            if (q.currentValue >= q.targetValue) q.completed = true;
-          }
-        });
-      } else {
-        user.coins += 50; // loser participation bonus
-        user.xp += 50;
-        user.stats.gamesPlayed++;
-        user.stats.gamesLost++;
-        user.level = Math.floor(user.xp / (cachedAdminSettings.xpLevelRate || 500)) + 1;
+  // Award XP/Coins to the winner securely
+  const users = loadUsers();
+  const winnerUser = users[winnerId];
+  const dateStr = new Date().toLocaleDateString('tr-TR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+
+  if (winnerUser) {
+    winnerUser.coins += 200; // 200 coins win bonus
+    winnerUser.xp += 150;
+    winnerUser.stats.gamesPlayed++;
+    winnerUser.stats.gamesWon++;
+    winnerUser.stats.totalSetsCompleted += 3;
+
+    // Check level up (every 500 XP is 1 level)
+    winnerUser.level = Math.floor(winnerUser.xp / 500) + 1;
+
+    // Update quests
+    winnerUser.dailyQuests.forEach((q: any) => {
+      if (q.description.includes('yen') || q.description.includes('maç')) {
+        q.currentValue = Math.min(q.targetValue, q.currentValue + 1);
+        if (q.currentValue >= q.targetValue) q.completed = true;
       }
-      await saveUserProfile(user);
+    });
+
+    if (!winnerUser.gamesHistory) winnerUser.gamesHistory = [];
+    const oppNames = match.players.filter((p: any) => p.id !== winnerId).map((p: any) => p.username).join(', ');
+    winnerUser.gamesHistory.unshift({
+      id: `match-${Date.now()}`,
+      date: dateStr,
+      opponent: oppNames || 'Bot Rakipler',
+      result: 'won',
+      coinsEarned: 200,
+      xpEarned: 150
+    });
+
+    users[winnerId] = winnerUser;
+  }
+
+  // Update losers
+  match.players.forEach((p: any) => {
+    if (p.id !== winnerId && !p.isBot) {
+      const loserUser = users[p.id];
+      if (loserUser) {
+        loserUser.coins += 50; // loser participation bonus
+        loserUser.xp += 50;
+        loserUser.stats.gamesPlayed++;
+        loserUser.stats.gamesLost++;
+        loserUser.level = Math.floor(loserUser.xp / 500) + 1;
+
+        if (!loserUser.gamesHistory) loserUser.gamesHistory = [];
+        const oppNames = match.players.filter((x: any) => x.id !== p.id).map((x: any) => x.username).join(', ');
+        loserUser.gamesHistory.unshift({
+          id: `match-${Date.now()}`,
+          date: dateStr,
+          opponent: oppNames || 'Bot Rakipler',
+          result: 'lost',
+          coinsEarned: 50,
+          xpEarned: 50
+        });
+
+        users[p.id] = loserUser;
+      }
     }
   });
 
-  await Promise.all(updatePromises);
+  saveUsers(users);
 }

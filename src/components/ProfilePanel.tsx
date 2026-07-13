@@ -62,6 +62,8 @@ export const ProfilePanel: React.FC<Props> = ({ profile, onUpdateProfile }) => {
         const updated = {
           ...profile,
           coins: data.coins,
+          xp: data.xp !== undefined ? data.xp : profile.xp,
+          level: data.level !== undefined ? data.level : profile.level,
           dailyQuests: data.dailyQuests,
         };
         onUpdateProfile(updated);
@@ -86,6 +88,7 @@ export const ProfilePanel: React.FC<Props> = ({ profile, onUpdateProfile }) => {
             <div className="flex items-center gap-4 mb-4">
               <AvatarWithFrame
                 avatarId={profile.avatarId}
+                avatarUrl={profile.avatarUrl}
                 frameId={profile.settings.profileFrame || 'frame_none'}
                 sizeClassName="w-16 h-16 text-3xl"
               />
@@ -288,24 +291,70 @@ export const ProfilePanel: React.FC<Props> = ({ profile, onUpdateProfile }) => {
 
           {/* Achievements */}
           <div>
-            <h3 className="text-lg font-bold text-red-500 mb-3 flex items-center gap-2">
-              <span>🏆</span> Kalıcı Başarılar (Achievements)
+            <h3 className="text-lg font-bold text-red-500 mb-4 flex items-center gap-2">
+              <span>🏆</span> Kalıcı Başarılar ve Rozetler
             </h3>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              {profile.achievements.map((ach) => (
-                <div key={ach.id} className="bg-black/40 border border-white/5 rounded-xl p-3 flex flex-col justify-between hover:border-white/10 transition-all">
-                  <div>
-                    <h4 className="font-bold text-xs text-red-400">{ach.title}</h4>
-                    <p className="text-[10px] text-slate-400 leading-tight mt-0.5">{ach.description}</p>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              {profile.achievements.map((ach) => {
+                let badge = { emoji: '⭐', color: 'from-slate-400 to-slate-600' };
+                if (ach.id === 'ach-1') badge = { emoji: '🏆', color: 'from-amber-400 to-yellow-600' };
+                else if (ach.id === 'ach-2') badge = { emoji: '💰', color: 'from-emerald-400 to-teal-600' };
+                else if (ach.id === 'ach-3') badge = { emoji: '🕵️', color: 'from-indigo-400 to-purple-600' };
+                else if (ach.id === 'ach-streak') badge = { emoji: '🔥', color: 'from-red-500 to-orange-600' };
+                else if (ach.id === 'ach-collector') badge = { emoji: '👑', color: 'from-fuchsia-400 to-pink-650' };
+                else if (ach.id === 'ach-fast') badge = { emoji: '⚡', color: 'from-cyan-400 to-blue-600' };
+
+                const isCompleted = ach.completed;
+                const percent = Math.min(100, (ach.currentValue / ach.targetValue) * 100);
+
+                return (
+                  <div 
+                    key={ach.id} 
+                    className={`bg-black/40 border rounded-2xl p-4 flex gap-4 hover:border-white/25 transition-all items-center ${isCompleted ? 'border-red-500/25 shadow-lg shadow-red-500/5' : 'border-white/5'}`}
+                  >
+                    {/* Badge Visual Representation */}
+                    <div className={`w-12 h-12 rounded-xl flex items-center justify-center font-black text-xl flex-shrink-0 bg-gradient-to-br ${isCompleted ? badge.color + ' shadow-md shadow-white/10' : 'from-slate-800 to-slate-900 border border-white/5 opacity-40 grayscale'}`}>
+                      {badge.emoji}
+                    </div>
+
+                    <div className="flex-1 space-y-1.5">
+                      <div className="flex items-center justify-between gap-2">
+                        <div>
+                          <h4 className={`font-bold text-xs ${isCompleted ? 'text-white font-black' : 'text-slate-400'}`}>
+                            {ach.title}
+                          </h4>
+                          <p className="text-[9px] text-slate-400 leading-tight mt-0.5">{ach.description}</p>
+                        </div>
+                        <div className="text-right">
+                          {isCompleted ? (
+                            <span className="text-[8px] bg-emerald-500/15 text-emerald-400 border border-emerald-500/20 px-2 py-0.5 rounded-full font-black uppercase tracking-wider">
+                              Açıldı
+                            </span>
+                          ) : (
+                            <span className="text-[8px] bg-slate-500/10 text-slate-400 border border-white/5 px-2 py-0.5 rounded-full font-bold uppercase tracking-wider">
+                              Kilitli
+                            </span>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Progress Bar and Indicator */}
+                      <div className="space-y-1">
+                        <div className="w-full bg-white/5 h-1.5 rounded-full overflow-hidden border border-white/5">
+                          <div 
+                            className={`h-full transition-all duration-500 bg-gradient-to-r ${isCompleted ? badge.color : 'from-slate-650 to-slate-550'}`}
+                            style={{ width: `${percent}%` }}
+                          />
+                        </div>
+                        <div className="flex justify-between items-center text-[9px] font-bold text-slate-400 leading-none">
+                          <span className="text-amber-300 font-bold">💰 +{ach.rewardCoins} Altın</span>
+                          <span className="font-mono">{ach.currentValue} / {ach.targetValue}</span>
+                        </div>
+                      </div>
+                    </div>
                   </div>
-                  <div className="flex items-center justify-between mt-3">
-                    <span className="text-[10px] text-red-400 bg-red-500/10 px-1.5 py-0.5 rounded font-bold">
-                      +{ach.rewardCoins} Altın
-                    </span>
-                    <span className="text-[10px] text-slate-500 font-bold">Maçlarla İlerler</span>
-                  </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           </div>
 

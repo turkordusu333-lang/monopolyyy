@@ -10,7 +10,7 @@ interface Props {
 
 const THEME_OPTIONS = [
   { id: 'theme_slate', name: 'Kozmik Slate', color: '#1E293B', description: 'Koyu gri minimalist arka plan.' },
-  { id: 'theme_green', name: 'Nane Yeşili', color: '#064E3B', description: 'Geleneksel yeşil Monopoly masası.' },
+  { id: 'theme_green', name: 'Nane Yeşili', color: '#064E3B', description: 'Geleneksel yeşil  masası.' },
   { id: 'theme_purple', name: 'Kraliyet Moru', color: '#581C87', description: 'Altın detaylı zengin mor masa.' },
   { id: 'theme_cyberpunk', name: 'Siber Izgara', color: '#090D16', description: 'Fütüristik yüksek kontrastlı neon çizgileri.' },
 ];
@@ -28,6 +28,14 @@ const PROFILE_FRAMES = [
   { id: 'frame_gold', name: 'V.I.P Altın', description: 'Asil saf altın kaplama.' },
   { id: 'frame_fire', name: 'Volkanik Ateş', description: 'Ateşli lav ve köz tasarımı.' },
   { id: 'frame_royal', name: 'Kraliyet Elması', description: 'Göz alıcı mavi elmas süsü.' },
+];
+
+const CELEBRATION_SOUNDS = [
+  { id: 'sound_classic', name: 'Klasik Melodi', description: 'Klasik retro zafer melodisi.' },
+  { id: 'sound_applause', name: 'Coşkulu Alkış', description: 'Coşkulu alkışlama efekti.' },
+  { id: 'sound_fireworks', name: 'Havai Fişek', description: 'Heyecanlı gökyüzü şenlik patlamaları.' },
+  { id: 'sound_laser', name: 'Siber Lazer', description: 'Fütüristik retro lazer şovu.' },
+  { id: 'sound_fanfare', name: 'Şampiyon Fanfarı', description: 'Asil zafer fanfar melodisi.' },
 ];
 
 export const CustomizationPanel: React.FC<Props> = ({ profile, onUpdateProfile }) => {
@@ -123,20 +131,72 @@ export const CustomizationPanel: React.FC<Props> = ({ profile, onUpdateProfile }
 
           <div>
             <span className="text-slate-300 text-sm block mb-3">Sentezleyici Dalga Tipi (Synth Wave)</span>
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-2 gap-3 mb-4">
               {(['sine', 'square', 'triangle', 'sawtooth'] as const).map((type) => (
                 <button
                   key={type}
                   onClick={() => handleSaveSetting('synthType', type)}
-                  className={`py-2 px-3 rounded-lg border text-sm font-medium capitalize transition-all ${
-                    currentSettings.synthType === type
+                  className={`py-2 px-3 rounded-lg border text-sm font-medium capitalize transition-all ${currentSettings.synthType === type
                       ? 'bg-red-600/20 border-red-500 text-red-400'
                       : 'bg-black/40 border-white/10 text-slate-400 hover:border-white/20'
-                  }`}
+                    }`}
                 >
                   {type === 'sine' ? 'Sinüs (Yumuşak)' : type === 'square' ? 'Kare (Retro)' : type === 'triangle' ? 'Üçgen (Flüt)' : 'Testere (Retro)'}
                 </button>
               ))}
+            </div>
+          </div>
+
+          <div>
+            <span className="text-slate-300 text-sm block mb-3">Aktif Kutlama Sesi</span>
+            <div className="space-y-2">
+              {CELEBRATION_SOUNDS.map((snd) => {
+                const isUnlocked = snd.id === 'sound_classic' || profile.unlockedItems.includes(snd.id);
+                const isSelected = (currentSettings.celebrationSound || 'sound_classic') === snd.id;
+                return (
+                  <div
+                    key={snd.id}
+                    className={`p-3 rounded-xl border flex items-center justify-between transition-all relative ${!isUnlocked ? 'opacity-40' : ''
+                      } ${isSelected
+                        ? 'border-red-500 bg-red-600/10'
+                        : 'border-white/5 bg-black/40'
+                      }`}
+                  >
+                    <div className="flex-1">
+                      <span className="font-semibold text-xs block text-white">{snd.name}</span>
+                      <span className="text-[10px] text-slate-400 leading-tight block">{snd.description}</span>
+                    </div>
+
+                    <div className="flex items-center gap-2">
+                      {isUnlocked && (
+                        <button
+                          onClick={() => sounds.playCelebration(snd.id, currentSettings)}
+                          className="p-1.5 bg-white/5 hover:bg-white/10 rounded-lg text-xs text-amber-400 cursor-pointer"
+                          title="Sesi Dinle"
+                        >
+                          🔊 Dinle
+                        </button>
+                      )}
+                      {isUnlocked ? (
+                        <button
+                          disabled={isSelected}
+                          onClick={() => handleSaveSetting('celebrationSound', snd.id)}
+                          className={`px-2.5 py-1 rounded-lg text-[10px] font-bold cursor-pointer transition-all ${isSelected
+                              ? 'bg-red-600 text-white cursor-default'
+                              : 'bg-white/10 hover:bg-white/20 text-slate-300'
+                            }`}
+                        >
+                          {isSelected ? 'Seçildi' : 'Seç'}
+                        </button>
+                      ) : (
+                        <span className="text-[9px] bg-red-600/90 text-white font-bold px-1.5 py-0.5 rounded">
+                          KİLİTLİ
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
             </div>
           </div>
         </div>
@@ -152,19 +212,17 @@ export const CustomizationPanel: React.FC<Props> = ({ profile, onUpdateProfile }
             <span className="text-slate-300 text-sm block mb-3">Masa Teması</span>
             <div className="grid grid-cols-2 gap-3">
               {THEME_OPTIONS.map((theme) => {
-                const isUnlocked = profile.unlockedItems.includes(theme.id);
+                const isUnlocked = theme.id === 'theme_slate' || profile.unlockedItems.includes(theme.id);
                 return (
                   <button
                     key={theme.id}
                     disabled={!isUnlocked}
                     onClick={() => handleSaveSetting('boardTheme', theme.id)}
-                    className={`p-3 rounded-xl border text-left transition-all relative ${
-                      !isUnlocked ? 'opacity-40 cursor-not-allowed' : ''
-                    } ${
-                      currentSettings.boardTheme === theme.id
+                    className={`p-3 rounded-xl border text-left transition-all relative ${!isUnlocked ? 'opacity-40 cursor-not-allowed' : ''
+                      } ${currentSettings.boardTheme === theme.id
                         ? 'border-red-500 bg-red-600/10'
                         : 'border-white/5 bg-black/40 hover:border-white/10'
-                    }`}
+                      }`}
                   >
                     <div className="flex items-center gap-2 mb-1">
                       <span className="w-4 h-4 rounded-full border border-white/20" style={{ backgroundColor: theme.color }} />
@@ -187,19 +245,17 @@ export const CustomizationPanel: React.FC<Props> = ({ profile, onUpdateProfile }
             <span className="text-slate-300 text-sm block mb-3">Kart Arkalığı Tasarımı</span>
             <div className="grid grid-cols-2 gap-3">
               {CARD_BACKS.map((cb) => {
-                const isUnlocked = profile.unlockedItems.includes(cb.id);
+                const isUnlocked = cb.id === 'back_classic' || profile.unlockedItems.includes(cb.id);
                 return (
                   <button
                     key={cb.id}
                     disabled={!isUnlocked}
                     onClick={() => handleSaveSetting('cardBack', cb.id)}
-                    className={`p-3 rounded-xl border text-left transition-all relative ${
-                      !isUnlocked ? 'opacity-40 cursor-not-allowed' : ''
-                    } ${
-                      currentSettings.cardBack === cb.id
+                    className={`p-3 rounded-xl border text-left transition-all relative ${!isUnlocked ? 'opacity-40 cursor-not-allowed' : ''
+                      } ${currentSettings.cardBack === cb.id
                         ? 'border-red-500 bg-red-600/10'
                         : 'border-white/5 bg-black/40 hover:border-white/10'
-                    }`}
+                      }`}
                   >
                     <div className="flex items-center gap-3">
                       <div
@@ -235,17 +291,16 @@ export const CustomizationPanel: React.FC<Props> = ({ profile, onUpdateProfile }
                     key={frame.id}
                     disabled={!isUnlocked}
                     onClick={() => handleSaveSetting('profileFrame', frame.id)}
-                    className={`p-3 rounded-xl border text-left transition-all relative ${
-                      !isUnlocked ? 'opacity-40 cursor-not-allowed' : ''
-                    } ${
-                      (currentSettings.profileFrame || 'frame_none') === frame.id
+                    className={`p-3 rounded-xl border text-left transition-all relative ${!isUnlocked ? 'opacity-40 cursor-not-allowed' : ''
+                      } ${(currentSettings.profileFrame || 'frame_none') === frame.id
                         ? 'border-red-500 bg-red-600/10'
                         : 'border-white/5 bg-black/40 hover:border-white/10'
-                    }`}
+                      }`}
                   >
                     <div className="flex items-center gap-3">
                       <AvatarWithFrame
                         avatarId={profile.avatarId}
+                        avatarUrl={profile.avatarUrl}
                         frameId={frame.id}
                         sizeClassName="w-10 h-10 text-xl"
                       />

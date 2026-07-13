@@ -2,12 +2,14 @@ import React from 'react';
 
 interface AvatarWithFrameProps {
   avatarId: string;
+  avatarUrl?: string;
   frameId?: string;
   sizeClassName?: string;
 }
 
 export const AvatarWithFrame: React.FC<AvatarWithFrameProps> = ({
   avatarId,
+  avatarUrl,
   frameId = 'frame_none',
   sizeClassName = 'w-16 h-16 text-3xl'
 }) => {
@@ -55,7 +57,16 @@ export const AvatarWithFrame: React.FC<AvatarWithFrameProps> = ({
       style={glowStyle}
     >
       <div className="w-full h-full rounded-full bg-slate-900/95 flex items-center justify-center overflow-hidden">
-        <span className="select-none scale-110">{emoji}</span>
+        {avatarUrl ? (
+          <img 
+            src={avatarUrl} 
+            alt="Avatar" 
+            className="w-full h-full object-cover rounded-full"
+            referrerPolicy="no-referrer"
+          />
+        ) : (
+          <span className="select-none scale-110">{emoji}</span>
+        )}
       </div>
     </div>
   );

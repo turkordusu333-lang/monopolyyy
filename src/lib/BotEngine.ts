@@ -2,8 +2,7 @@ import { Card, GamePlayer, MatchState, CardColor } from '../types';
 import { MAX_IN_SET, RENT_VALUES } from './deck';
 
 /**
- * Heuristics-based AI Decision Engine for Monopoly Deal Bot
- * Expanded with difficulty settings and bot strategy personalities.
+ * Heuristics-based AI Decision Engine for Deal Master PRO Deal Bot
  */
 export class BotEngine {
   /**
@@ -25,137 +24,57 @@ export class BotEngine {
    */
   static selectPlayAction(
     botPlayer: GamePlayer,
-    matchState: MatchState
+    matchState: MatchState,
+    difficulty: 'easy' | 'medium' | 'hard' = 'medium'
   ): { cardId: string; targetZone: 'bank' | 'property' | 'action'; extraColor?: CardColor; payload?: any } | null {
     if (botPlayer.hand.length === 0) return null;
 
-    const personality = botPlayer.botPersonality || 'strategic';
-    const difficulty = botPlayer.difficulty || 'medium';
-
-    // Easy mode: 50% chance to end turn early if already played 1+ cards
-    if (difficulty === 'easy' && matchState.actionsPlayedThisTurn >= 1 && Math.random() < 0.5) {
-      return null;
-    }
-
-    // Easy mode: 25% chance to make a completely random legal move
+    // Easy AI occasional random play "mistakes" (Improvement #20)
     if (difficulty === 'easy' && Math.random() < 0.25) {
-      const randomCard = botPlayer.hand[Math.floor(Math.random() * botPlayer.hand.length)];
-      if (randomCard.type === 'property' || randomCard.type === 'wildcard') {
-        const col = randomCard.color || 'brown';
-        return { cardId: randomCard.id, targetZone: 'property', extraColor: col };
-      } else if (randomCard.type === 'money') {
-        return { cardId: randomCard.id, targetZone: 'bank' };
-      } else if (randomCard.type === 'action' && randomCard.actionType === 'pass-go') {
-        return { cardId: randomCard.id, targetZone: 'action' };
+      const props = botPlayer.hand.filter((c) => c.type === 'property');
+      if (props.length > 0) {
+        return { cardId: props[Math.floor(Math.random() * props.length)].id, targetZone: 'property' };
+      }
+      const depositables = botPlayer.hand.filter((c) => c.value > 0);
+      if (depositables.length > 0) {
+        return { cardId: depositables[Math.floor(Math.random() * depositables.length)].id, targetZone: 'bank' };
       }
     }
 
     const otherPlayers = matchState.players.filter((p) => p.id !== botPlayer.id);
-    const propertiesInHand = botPlayer.hand.filter((c) => c.type === 'property' || c.type === 'wildcard');
-    const houseHotels = botPlayer.hand.filter((c) => c.type === 'house-hotel');
-    const actionCards = botPlayer.hand.filter((c) => c.type === 'action' || c.type === 'rent');
-    const moneyCards = botPlayer.hand.filter((c) => c.type === 'money');
 
-    if (personality === 'aggressive') {
-      // 1. Actions / Steals
-      const act = this.decideActionCard(botPlayer, matchState, actionCards, otherPlayers, difficulty);
-      if (act) return act;
-
-      // 2. Properties
-      const prop = this.decidePropertyCard(botPlayer, propertiesInHand);
-      if (prop) return prop;
-
-      // 3. House/Hotel
-      const hh = this.decideHouseHotel(botPlayer, houseHotels);
-      if (hh) return hh;
-
-      // 4. Money
-      const mon = this.decideMoneyCard(moneyCards);
-      if (mon) return mon;
-    } else if (personality === 'banker') {
-      // 1. Money
-      const mon = this.decideMoneyCard(moneyCards);
-      if (mon) return mon;
-
-      // 2. Bank low-value actions as money
-      if (botPlayer.hand.length > 3) {
-        const lowValAction = actionCards.find((c) => c.actionType !== 'just-say-no');
-        if (lowValAction) {
-          return { cardId: lowValAction.id, targetZone: 'bank' };
-        }
-      }
-
-      // 3. Properties
-      const prop = this.decidePropertyCard(botPlayer, propertiesInHand);
-      if (prop) return prop;
-
-      // 4. Actions
-      const act = this.decideActionCard(botPlayer, matchState, actionCards, otherPlayers, difficulty);
-      if (act) return act;
-    } else {
-      // Strategic / Default
-      // 1. Properties
-      const prop = this.decidePropertyCard(botPlayer, propertiesInHand);
-      if (prop) return prop;
-
-      // 2. House/Hotel
-      const hh = this.decideHouseHotel(botPlayer, houseHotels);
-      if (hh) return hh;
-
-      // 3. Actions
-      const act = this.decideActionCard(botPlayer, matchState, actionCards, otherPlayers, difficulty);
-      if (act) return act;
-
-      // 4. Money
-      const mon = this.decideMoneyCard(moneyCards);
-      if (mon) return mon;
-    }
-
-    // Fallback: if hand is too full, bank an action card as money
-    if (botPlayer.hand.length > 5) {
-      const lowValueAction = actionCards.find((c) => c.actionType !== 'just-say-no');
-      if (lowValueAction) {
-        return { cardId: lowValueAction.id, targetZone: 'bank' };
-      }
-    }
-
-    return null;
-  }
-
-  static decidePropertyCard(
-    botPlayer: GamePlayer,
-    propertiesInHand: Card[]
-  ): { cardId: string; targetZone: 'bank' | 'property' | 'action'; extraColor?: CardColor } | null {
-    const props = propertiesInHand.filter((c) => c.type === 'property');
-    if (props.length > 0) {
-      const chosenProp = props[0];
+    // 1. Priority: Play properties (and wildcards) to complete sets
+    const propertiesInHand = botPlayer.hand.filter((c) => c.type === 'property');
+    if (propertiesInHand.length > 0) {
+      // Find a property of a color we are already collecting, or a new color
+      const chosenProp = propertiesInHand[0];
       if (chosenProp.color) {
         return { cardId: chosenProp.id, targetZone: 'property' };
       }
     }
 
-    const wildcards = propertiesInHand.filter((c) => c.type === 'wildcard');
-    if (wildcards.length > 0) {
-      const wild = wildcards[0];
+    // Wildcards
+    const wildcardsInHand = botPlayer.hand.filter((c) => c.type === 'wildcard');
+    if (wildcardsInHand.length > 0) {
+      const wild = wildcardsInHand[0];
+      // Pick a color to use it as
       let targetColor: CardColor = wild.color || 'brown';
       if (wild.secondaryColor && botPlayer.properties[wild.secondaryColor]) {
         targetColor = wild.secondaryColor;
       } else if (wild.color && botPlayer.properties[wild.color]) {
         targetColor = wild.color;
       } else {
+        // Fallback to any allowed color
         targetColor = wild.color || wild.secondaryColor || (wild.allowedColors && wild.allowedColors.length > 0 ? wild.allowedColors[0] as CardColor : 'brown');
       }
       return { cardId: wild.id, targetZone: 'property', extraColor: targetColor };
     }
-    return null;
-  }
 
-  static decideHouseHotel(
-    botPlayer: GamePlayer,
-    houseHotels: Card[]
-  ): { cardId: string; targetZone: 'bank' | 'property' | 'action'; extraColor?: CardColor } | null {
+    // 2. Play Houses or Hotels if we have a completed set
+    const houseHotels = botPlayer.hand.filter((c) => c.type === 'house-hotel');
     if (houseHotels.length > 0) {
       const hh = houseHotels[0];
+      // Find a completed set
       for (const colorKey in botPlayer.properties) {
         const color = colorKey as CardColor;
         const propSet = botPlayer.properties[color];
@@ -169,31 +88,14 @@ export class BotEngine {
         }
       }
     }
-    return null;
-  }
 
-  static decideMoneyCard(
-    moneyCards: Card[]
-  ): { cardId: string; targetZone: 'bank' | 'property' | 'action' } | null {
-    if (moneyCards.length > 0) {
-      const bestMoney = moneyCards.sort((a, b) => b.value - a.value)[0];
-      return { cardId: bestMoney.id, targetZone: 'bank' };
-    }
-    return null;
-  }
+    // 3. Play Action Cards if useful (sly-deal, deal-breaker, forced-deal, rent, debt, birthday, pass-go)
+    const actionCards = botPlayer.hand.filter((c) => c.type === 'action' || c.type === 'rent');
 
-  static decideActionCard(
-    botPlayer: GamePlayer,
-    matchState: MatchState,
-    actionCards: Card[],
-    otherPlayers: GamePlayer[],
-    difficulty: string
-  ): { cardId: string; targetZone: 'bank' | 'property' | 'action'; extraColor?: CardColor; payload?: any } | null {
-    if (actionCards.length === 0 || otherPlayers.length === 0) return null;
-
-    // 1. Deal Breaker
+    // First let's look for game-changing steal cards: Deal Breaker
     const dealBreaker = actionCards.find((c) => c.actionType === 'deal-breaker');
-    if (dealBreaker) {
+    if (dealBreaker && otherPlayers.length > 0) {
+      // Find completed sets to steal
       let bestTargetPlayer: GamePlayer | null = null;
       let bestColor: CardColor | null = null;
       let highestVal = 0;
@@ -222,42 +124,29 @@ export class BotEngine {
       }
     }
 
-    // 2. Sly Deal
+    // Sly Deal
     const slyDeal = actionCards.find((c) => c.actionType === 'sly-deal');
-    if (slyDeal) {
+    if (slyDeal && otherPlayers.length > 0) {
+      // Find incomplete sets containing cards to steal
       let bestTargetPlayer: GamePlayer | null = null;
       let bestCardToSteal: Card | null = null;
       let highestCardVal = 0;
 
-      if (difficulty === 'easy') {
-        // Random selection for easy difficulty
-        const randomOp = otherPlayers[Math.floor(Math.random() * otherPlayers.length)];
-        const opPropSets = Object.values(randomOp.properties).filter((set) => set && set.cards.length > 0);
-        if (opPropSets.length > 0) {
-          const randomSet = opPropSets[Math.floor(Math.random() * opPropSets.length)];
-          if (randomSet && randomSet.cards.length > 0) {
-            bestTargetPlayer = randomOp;
-            bestCardToSteal = randomSet.cards[0];
+      otherPlayers.forEach((op) => {
+        Object.keys(op.properties).forEach((colorKey) => {
+          const col = colorKey as CardColor;
+          const propSet = op.properties[col];
+          if (propSet && propSet.cards.length > 0 && propSet.cards.length < MAX_IN_SET[col]) {
+            propSet.cards.forEach((c) => {
+              if (c.value > highestCardVal) {
+                highestCardVal = c.value;
+                bestTargetPlayer = op;
+                bestCardToSteal = c;
+              }
+            });
           }
-        }
-      } else {
-        // Smart selection for medium/hard
-        otherPlayers.forEach((op) => {
-          Object.keys(op.properties).forEach((colorKey) => {
-            const col = colorKey as CardColor;
-            const propSet = op.properties[col];
-            if (propSet && propSet.cards.length > 0 && propSet.cards.length < MAX_IN_SET[col]) {
-              propSet.cards.forEach((c) => {
-                if (c.value > highestCardVal) {
-                  highestCardVal = c.value;
-                  bestTargetPlayer = op;
-                  bestCardToSteal = c;
-                }
-              });
-            }
-          });
         });
-      }
+      });
 
       if (bestTargetPlayer && bestCardToSteal) {
         return {
@@ -268,9 +157,10 @@ export class BotEngine {
       }
     }
 
-    // 3. Forced Deal
+    // Forced Deal
     const forcedDeal = actionCards.find((c) => c.actionType === 'forced-deal');
-    if (forcedDeal) {
+    if (forcedDeal && otherPlayers.length > 0) {
+      // We need one of our own cards from an incomplete set to give away
       let myCardToGive: Card | null = null;
       let lowestMyVal = 999;
 
@@ -288,39 +178,29 @@ export class BotEngine {
       });
 
       if (myCardToGive) {
+        // Find an opponent card from an incomplete set to steal
         let opTargetPlayer: GamePlayer | null = null;
         let opCardToSteal: Card | null = null;
         let highestOpVal = 0;
 
-        if (difficulty === 'easy') {
-          const randomOp = otherPlayers[Math.floor(Math.random() * otherPlayers.length)];
-          const opPropSets = Object.values(randomOp.properties).filter((set) => set && set.cards.length > 0);
-          if (opPropSets.length > 0) {
-            const randomSet = opPropSets[Math.floor(Math.random() * opPropSets.length)];
-            if (randomSet && randomSet.cards.length > 0) {
-              opTargetPlayer = randomOp;
-              opCardToSteal = randomSet.cards[0];
+        otherPlayers.forEach((op) => {
+          Object.keys(op.properties).forEach((colorKey) => {
+            const col = colorKey as CardColor;
+            const propSet = op.properties[col];
+            if (propSet && propSet.cards.length > 0 && propSet.cards.length < MAX_IN_SET[col]) {
+              propSet.cards.forEach((c) => {
+                if (c.value > highestOpVal) {
+                  highestOpVal = c.value;
+                  opTargetPlayer = op;
+                  opCardToSteal = c;
+                }
+              });
             }
-          }
-        } else {
-          otherPlayers.forEach((op) => {
-            Object.keys(op.properties).forEach((colorKey) => {
-              const col = colorKey as CardColor;
-              const propSet = op.properties[col];
-              if (propSet && propSet.cards.length > 0 && propSet.cards.length < MAX_IN_SET[col]) {
-                propSet.cards.forEach((c) => {
-                  if (c.value > highestOpVal) {
-                    highestOpVal = c.value;
-                    opTargetPlayer = op;
-                    opCardToSteal = c;
-                  }
-                });
-              }
-            });
           });
-        }
+        });
 
-        if (opTargetPlayer && opCardToSteal && (difficulty === 'easy' || highestOpVal >= lowestMyVal)) {
+        // Only do Forced Deal if we steal something of equal or greater value
+        if (opTargetPlayer && opCardToSteal && highestOpVal >= lowestMyVal) {
           return {
             cardId: forcedDeal.id,
             targetZone: 'action',
@@ -334,31 +214,27 @@ export class BotEngine {
       }
     }
 
-    // 4. Pass Go (Always draw cards)
+    // Pass Go (Always play to draw cards)
     const passGo = actionCards.find((c) => c.actionType === 'pass-go');
     if (passGo) {
       return { cardId: passGo.id, targetZone: 'action' };
     }
 
-    // 5. Birthday
+    // Birthday
     const birthday = actionCards.find((c) => c.actionType === 'birthday');
     if (birthday) {
       return { cardId: birthday.id, targetZone: 'action' };
     }
 
-    // 6. Debt Collector
+    // Debt Collector
     const debtCollector = actionCards.find((c) => c.actionType === 'debt-collector');
-    if (debtCollector) {
-      let targetOp = otherPlayers[0];
-      if (difficulty === 'easy') {
-        targetOp = otherPlayers[Math.floor(Math.random() * otherPlayers.length)];
-      } else {
-        targetOp = otherPlayers.reduce((best, current) => {
-          const bestVal = best.bank.reduce((sum, c) => sum + c.value, 0) + Object.values(best.properties).reduce((sum: number, set: any) => sum + (set?.cards?.reduce((s: number, card: Card) => s + card.value, 0) || 0), 0);
-          const currentVal = current.bank.reduce((sum, c) => sum + c.value, 0) + Object.values(current.properties).reduce((sum: number, set: any) => sum + (set?.cards?.reduce((s: number, card: Card) => s + card.value, 0) || 0), 0);
-          return currentVal > bestVal ? current : best;
-        }, otherPlayers[0]);
-      }
+    if (debtCollector && otherPlayers.length > 0) {
+      // Target the player with the most assets (highest bank + property card values)
+      const targetOp = otherPlayers.reduce((best, current) => {
+        const bestVal = best.bank.reduce((sum, c) => sum + c.value, 0) + Object.values(best.properties).reduce((sum: number, set: any) => sum + (set?.cards?.reduce((s: number, card: Card) => s + card.value, 0) || 0), 0);
+        const currentVal = current.bank.reduce((sum, c) => sum + c.value, 0) + Object.values(current.properties).reduce((sum: number, set: any) => sum + (set?.cards?.reduce((s: number, card: Card) => s + card.value, 0) || 0), 0);
+        return currentVal > bestVal ? current : best;
+      }, otherPlayers[0]);
 
       return {
         cardId: debtCollector.id,
@@ -367,12 +243,14 @@ export class BotEngine {
       };
     }
 
-    // 7. Rent Cards
+    // Rent Cards
     const rentCards = actionCards.filter((c) => c.type === 'rent');
     if (rentCards.length > 0) {
       for (const card of rentCards) {
+        // Check if multi-color rent card
         const isMultiRent = card.name.includes('Her Renk') || !card.color;
         if (isMultiRent) {
+          // Find our color set with the highest rent value currently
           let bestColor: CardColor | null = null;
           let highestRent = 0;
 
@@ -385,16 +263,23 @@ export class BotEngine {
             }
           });
 
-          if (bestColor) {
+          if (bestColor && otherPlayers.length > 0) {
+            const targetOp = otherPlayers.reduce((best, current) => {
+              const bestVal = best.bank.reduce((sum, c) => sum + c.value, 0) + Object.values(best.properties).reduce((sum: number, set: any) => sum + (set?.cards?.reduce((s: number, card: Card) => s + card.value, 0) || 0), 0);
+              const currentVal = current.bank.reduce((sum, c) => sum + c.value, 0) + Object.values(current.properties).reduce((sum: number, set: any) => sum + (set?.cards?.reduce((s: number, card: Card) => s + card.value, 0) || 0), 0);
+              return currentVal > bestVal ? current : best;
+            }, otherPlayers[0]);
+
             const hasDoubleRent = botPlayer.hand.some((c) => c.actionType === 'double-rent');
             return {
               cardId: card.id,
               targetZone: 'action',
               extraColor: bestColor,
-              payload: hasDoubleRent ? { isDoubleRent: true } : undefined
+              payload: { isDoubleRent: hasDoubleRent, targetPlayerId: targetOp.id }
             };
           }
         } else {
+          // Specific or dual rent card (card.color and card.secondaryColor)
           const colorsToCheck: CardColor[] = [];
           if (card.color) colorsToCheck.push(card.color);
           if (card.secondaryColor) colorsToCheck.push(card.secondaryColor);
@@ -426,6 +311,22 @@ export class BotEngine {
       }
     }
 
+    // 4. Bank some money if we have high-value money cards and want safety
+    const moneyCards = botPlayer.hand.filter((c) => c.type === 'money');
+    if (moneyCards.length > 0) {
+      // Always keep some cards in hand, but bank high values
+      const bestMoney = moneyCards.sort((a, b) => b.value - a.value)[0];
+      return { cardId: bestMoney.id, targetZone: 'bank' };
+    }
+
+    // 5. If hand is too full, just bank an action card as money
+    if (botPlayer.hand.length > 5) {
+      const lowValueAction = actionCards.find((c) => c.actionType !== 'just-say-no');
+      if (lowValueAction) {
+        return { cardId: lowValueAction.id, targetZone: 'bank' };
+      }
+    }
+
     return null;
   }
 
@@ -440,7 +341,7 @@ export class BotEngine {
     // List of all items available to pay with (sorted by value ascending to pay with cheapest first)
     // We prefer money in the bank first
     const bankCards = [...botPlayer.bank].sort((a, b) => a.value - b.value);
-    
+
     for (const card of bankCards) {
       if (accumulated >= amountDue) break;
       selectedIds.push(card.id);
@@ -492,18 +393,8 @@ export class BotEngine {
    */
   static shouldPlayJustSayNo(botPlayer: GamePlayer): boolean {
     const hasJsn = botPlayer.hand.some((c) => c.actionType === 'just-say-no');
-    if (!hasJsn) return false;
-
-    const difficulty = botPlayer.difficulty || 'medium';
-    const personality = botPlayer.botPersonality || 'strategic';
-
-    let chance = 0.85; // Medium default
-    if (difficulty === 'easy') chance = 0.50;
-    if (difficulty === 'hard') chance = 0.95;
-    if (personality === 'aggressive') chance = Math.max(chance, 0.95);
-    if (personality === 'banker') chance = Math.max(chance, 0.85);
-
-    return Math.random() < chance;
+    // If targeted, 85% chance of countering immediately
+    return hasJsn && Math.random() < 0.85;
   }
 
   /**

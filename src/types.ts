@@ -1,5 +1,5 @@
 /**
- * Monopoly Deal Online - Type Definitions
+ * Deal Master PRO - Type Definitions
  */
 
 export type CardColor =
@@ -31,16 +31,16 @@ export interface Card {
   secondaryColor?: CardColor; // For dual-rent or property wildcards
   isWildcard?: boolean;
   actionType?:
-    | 'pass-go'
-    | 'debt-collector'
-    | 'birthday'
-    | 'forced-deal'
-    | 'sly-deal'
-    | 'deal-breaker'
-    | 'just-say-no'
-    | 'double-rent'
-    | 'house'
-    | 'hotel';
+  | 'pass-go'
+  | 'debt-collector'
+  | 'birthday'
+  | 'forced-deal'
+  | 'sly-deal'
+  | 'deal-breaker'
+  | 'just-say-no'
+  | 'double-rent'
+  | 'house'
+  | 'hotel';
   rentValues?: number[]; // Rent values corresponding to count [1, 2, 3, 4]
   maxInSet?: number; // Target count to complete a full set
   allowedColors?: CardColor[]; // Allowed colors for wildcards
@@ -76,12 +76,13 @@ export interface DailyQuest {
   completed: boolean;
   claimed: boolean;
   rewardCoins: number;
+  rewardXp: number;
 }
 
 export interface StoreItem {
   id: string;
   name: string;
-  category: 'avatar' | 'card_back' | 'board_theme' | 'sound_pack' | 'profile_frame';
+  category: 'avatar' | 'card_back' | 'board_theme' | 'sound_pack' | 'profile_frame' | 'celebration_sound';
   price: number;
   previewUrl?: string;
   previewColor?: string;
@@ -98,6 +99,7 @@ export interface UserSettings {
   avatarId: string; // ID of unlocked avatar item
   clothesId: string; // ID of unlocked clothes item
   profileFrame?: string; // ID of unlocked profile frame
+  celebrationSound?: string; // ID of unlocked celebration sound
 }
 
 export interface Friend {
@@ -139,6 +141,15 @@ export interface Tournament {
   winner?: string;
 }
 
+export interface GameHistoryItem {
+  id: string;
+  date: string; // Tarih bilgisi
+  opponent: string; // Rakip oyuncular
+  result: 'won' | 'lost'; // Sonuç
+  coinsEarned: number; // Kazanılan jeton
+  xpEarned: number; // Kazanılan XP
+}
+
 export interface UserProfile {
   id: string;
   username: string;
@@ -146,12 +157,14 @@ export interface UserProfile {
   level: number;
   xp: number;
   avatarId: string;
+  avatarUrl?: string;
   stats: PlayerStats;
   settings: UserSettings;
   unlockedItems: string[]; // IDs of store items
   friends: Friend[];
   achievements: Achievement[];
   dailyQuests: DailyQuest[];
+  gamesHistory?: GameHistoryItem[];
 }
 
 // Multiplayer Game Types
@@ -159,10 +172,9 @@ export interface GamePlayer {
   id: string;
   username: string;
   avatarId: string;
+  avatarUrl?: string;
   profileFrame?: string;
   isBot: boolean;
-  botPersonality?: 'aggressive' | 'banker' | 'strategic';
-  difficulty?: 'easy' | 'medium' | 'hard';
   isDisconnected?: boolean;
   isSpeaking?: boolean;
   isMuted?: boolean;
@@ -197,11 +209,12 @@ export interface MatchState {
   logs: GameLog[];
   isOffline: boolean;
   activeActionRequest?: ActionRequest; // For interactions like "Just Say No", payments, forced-deal target, etc.
+  activeActionRequests?: ActionRequest[]; // For simultaneous payments/interactions (e.g., birthday or rent to everyone)
   settings?: {
-    gameMode: string;
-    turnDuration: number;
-    winSetsTarget: number;
+    targetSets: number;
+    turnLimit: '15s' | '30s' | '1m' | 'unlimited';
     autoEndTurn: boolean;
+    gameMode: 'classic' | 'chaos' | 'speed';
   };
 }
 

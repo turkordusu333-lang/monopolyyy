@@ -322,12 +322,12 @@ export const GameCard: React.FC<GameCardProps> = ({
         fontClass += 'text-[13px] leading-snug';
       }
     } else if (cardSize === 'medium') {
-      if (len > 18) {
-        fontClass += 'text-[5.5px] sm:text-[7.5px] tracking-tighter leading-none line-clamp-2';
-      } else if (len > 12) {
-        fontClass += 'text-[6.5px] sm:text-[8px] leading-tight';
+      if (len > 14) {
+        fontClass += 'text-[5px] sm:text-[7px] tracking-tighter leading-none line-clamp-2 break-all';
+      } else if (len > 8) {
+        fontClass += 'text-[6px] sm:text-[7.5px] tracking-tight leading-[1.05] break-words line-clamp-2';
       } else {
-        fontClass += 'text-[8.5px] sm:text-[10px] leading-tight';
+        fontClass += 'text-[7.5px] sm:text-[9px] leading-tight break-words';
       }
     } else { // mini
       if (len > 12) {
@@ -338,7 +338,7 @@ export const GameCard: React.FC<GameCardProps> = ({
     }
 
     return (
-      <span className={`${fontClass} ${colorClass} select-none transition-all duration-150`}>
+      <span className={`block w-full ${fontClass} ${colorClass} select-none transition-all duration-150`}>
         {cleanText}
       </span>
     );
@@ -463,6 +463,42 @@ export const GameCard: React.FC<GameCardProps> = ({
   const details = getCardDetails();
   const primaryColorHex = card.color ? COLOR_HEX[card.color] : '#475569';
   const secondaryColorHex = card.secondaryColor ? COLOR_HEX[card.secondaryColor] : undefined;
+
+  const getValueBadgeStyles = (val: number) => {
+    switch (val) {
+      case 10:
+        return {
+          bgClass: 'bg-gradient-to-r from-emerald-500 to-teal-500 text-white border-emerald-300 shadow-[0_0_8px_rgba(16,185,129,0.7)] animate-pulse',
+          textColor: 'text-emerald-400 font-black'
+        };
+      case 5:
+        return {
+          bgClass: 'bg-gradient-to-r from-yellow-400 to-amber-500 text-slate-950 border-amber-300 shadow-[0_0_8px_rgba(245,158,11,0.7)] font-black',
+          textColor: 'text-amber-400 font-extrabold'
+        };
+      case 4:
+        return {
+          bgClass: 'bg-gradient-to-r from-orange-500 to-red-500 text-white border-orange-300 shadow-[0_0_6px_rgba(249,115,22,0.6)] font-black',
+          textColor: 'text-orange-400 font-bold'
+        };
+      case 3:
+        return {
+          bgClass: 'bg-gradient-to-r from-fuchsia-600 to-purple-600 text-white border-fuchsia-400 shadow-[0_0_6px_rgba(217,70,239,0.6)] font-black',
+          textColor: 'text-fuchsia-400 font-bold'
+        };
+      case 2:
+        return {
+          bgClass: 'bg-gradient-to-r from-sky-400 to-blue-500 text-white border-sky-300 shadow-[0_0_6px_rgba(14,165,233,0.6)] font-black',
+          textColor: 'text-sky-400 font-bold'
+        };
+      case 1:
+      default:
+        return {
+          bgClass: 'bg-slate-700 text-slate-100 border-slate-500 font-bold',
+          textColor: 'text-slate-300 font-bold'
+        };
+    }
+  };
 
   // Premium holographic style and Rarity calculations
   const rarity: 'EFSANEVİ' | 'EPİK' | 'ENDER' | 'SIRADAN' = (() => {
@@ -868,11 +904,10 @@ export const GameCard: React.FC<GameCardProps> = ({
       );
     };
 
-    const widthClass = className?.includes('w-') ? '' : 'w-[46px] sm:w-[68px] md:w-[80px]';
     return (
       <Holo
         rarity={rarity}
-        className={`relative inline-block ${widthClass} flex-shrink-0 rounded-md overflow-hidden ${className || ''}`}
+        className="relative inline-block w-[46px] sm:w-[68px] md:w-[80px] flex-shrink-0 rounded-md overflow-hidden"
         style={tiltStyle}
       >
         {tooltipElement}
@@ -915,7 +950,7 @@ export const GameCard: React.FC<GameCardProps> = ({
 
           {/* Top Value Circle */}
           <div className="flex justify-between items-start z-10">
-            <div className="w-5 h-5 rounded-full border border-black bg-white flex items-center justify-center font-black text-[8px] text-slate-900 shadow-sm leading-none">
+            <div className={`w-5 h-5 rounded-full border border-black/35 flex items-center justify-center font-black text-[8px] shadow-sm leading-none ${getValueBadgeStyles(card.value).bgClass}`}>
               M{card.value}
             </div>
             <span className="text-[6px] font-black tracking-widest text-white uppercase bg-black/20 px-1 py-0.5 rounded-sm leading-none">
@@ -960,8 +995,8 @@ export const GameCard: React.FC<GameCardProps> = ({
           {/* Body Section */}
           <div className="flex-1 flex flex-col justify-between p-1.5 bg-white relative">
             {/* Cost Badge top-left */}
-            <div className="absolute top-1 left-1 w-5 h-5 rounded-full border border-black bg-white flex items-center justify-center font-black text-[8px] text-slate-900 shadow-sm leading-none">
-              {card.value}M
+            <div className={`absolute top-1 left-1 w-5 h-5 rounded-full border border-black/35 flex items-center justify-center font-black text-[8px] shadow-sm leading-none ${getValueBadgeStyles(card.value).bgClass}`}>
+              M{card.value}
             </div>
 
             {/* Set limit tag top-right */}
@@ -1074,7 +1109,7 @@ export const GameCard: React.FC<GameCardProps> = ({
                 </div>
               </div>
 
-              <div className="absolute top-1/2 left-1.5 -translate-y-1/2 w-5 h-5 rounded-full border border-black bg-white flex items-center justify-center font-black text-[7.5px] text-slate-950 shadow z-10 leading-none">
+              <div className={`absolute top-1/2 left-1.5 -translate-y-1/2 w-5 h-5 rounded-full border border-black/35 flex items-center justify-center font-black text-[7.5px] shadow z-10 leading-none ${getValueBadgeStyles(card.value).bgClass}`}>
                 M{card.value}
               </div>
             </div>
@@ -1090,7 +1125,7 @@ export const GameCard: React.FC<GameCardProps> = ({
         >
           {/* Top Bar */}
           <div className="flex justify-between items-center z-10">
-            <div className="w-5 h-5 rounded-full border border-black bg-white flex items-center justify-center font-black text-[8px] text-slate-950 shadow-sm leading-none">
+            <div className={`w-5 h-5 rounded-full border border-black/35 flex items-center justify-center font-black text-[8px] shadow-sm leading-none ${getValueBadgeStyles(card.value).bgClass}`}>
               M{card.value}
             </div>
 
@@ -1129,7 +1164,7 @@ export const GameCard: React.FC<GameCardProps> = ({
         <div className="w-full h-full rounded-xl bg-white flex flex-col justify-between p-1.5 relative border border-slate-350 overflow-hidden">
           {/* Top indicators */}
           <div className="flex justify-between items-center z-10">
-            <div className="w-5 h-5 rounded-full border border-black bg-white flex items-center justify-center font-black text-[8px] text-slate-950 shadow-sm leading-none">
+            <div className={`w-5 h-5 rounded-full border border-black/35 flex items-center justify-center font-black text-[8px] shadow-sm leading-none ${getValueBadgeStyles(card.value).bgClass}`}>
               M{card.value}
             </div>
             <div className="border border-black bg-slate-950 px-1.5 py-0.5 rounded text-[5px] font-black text-white uppercase tracking-wide select-none shadow leading-none">

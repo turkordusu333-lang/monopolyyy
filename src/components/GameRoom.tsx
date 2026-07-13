@@ -62,62 +62,36 @@ export const GameRoom: React.FC<Props> = ({ roomId, isOffline, profile, onLeaveR
     matchRef.current = match;
   }, [match]);
 
+  // Bot difficulty calculations (Improvement #20)
+  const botDifficulty: 'easy' | 'medium' | 'hard' = React.useMemo(() => {
+    if (roomId.includes('-easy-') || roomId.includes('practice-easy')) return 'easy';
+    if (roomId.includes('-hard-') || roomId.includes('practice-hard')) return 'hard';
+    return 'medium';
+  }, [roomId]);
+
+  const botDelay = botDifficulty === 'easy' ? 2500 : botDifficulty === 'hard' ? 900 : 1800;
+  const botPaymentDelay = botDifficulty === 'easy' ? 2800 : botDifficulty === 'hard' ? 1000 : 2000;
+  const botFinishDelay = botDifficulty === 'easy' ? 2000 : botDifficulty === 'hard' ? 700 : 1500;
+
+  const [botIsThinking, setBotIsThinking] = React.useState(false);
+  const [localSettings, setLocalSettings] = React.useState({
+    targetSets: 3,
+    turnLimit: 'unlimited',
+    autoEndTurn: false,
+    gameMode: 'classic',
+  });
+
+  const checkWinnerWithSettings = (properties: any) => {
+    return checkWinner(properties, match?.settings?.targetSets || 3);
+  };
+
+  const [showShieldDefenseFor, setShowShieldDefenseFor] = React.useState<string | null>(null);
+  const [showDealBreakerAnimation, setShowDealBreakerAnimation] = React.useState<{ source: string; target: string; color: CardColor } | null>(null);
+
   const updateMatchState = (newMatch: MatchState | null) => {
     matchRef.current = newMatch;
     setMatch(newMatch);
   };
-
-  const updateAchievement = async (achievementId: string, amount: number) => {
-    try {
-      const res = await fetch('/api/achievements/update', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ userId: profile.id, achievementId, amount }),
-      });
-      if (res.ok) {
-        const data = await res.json();
-        const updatedProfile = {
-          ...profile,
-          coins: data.coins,
-          achievements: data.achievements,
-        };
-        onUpdateProfile(updatedProfile);
-      }
-    } catch (e) {
-      console.error("Error updating achievement", e);
-    }
-  };
-
-  // Listen for banking changes to trigger Milyoner achievement (ach-2)
-  React.useEffect(() => {
-    if (!match) return;
-    const localP = match.players.find((p) => p.id === profile.id);
-    if (localP) {
-      const bankTotal = localP.bank.reduce((sum, c) => sum + c.value, 0);
-      const ach = profile.achievements.find((a) => a.id === 'ach-2');
-      if (ach && !ach.completed && bankTotal >= ach.targetValue) {
-        updateAchievement('ach-2', ach.targetValue - ach.currentValue);
-      }
-    }
-  }, [match?.players, profile.id, profile.achievements]);
-
-  // Listen for logs to trigger "Sinsi Hırsız" achievement (ach-3)
-  const processedAchievementLogsRef = React.useRef<string[]>([]);
-  React.useEffect(() => {
-    if (!match) return;
-    match.logs.forEach((log) => {
-      if (!processedAchievementLogsRef.current.includes(log.id)) {
-        processedAchievementLogsRef.current.push(log.id);
-        const isMySteal = log.message.includes(profile.username) && log.message.includes('çaldı');
-        if (isMySteal) {
-          const ach = profile.achievements.find((a) => a.id === 'ach-3');
-          if (ach && !ach.completed) {
-            updateAchievement('ach-3', 1);
-          }
-        }
-      }
-    });
-  }, [match?.logs, profile.username, profile.achievements]);
   const [selectedCard, setSelectedCard] = React.useState<Card | null>(null);
   const [showCardMenu, setShowCardMenu] = React.useState(false);
   const [wildcardColorPick, setWildcardColorPick] = React.useState<Card | null>(null);
@@ -126,9 +100,22 @@ export const GameRoom: React.FC<Props> = ({ roomId, isOffline, profile, onLeaveR
   const [isDragOverBank, setIsDragOverBank] = React.useState(false);
   const [isDragOverProperties, setIsDragOverProperties] = React.useState(false);
   const [rentColorPick, setRentColorPick] = React.useState<Card | null>(null);
+  const [rentTargetSelect, setRentTargetSelect] = React.useState<{ card: Card; color: CardColor; payload?: any } | null>(null);
   const [paymentSelection, setPaymentSelection] = React.useState<string[]>([]);
   const [voiceMuted, setVoiceMuted] = React.useState(false);
+  const [isMusicPlaying, setIsMusicPlaying] = React.useState(() => {
+    const saved = localStorage.getItem('bgm_enabled');
+    return saved === 'true';
+  });
   const [speakingList, setSpeakingList] = React.useState<string[]>([]);
+  const [customAlert, setCustomAlert] = React.useState<{ message: string; title: string } | null>(null);
+
+  const alert = React.useCallback((message: string, title: string = 'Deal Master PRO') => {
+    setCustomAlert({ message, title });
+    try {
+      sounds.playAlert(profile.settings);
+    } catch (e) { }
+  }, [profile.settings]);
 
   // Interaction targets
   const [pendingSlyDeal, setPendingSlyDeal] = React.useState<Card | null>(null);
@@ -155,6 +142,56 @@ export const GameRoom: React.FC<Props> = ({ roomId, isOffline, profile, onLeaveR
     }, 2200);
   };
 
+  const [analyzedProperty, setAnalyzedProperty] = React.useState<{
+    color: CardColor;
+    ownerName: string;
+    cardsCount: number;
+    hasHouse: boolean;
+    hasHotel: boolean;
+    currentRent: number;
+  } | null>(null);
+
+  const longPressTimerRef = React.useRef<any>(null);
+
+  const handleStartPress = (col: CardColor, owner: string, setObj: any) => {
+    if (longPressTimerRef.current) clearTimeout(longPressTimerRef.current);
+    longPressTimerRef.current = setTimeout(() => {
+      triggerHaptic('medium');
+      setExpandedPropertyColor(prev => prev === col ? null : col);
+      setAnalyzedProperty({
+        color: col,
+        ownerName: owner,
+        cardsCount: setObj.cards.length,
+        hasHouse: setObj.hasHouse,
+        hasHotel: setObj.hasHotel,
+        currentRent: calculateSetRent(setObj.cards, col, setObj.hasHouse, setObj.hasHotel),
+      });
+    }, 450);
+  };
+
+  const handleEndPress = () => {
+    if (longPressTimerRef.current) {
+      clearTimeout(longPressTimerRef.current);
+      longPressTimerRef.current = null;
+    }
+  };
+
+  const triggerHaptic = (type: 'light' | 'medium' | 'heavy' = 'light') => {
+    if (typeof navigator !== 'undefined' && navigator.vibrate) {
+      try {
+        if (type === 'light') {
+          navigator.vibrate(12);
+        } else if (type === 'medium') {
+          navigator.vibrate(25);
+        } else if (type === 'heavy') {
+          navigator.vibrate([40, 20, 40]);
+        }
+      } catch (e) {
+        // Safe check
+      }
+    }
+  };
+
   // Layout & Adaptive Mobile States
   const [isHandExpanded, setIsHandExpanded] = React.useState(true);
   const [showChatPanel, setShowChatPanel] = React.useState(true);
@@ -162,16 +199,13 @@ export const GameRoom: React.FC<Props> = ({ roomId, isOffline, profile, onLeaveR
   const [isCompactLayout, setIsCompactLayout] = React.useState(() => typeof window !== 'undefined' ? window.innerWidth < 768 : true);
   const [timeLeft, setTimeLeft] = React.useState(30);
   const [managedSetColor, setManagedSetColor] = React.useState<CardColor | null>(null);
+  const [expandedPropertyColor, setExpandedPropertyColor] = React.useState<CardColor | null>(null);
   const [showHint, setShowHint] = React.useState(false);
   const [showBankVaultModal, setShowBankVaultModal] = React.useState(false);
   const [showOpponentAssetsModal, setShowOpponentAssetsModal] = React.useState(false);
   const [assetsOpponentId, setAssetsOpponentId] = React.useState<string | null>(null);
   const [focusedCard, setFocusedCard] = React.useState<Card | null>(null);
   const [focusedCardZoom, setFocusedCardZoom] = React.useState<number>(1.5);
-
-  // Bot Customization Settings (Difficulty and Personality)
-  const [selectedDifficulty, setSelectedDifficulty] = React.useState<'easy' | 'medium' | 'hard'>('medium');
-  const [selectedPersonality, setSelectedPersonality] = React.useState<'aggressive' | 'banker' | 'strategic'>('strategic');
 
   // Action Cancel Warning alert state (for troubleshooting / stuck recovery)
   const [isHeaderHidden, setIsHeaderHidden] = React.useState(false);
@@ -180,15 +214,6 @@ export const GameRoom: React.FC<Props> = ({ roomId, isOffline, profile, onLeaveR
     message: string;
     type: 'warning' | 'success' | 'info';
   } | null>(null);
-
-  // Loading cancel state for stuck prevention
-  const [showCancelLoading, setShowCancelLoading] = React.useState(false);
-  React.useEffect(() => {
-    const timer = setTimeout(() => {
-      setShowCancelLoading(true);
-    }, 3500);
-    return () => clearTimeout(timer);
-  }, []);
 
   // Force bypass/cancel mechanism to prevent the game from getting stuck
   const handleForceCancelActiveAction = (reason?: string) => {
@@ -468,95 +493,6 @@ export const GameRoom: React.FC<Props> = ({ roomId, isOffline, profile, onLeaveR
     }, 2500);
   }, []);
 
-  // Floating Emoji Reactions State
-  const [reactions, setReactions] = React.useState<Record<string, { emoji: string; id: string }>>({});
-
-  const triggerReaction = React.useCallback((playerId: string, emoji: string) => {
-    const id = Math.random().toString(36).substr(2, 9);
-    setReactions((prev) => ({
-      ...prev,
-      [playerId]: { emoji, id }
-    }));
-    setTimeout(() => {
-      setReactions((prev) => {
-        if (prev[playerId]?.id === id) {
-          const copy = { ...prev };
-          delete copy[playerId];
-          return copy;
-        }
-        return prev;
-      });
-    }, 2500);
-  }, []);
-
-  const sendReaction = (emoji: string) => {
-    if (isOffline) {
-      triggerReaction(profile.id, emoji);
-      // Bot reaction simulation (40% chance after 1.2s delay)
-      if (match) {
-        const botPlayer = match.players.find((p) => p.isBot);
-        if (botPlayer && Math.random() < 0.4) {
-          const botEmojis = ['💸', '🛡️', '😂', '😠', '🎉', '🤝'];
-          const randomEmoji = botEmojis[Math.floor(Math.random() * botEmojis.length)];
-          setTimeout(() => {
-            triggerReaction(botPlayer.id, randomEmoji);
-          }, 1200);
-        }
-      }
-    } else {
-      socketRef.current?.send(
-        JSON.stringify({ type: 'quick_reaction', userId: profile.id, roomId, emoji })
-      );
-    }
-  };
-
-  // Confetti Particle System State
-  const [confettiActive, setConfettiActive] = React.useState(false);
-  const [confettiParticles, setConfettiParticles] = React.useState<{ id: number; x: number; y: number; color: string; size: number; delay: number; shape: 'circle' | 'square' }[]>([]);
-
-  const triggerConfetti = React.useCallback(() => {
-    const colors = ['#f59e0b', '#10b981', '#3b82f6', '#ef4444', '#ec4899', '#8b5cf6'];
-    const particles = Array.from({ length: 80 }).map((_, i) => ({
-      id: i,
-      x: Math.random() * 100,
-      y: -10 - Math.random() * 20,
-      color: colors[Math.floor(Math.random() * colors.length)],
-      size: 6 + Math.random() * 10,
-      delay: Math.random() * 2,
-      shape: Math.random() < 0.5 ? 'circle' as const : 'square' as const
-    }));
-    setConfettiParticles(particles);
-    setConfettiActive(true);
-    setTimeout(() => {
-      setConfettiActive(false);
-      setConfettiParticles([]);
-    }, 6000);
-  }, []);
-
-  // Trigger confetti on match finished
-  React.useEffect(() => {
-    if (match?.status === 'finished') {
-      triggerConfetti();
-      const ach = profile.achievements.find((a) => a.id === 'ach-1');
-      if (ach && !ach.completed) {
-        updateAchievement('ach-1', 1);
-      }
-    }
-  }, [match?.status, triggerConfetti]);
-
-  // Trigger confetti on set completion
-  const prevCompletedSetsRef = React.useRef(0);
-  React.useEffect(() => {
-    const lPlayer = match?.players.find((p) => p.id === profile.id) || match?.players[0];
-    if (lPlayer) {
-      const completed = countCompletedSets(lPlayer.properties);
-      if (completed > prevCompletedSetsRef.current) {
-        triggerConfetti();
-      }
-      prevCompletedSetsRef.current = completed;
-    }
-  }, [match?.players, profile.id, triggerConfetti]);
-
   // Game notification stack type & state
   interface GameNotification {
     id: string;
@@ -628,18 +564,26 @@ export const GameRoom: React.FC<Props> = ({ roomId, isOffline, profile, onLeaveR
     }
   }, [match?.turnIndex, match?.actionsPlayedThisTurn, match?.status]);
 
+  const getTurnLimitSeconds = () => {
+    const limit = match?.settings?.turnLimit || 'unlimited';
+    if (limit === '15s') return 15;
+    if (limit === '30s') return 30;
+    if (limit === '1m') return 60;
+    return 99999; // Unlimited flag
+  };
+
   // Turn Timer Countdown Effect
   React.useEffect(() => {
     if (match && match.status === 'playing') {
-      setTimeLeft(match.settings?.turnDuration || 30);
+      setTimeLeft(getTurnLimitSeconds());
     }
-  }, [match?.turnIndex, match?.status, match?.settings?.turnDuration]);
+  }, [match?.turnIndex, match?.status, match?.settings?.turnLimit]);
 
   React.useEffect(() => {
     if (match && match.status === 'playing') {
-      // Early exit if turn duration is unlimited
-      const duration = match.settings?.turnDuration || 30;
-      if (duration >= 99999) {
+      const maxSeconds = getTurnLimitSeconds();
+      if (maxSeconds === 99999) {
+        setTimeLeft(99999);
         return;
       }
 
@@ -658,7 +602,7 @@ export const GameRoom: React.FC<Props> = ({ roomId, isOffline, profile, onLeaveR
                 while (currentHand.length > 7) {
                   const toDiscard = currentHand.shift();
                   if (toDiscard) {
-                     handleOfflineDiscard(toDiscard.id);
+                    handleOfflineDiscard(toDiscard.id);
                   }
                 }
                 handleOfflineEndTurn();
@@ -679,14 +623,32 @@ export const GameRoom: React.FC<Props> = ({ roomId, isOffline, profile, onLeaveR
                 }
               }
             }
-            return duration;
+            return maxSeconds;
           }
           return prev - 1;
         });
       }, 1000);
       return () => clearInterval(timer);
     }
-  }, [match?.turnIndex, match?.status, match?.activeActionRequest, activeActionCard]);
+  }, [match?.turnIndex, match?.status, match?.activeActionRequest, activeActionCard, match?.settings?.turnLimit]);
+
+  // Auto End Turn effect
+  React.useEffect(() => {
+    if (match && match.status === 'playing' && match.settings?.autoEndTurn) {
+      const activePlayer = match.players[match.turnIndex];
+      const isMyTurn = activePlayer?.id === profile.id;
+      if (isMyTurn && match.actionsPlayedThisTurn === 3) {
+        // Only end if hand size is <= 7, otherwise they must select cards to discard
+        if (activePlayer.hand.length <= 7) {
+          if (isOffline) {
+            handleOfflineEndTurn();
+          } else {
+            handleEndTurnMultiplayer();
+          }
+        }
+      }
+    }
+  }, [match?.actionsPlayedThisTurn, match?.turnIndex, match?.status, match?.settings?.autoEndTurn]);
 
   // Log-monitoring Effect to show Toasts/Banners and trigger 3D custom particle animations
   React.useEffect(() => {
@@ -702,6 +664,8 @@ export const GameRoom: React.FC<Props> = ({ roomId, isOffline, profile, onLeaveR
       // Add a dynamic slide-in notification
       let notifType: 'action' | 'property' | 'rent' | 'money' | 'other' = 'other';
       const lowercaseMsg = text.toLowerCase();
+      const isBankPlacement = lowercaseMsg.includes('banka') || lowercaseMsg.includes('kasasına') || lowercaseMsg.includes('bankaya') || lowercaseMsg.includes('para ekledi');
+
       if (lowercaseMsg.includes('mülk') || lowercaseMsg.includes('tapu') || lowercaseMsg.includes('arsa') || lowercaseMsg.includes('set')) {
         notifType = 'property';
       } else if (lowercaseMsg.includes('kira') || lowercaseMsg.includes('bedel')) {
@@ -727,7 +691,7 @@ export const GameRoom: React.FC<Props> = ({ roomId, isOffline, profile, onLeaveR
       }, 4000);
 
       // Detect "Doğum Günü" play
-      if (text.includes('Bugün Benim Doğum Günüm') || text.includes('doğum günü')) {
+      if (!isBankPlacement && (text.includes('Bugün Benim Doğum Günüm') || text.includes('doğum günü'))) {
         match.players.forEach((p) => {
           p.hand.forEach((c) => triggerCardEffect(c.id, 'birthday-confetti'));
           Object.values(p.properties).forEach((set: any) => {
@@ -744,7 +708,7 @@ export const GameRoom: React.FC<Props> = ({ roomId, isOffline, profile, onLeaveR
         );
       }
       // Detect "Haciz" / "Borç" play
-      else if (text.includes('borç tahsilatı') || text.includes('Borç Tahsildarı') || text.includes('tahsilat')) {
+      else if (!isBankPlacement && (text.includes('borç tahsilatı') || text.includes('Borç Tahsildarı') || text.includes('tahsilat'))) {
         match.players.forEach((p) => {
           Object.values(p.properties).forEach((set: any) => {
             set?.cards.forEach((c: any) => triggerCardEffect(c.id, 'debt-seal'));
@@ -760,7 +724,7 @@ export const GameRoom: React.FC<Props> = ({ roomId, isOffline, profile, onLeaveR
         );
       }
       // Detect "Sinsi Anlaşma" play
-      else if (text.includes('sinsi anlaşma') || text.includes('Sinsi Anlaşma')) {
+      else if (!isBankPlacement && (text.includes('sinsi anlaşma') || text.includes('Sinsi Anlaşma'))) {
         match.players.forEach((p) => {
           Object.values(p.properties).forEach((set: any) => {
             set?.cards.forEach((c: any) => triggerCardEffect(c.id, 'sly-shadow'));
@@ -776,7 +740,7 @@ export const GameRoom: React.FC<Props> = ({ roomId, isOffline, profile, onLeaveR
         );
       }
       // Detect "Anlaşma Bozan" play
-      else if (text.includes('Anlaşma Bozan') || text.includes('bozan')) {
+      else if (!isBankPlacement && (text.includes('Anlaşma Bozan') || text.includes('bozan'))) {
         match.players.forEach((p) => {
           Object.values(p.properties).forEach((set: any) => {
             set?.cards.forEach((c: any) => triggerCardEffect(c.id, 'debt-seal'));
@@ -792,7 +756,7 @@ export const GameRoom: React.FC<Props> = ({ roomId, isOffline, profile, onLeaveR
         );
       }
       // Detect "Zoraki Takas" play
-      else if (text.includes('Zoraki Takas') || text.includes('forced-deal')) {
+      else if (!isBankPlacement && (text.includes('Zoraki Takas') || text.includes('forced-deal'))) {
         match.players.forEach((p) => {
           Object.values(p.properties).forEach((set: any) => {
             set?.cards.forEach((c: any) => triggerCardEffect(c.id, 'sly-shadow'));
@@ -808,7 +772,7 @@ export const GameRoom: React.FC<Props> = ({ roomId, isOffline, profile, onLeaveR
         );
       }
       // Detect "Hayır Teşekkürler" (Just Say No) play or counter
-      else if (text.includes('Hayır Teşekkürler') || text.includes('savunma') || text.includes('Savunma') || text.includes('JSN') || text.includes('jsn')) {
+      else if (!isBankPlacement && (text.includes('Hayır Teşekkürler') || text.includes('savunma') || text.includes('Savunma') || text.includes('JSN') || text.includes('jsn'))) {
         match.players.forEach((p: any) => {
           p.hand.forEach((c: any) => triggerCardEffect(c.id, 'sly-shadow'));
         });
@@ -832,13 +796,55 @@ export const GameRoom: React.FC<Props> = ({ roomId, isOffline, profile, onLeaveR
   const socketRef = React.useRef<WebSocket | null>(null);
 
   // --- AUDIO SYNTHESIS INTEGRATION ---
-  const playDrawSound = () => sounds.playDraw(profile.settings);
-  const playPlaySound = () => sounds.playPlay(profile.settings);
+  const playDrawSound = () => sounds.playCardDraw(profile.settings);
+  const playPlaySound = (card?: Card) => {
+    if (card && (card.actionType === 'house' || card.actionType === 'hotel')) {
+      sounds.playHouseHotelBuild(profile.settings);
+    } else {
+      sounds.playPropertyPlace(profile.settings);
+    }
+  };
   const playCoinSound = () => sounds.playCoin(profile.settings);
-  const playActionSound = () => sounds.playAction(profile.settings);
+  const playActionSound = (card?: Card) => {
+    if (!card) {
+      sounds.playActionCardPlay(profile.settings);
+      return;
+    }
+    if (card.actionType === 'birthday') {
+      sounds.playBirthday(profile.settings);
+    } else if (card.actionType === 'debt-collector') {
+      sounds.playDebtCollector(profile.settings);
+    } else if (card.actionType === 'deal-breaker') {
+      sounds.playDealBreaker(profile.settings);
+    } else if (card.actionType === 'sly-deal' || card.actionType === 'forced-deal') {
+      sounds.playSlyForcedDeal(profile.settings);
+    } else if (card.actionType === 'pass-go') {
+      sounds.playPassGo(profile.settings);
+    } else if (card.actionType === 'house' || card.actionType === 'hotel') {
+      sounds.playHouseHotelBuild(profile.settings);
+    } else {
+      sounds.playActionCardPlay(profile.settings);
+    }
+  };
   const playStealSound = () => sounds.playSteal(profile.settings);
   const playJsnSound = () => sounds.playJustSayNo(profile.settings);
   const playAlertSound = () => sounds.playAlert(profile.settings);
+  const playCardDrawSound = () => sounds.playCardDraw(profile.settings);
+  const playCardDiscardSound = () => sounds.playCardDiscard(profile.settings);
+  const playPropertyPlaceSound = () => sounds.playPropertyPlace(profile.settings);
+  const playActionCardPlaySound = () => sounds.playActionCardPlay(profile.settings);
+
+  // --- BACKGROUND MUSIC ENGINE CONTROLLER ---
+  React.useEffect(() => {
+    if (isMusicPlaying) {
+      sounds.startMusic(profile.settings);
+    } else {
+      sounds.stopMusic();
+    }
+    return () => {
+      sounds.stopMusic();
+    };
+  }, [isMusicPlaying, profile.settings.soundVolume]);
 
   // Initialize Offline Practice Match or Connect WebSocket
   React.useEffect(() => {
@@ -877,12 +883,6 @@ export const GameRoom: React.FC<Props> = ({ roomId, isOffline, profile, onLeaveR
           { id: 'log-1', message: 'Çevrimdışı Pratik Odası Kuruldu. Bot Can maça hazır!', timestamp: Date.now() },
         ],
         isOffline: true,
-        settings: {
-          gameMode: 'classic',
-          turnDuration: 30,
-          winSetsTarget: 3,
-          autoEndTurn: false,
-        }
       };
       setMatch(initialMatch);
     } else {
@@ -904,27 +904,54 @@ export const GameRoom: React.FC<Props> = ({ roomId, isOffline, profile, onLeaveR
           const data = JSON.parse(event.data);
           if (data.type === 'room_update') {
             setMatch(data.matchState);
+            if (data.matchState.settings) {
+              setLocalSettings(data.matchState.settings);
+            }
             // Play corresponding trigger sound effects based on last log messages
             const logs = data.matchState.logs as GameLog[];
             if (logs.length > 0) {
               const lastLog = logs[logs.length - 1].message;
-              if (lastLog.includes('çekti')) playDrawSound();
-              else if (lastLog.includes('bankaya')) playCoinSound();
-              else if (lastLog.includes('yerleştirdi')) playPlaySound();
-              else if (lastLog.includes('aksiyon') || lastLog.includes('başladı')) playActionSound();
-              else if (lastLog.includes('çaldı')) playStealSound();
-              else if (lastLog.includes('Hayır Teşekkürler')) playJsnSound();
+              const lowercaseLastLog = lastLog.toLowerCase();
+              const isBankLog = lowercaseLastLog.includes('banka') || lowercaseLastLog.includes('kasasına') || lowercaseLastLog.includes('bankaya') || lowercaseLastLog.includes('para ekledi');
+
+              if (isBankLog) {
+                playCoinSound();
+              } else if (lastLog.includes('çekti')) {
+                playCardDrawSound();
+              } else if (lastLog.includes('attı')) {
+                playCardDiscardSound();
+              } else if (lastLog.includes('yerleştirdi')) {
+                if (lastLog.includes('Ev') || lastLog.includes('Otel') || lastLog.includes('ev') || lastLog.includes('otel')) {
+                  sounds.playHouseHotelBuild(profile.settings);
+                } else {
+                  playPropertyPlaceSound();
+                }
+              } else if (lastLog.includes('Doğum Günü') || lastLog.includes('doğum günü')) {
+                sounds.playBirthday(profile.settings);
+              } else if (lastLog.includes('Borç Tahsilatı') || lastLog.includes('borç tahsilatı') || lastLog.includes('Haciz')) {
+                sounds.playDebtCollector(profile.settings);
+              } else if (lastLog.includes('Anlaşma Bozan') || lastLog.includes('anlaşma bozan') || lastLog.includes('Set Çaldı') || lastLog.includes('set çaldı')) {
+                sounds.playDealBreaker(profile.settings);
+              } else if (lastLog.includes('Sinsi Anlaşma') || lastLog.includes('sinsi anlaşma') || lastLog.includes('Zorunlu Anlaşma') || lastLog.includes('zorunlu anlaşma')) {
+                sounds.playSlyForcedDeal(profile.settings);
+              } else if (lastLog.includes('Başlangıç Noktası') || lastLog.includes('Başlangıç noktasından') || lastLog.includes('pass-go')) {
+                sounds.playPassGo(profile.settings);
+              } else if (lastLog.includes('aksiyon') || lastLog.includes('başladı') || lastLog.includes('oynadı') || lastLog.includes('talep etti') || lastLog.includes('talep ediyor') || lastLog.includes('çalmak istiyor') || lastLog.includes('değiştirmek istiyor')) {
+                playActionCardPlaySound();
+              } else if (lastLog.includes('çaldı')) {
+                playStealSound();
+              } else if (lastLog.includes('Hayır Teşekkürler') || lastLog.includes('Hayır Deme Hakkı') || lastLog.includes('Reddet')) {
+                playJsnSound();
+              }
             }
-          } else if (data.type === 'quick_reaction') {
-            triggerReaction(data.userId, data.emoji);
           } else if (data.type === 'voice_update') {
             const speaking = data.players.filter((p: any) => p.isSpeaking).map((p: any) => p.id);
             setSpeakingList(speaking);
+          } else if (data.type === 'kicked') {
+            alert('Lobiden Atıldınız!');
+            onLeaveRoom();
           } else if (data.type === 'alert') {
             alert(data.message);
-          } else if (data.type === 'kicked') {
-            alert(data.message || 'Lobiden atıldınız!');
-            onLeaveRoom();
           }
         } catch (e) {
           console.error(e);
@@ -965,6 +992,65 @@ export const GameRoom: React.FC<Props> = ({ roomId, isOffline, profile, onLeaveR
     }
   }, [voiceMuted]);
 
+  const handleLeaveLobby = () => {
+    if (!isOffline) {
+      socketRef.current?.send(JSON.stringify({ type: 'leave_room', userId: profile.id, roomId }));
+    }
+    onLeaveRoom();
+  };
+
+  const handleKickPlayer = (targetPlayerId: string) => {
+    if (isOffline) {
+      setMatch((prev) => {
+        if (!prev) return null;
+        const updatedPlayers = prev.players.filter((p) => p.id !== targetPlayerId);
+        return {
+          ...prev,
+          players: updatedPlayers,
+          logs: [
+            ...prev.logs,
+            { id: `kick-${Date.now()}`, message: `Bot odadan çıkarıldı.`, timestamp: Date.now() },
+          ],
+        };
+      });
+    } else {
+      socketRef.current?.send(JSON.stringify({
+        type: 'kick_player',
+        userId: profile.id,
+        roomId,
+        targetPlayerId
+      }));
+    }
+  };
+
+  const changeMatchSettings = (updated: Partial<typeof localSettings>) => {
+    const fullSettings = { ...localSettings, ...updated };
+
+    // Automatically apply rules for presets
+    if (updated.gameMode === 'chaos') {
+      fullSettings.targetSets = 4;
+      fullSettings.turnLimit = 'unlimited';
+      fullSettings.autoEndTurn = false;
+    } else if (updated.gameMode === 'speed') {
+      fullSettings.targetSets = 2;
+      fullSettings.turnLimit = '15s';
+      fullSettings.autoEndTurn = true;
+    }
+
+    setLocalSettings(fullSettings);
+
+    if (isOffline) {
+      setMatch(prev => prev ? { ...prev, settings: fullSettings } : null);
+    } else {
+      socketRef.current?.send(JSON.stringify({
+        type: 'update_match_settings',
+        userId: profile.id,
+        roomId,
+        settings: fullSettings
+      }));
+    }
+  };
+
   // --- OFFLINE PRACTICE MODE ENGINE ACTIONS ---
   const handleStartOfflineGame = () => {
     if (!match) return;
@@ -972,24 +1058,10 @@ export const GameRoom: React.FC<Props> = ({ roomId, isOffline, profile, onLeaveR
     let fullDeck = shuffleDeck(generateDeck());
 
     // Deal 5 cards
-    const updatedPlayers = match.players.map((p) => {
-      if (p.isBot) {
-        let personalityLabel = 'Stratejik';
-        if (selectedPersonality === 'aggressive') personalityLabel = 'Agresif 🥷';
-        if (selectedPersonality === 'banker') personalityLabel = 'Tutumlu 🏦';
-        return {
-          ...p,
-          botPersonality: selectedPersonality,
-          difficulty: selectedDifficulty,
-          username: `Bot Can (${personalityLabel} - ${selectedDifficulty === 'easy' ? 'Kolay' : selectedDifficulty === 'medium' ? 'Orta' : 'Zor'})`,
-          hand: fullDeck.splice(0, 5),
-        };
-      }
-      return {
-        ...p,
-        hand: fullDeck.splice(0, 5),
-      };
-    });
+    const updatedPlayers = match.players.map((p) => ({
+      ...p,
+      hand: fullDeck.splice(0, 5),
+    }));
 
     const nextState: MatchState = {
       ...match,
@@ -999,6 +1071,7 @@ export const GameRoom: React.FC<Props> = ({ roomId, isOffline, profile, onLeaveR
       discardPile: [],
       turnIndex: 0,
       actionsPlayedThisTurn: 0,
+      settings: localSettings,
       logs: [
         ...match.logs,
         { id: `start-${Date.now()}`, message: 'Oyun başladı! İlk 5 kartınız dağıtıldı.', timestamp: Date.now() },
@@ -1198,16 +1271,16 @@ export const GameRoom: React.FC<Props> = ({ roomId, isOffline, profile, onLeaveR
 
   const handleOfflinePlayCard = (cardId: string, zone: 'bank' | 'property' | 'action', extraColor?: CardColor, payload?: any) => {
     if (!match) return;
+    triggerHaptic('medium');
 
     let actionsCost = 1;
     if (zone === 'action' && payload?.isDoubleRent) {
       actionsCost = 2;
     }
 
-    const maxActions = match.settings?.gameMode === 'chaos' ? 99 : 3;
-    if (match.actionsPlayedThisTurn + actionsCost > maxActions) {
+    if (match.actionsPlayedThisTurn + actionsCost > 3) {
       playAlertSound();
-      alert(`Bu turda en fazla ${maxActions} hamle yapabilirsiniz! Lütfen turunuzu sonlandırın.`);
+      alert("Bu turda en fazla 3 hamle yapabilirsiniz! Lütfen turunuzu sonlandırın.");
       return;
     }
 
@@ -1236,7 +1309,7 @@ export const GameRoom: React.FC<Props> = ({ roomId, isOffline, profile, onLeaveR
       playCoinSound();
     } else if (zone === 'property') {
       updatedPlayer.hand.splice(cardIdx, 1);
-      const colorToUse = card.color || extraColor || 'brown';
+      const colorToUse = (card.isWildcard && extraColor) ? extraColor : (card.color || extraColor || 'brown');
 
       if (!updatedPlayer.properties[colorToUse]) {
         updatedPlayer.properties[colorToUse] = { cards: [], hasHouse: false, hasHotel: false };
@@ -1262,10 +1335,10 @@ export const GameRoom: React.FC<Props> = ({ roomId, isOffline, profile, onLeaveR
         message: `${COLOR_LABELS[colorToUse]} renk grubuna ${card.name} eklendi.`,
         timestamp: Date.now(),
       });
-      playPlaySound();
+      playPlaySound(card);
 
       // Check win
-      if (checkWinner(updatedPlayer.properties, match.settings?.winSetsTarget || 3)) {
+      if (checkWinnerWithSettings(updatedPlayer.properties)) {
         handleOfflineWinner(updatedPlayer.id);
         return;
       }
@@ -1287,7 +1360,7 @@ export const GameRoom: React.FC<Props> = ({ roomId, isOffline, profile, onLeaveR
         message: `${activePlayer.username}, ${card.name} aksiyonunu masaya sürdü!`,
         timestamp: Date.now(),
       });
-      playActionSound();
+      playActionSound(card);
 
       // Implement specific offline action results
       if (card.actionType === 'pass-go') {
@@ -1303,19 +1376,26 @@ export const GameRoom: React.FC<Props> = ({ roomId, isOffline, profile, onLeaveR
         });
         playDrawSound();
       } else if (card.actionType === 'birthday') {
-        // Collect 2M from bot
-        const bot = match.players.find((p) => p.isBot);
-        if (bot) {
-          const payments = BotEngine.selectPayment(bot, 2);
-          transferOfflinePayment(bot.id, activePlayer.id, payments);
-          payments.forEach((cardId) => triggerCardEffect(cardId, 'gold'));
-          showActionToast(
-            'info',
-            '🎂 Doğum Günü Kutlaması!',
-            `${activePlayer.username} bir doğum günü partisi verdi! ${bot.username} ona 2M ödedi!`,
-            bot
-          );
-        }
+        // Collect 2M from all other players (bots)
+        const targets = match.players.filter((p) => p.id !== activePlayer.id);
+        targets.forEach((tp) => {
+          if (tp.isBot) {
+            const payments = BotEngine.selectPayment(tp, 2);
+            transferOfflinePayment(tp.id, activePlayer.id, payments);
+            payments.forEach((cardId) => triggerCardEffect(cardId, 'gold'));
+            match.logs.push({
+              id: `bday-offline-${Date.now()}-${Math.random()}`,
+              message: `🎂 ${tp.username}, Doğum Günü Kutlaması için ${activePlayer.username} oyuncusuna 2M ödedi.`,
+              timestamp: Date.now()
+            });
+          }
+        });
+        showActionToast(
+          'info',
+          '🎂 Doğum Günü Kutlaması!',
+          `${activePlayer.username} bir doğum günü partisi verdi ve herkesten 2M topladı!`,
+          activePlayer
+        );
       } else if (card.actionType === 'debt-collector') {
         const targetId = payload?.targetPlayerId || match.players.find((p) => p.id !== activePlayer.id)?.id;
         const targetPlayer = match.players.find((p) => p.id === targetId);
@@ -1361,9 +1441,8 @@ export const GameRoom: React.FC<Props> = ({ roomId, isOffline, profile, onLeaveR
         }
       } else if (card.type === 'rent') {
         const chosenColor = extraColor || 'brown';
-        const bot = match.players.find((p) => p.isBot);
         const set = updatedPlayer.properties[chosenColor];
-        if (set && set.cards.length > 0 && bot) {
+        if (set && set.cards.length > 0) {
           const baseCount = Math.min(set.cards.length, MAX_IN_SET[chosenColor]);
           let rentVal = set.cards[0].rentValues?.[baseCount - 1] || 1;
           if (set.hasHouse) rentVal += 3;
@@ -1373,15 +1452,51 @@ export const GameRoom: React.FC<Props> = ({ roomId, isOffline, profile, onLeaveR
             rentVal *= 2;
           }
 
-          const payments = BotEngine.selectPayment(bot, rentVal);
-          transferOfflinePayment(bot.id, activePlayer.id, payments);
-          payments.forEach((cardId) => triggerCardEffect(cardId, 'gold'));
-          showActionToast(
-            'rent',
-            '💰 Kira Tahsilatı!',
-            `${activePlayer.username}, ${bot.username} adlı oyuncudan ${COLOR_LABELS[chosenColor]} mülkleri için ${rentVal}M kira aldı!`,
-            bot
-          );
+          const isWildRent = card.name === 'Her Renk Kira Kartı' || !card.color;
+          if (isWildRent) {
+            // Collect from ONLY one player
+            const targetId = payload?.targetPlayerId || match.players.find((p) => p.id !== activePlayer.id)?.id;
+            const targetPlayer = match.players.find((p) => p.id === targetId);
+            if (targetPlayer) {
+              if (targetPlayer.isBot) {
+                const payments = BotEngine.selectPayment(targetPlayer, rentVal);
+                transferOfflinePayment(targetPlayer.id, activePlayer.id, payments);
+                payments.forEach((cardId) => triggerCardEffect(cardId, 'gold'));
+                match.logs.push({
+                  id: `rent-offline-${Date.now()}-${Math.random()}`,
+                  message: `💰 ${targetPlayer.username}, ${COLOR_LABELS[chosenColor]} mülkleri için ${rentVal}M kira ödedi.`,
+                  timestamp: Date.now()
+                });
+                showActionToast(
+                  'rent',
+                  '💰 Kira Tahsilatı!',
+                  `${activePlayer.username}, ${targetPlayer.username} adlı oyuncudan ${COLOR_LABELS[chosenColor]} mülkleri için ${rentVal}M kira aldı!`,
+                  targetPlayer
+                );
+              }
+            }
+          } else {
+            // Collect from EVERYONE (standard dual-color rent)
+            const targets = match.players.filter((p) => p.id !== activePlayer.id);
+            targets.forEach((targetPlayer) => {
+              if (targetPlayer.isBot) {
+                const payments = BotEngine.selectPayment(targetPlayer, rentVal);
+                transferOfflinePayment(targetPlayer.id, activePlayer.id, payments);
+                payments.forEach((cardId) => triggerCardEffect(cardId, 'gold'));
+                match.logs.push({
+                  id: `rent-offline-${Date.now()}-${Math.random()}`,
+                  message: `💰 ${targetPlayer.username}, ${COLOR_LABELS[chosenColor]} mülkleri için ${rentVal}M kira ödedi.`,
+                  timestamp: Date.now()
+                });
+              }
+            });
+            showActionToast(
+              'rent',
+              '💰 Kira Tahsilatı!',
+              `${activePlayer.username} herkesten ${COLOR_LABELS[chosenColor]} mülkleri için ${rentVal}M kira aldı!`,
+              activePlayer
+            );
+          }
         }
       } else if (card.actionType === 'sly-deal') {
         const targetId = payload?.targetPlayerId;
@@ -1794,6 +1909,8 @@ export const GameRoom: React.FC<Props> = ({ roomId, isOffline, profile, onLeaveR
     const bot = currentMatch.players[currentMatch.turnIndex];
     if (!bot || !bot.isBot) return;
 
+    setBotIsThinking(true);
+
     const human = currentMatch.players.find((p) => !p.isBot);
     botActionsPlayedRef.current = initialActionsCount;
 
@@ -1814,7 +1931,7 @@ export const GameRoom: React.FC<Props> = ({ roomId, isOffline, profile, onLeaveR
         return;
       }
 
-      const decision = BotEngine.selectPlayAction(currentBot, activeMatch);
+      const decision = BotEngine.selectPlayAction(currentBot, activeMatch, botDifficulty);
       if (!decision) {
         endBotTurn();
         return;
@@ -1840,7 +1957,7 @@ export const GameRoom: React.FC<Props> = ({ roomId, isOffline, profile, onLeaveR
 
         updateMatchState({ ...activeMatch });
         botActionsPlayedRef.current++;
-        setTimeout(playNextBotAction, 1800);
+        setTimeout(playNextBotAction, botDelay);
 
       } else if (decision.targetZone === 'property') {
         currentBot.hand.splice(cardIdx, 1);
@@ -1867,14 +1984,14 @@ export const GameRoom: React.FC<Props> = ({ roomId, isOffline, profile, onLeaveR
           });
         }
 
-        if (checkWinner(currentBot.properties, match.settings?.winSetsTarget || 3)) {
+        if (checkWinnerWithSettings(currentBot.properties)) {
           handleOfflineWinner(currentBot.id);
           return;
         }
 
         updateMatchState({ ...activeMatch });
         botActionsPlayedRef.current++;
-        setTimeout(playNextBotAction, 1800);
+        setTimeout(playNextBotAction, botDelay);
 
       } else if (decision.targetZone === 'action') {
         currentBot.hand.splice(cardIdx, 1);
@@ -1898,7 +2015,7 @@ export const GameRoom: React.FC<Props> = ({ roomId, isOffline, profile, onLeaveR
           });
           updateMatchState({ ...activeMatch });
           botActionsPlayedRef.current++;
-          setTimeout(playNextBotAction, 1800);
+          setTimeout(playNextBotAction, botDelay);
 
         } else if (card.actionType === 'birthday' && activeHuman) {
           // Pause and request payment from the human player interactively!
@@ -2090,7 +2207,7 @@ export const GameRoom: React.FC<Props> = ({ roomId, isOffline, profile, onLeaveR
                   activeHuman
                 );
               }
-              setTimeout(playNextBotAction, 2000);
+              setTimeout(playNextBotAction, botPaymentDelay);
             }
           }
           updateMatchState({ ...activeMatch });
@@ -2144,7 +2261,7 @@ export const GameRoom: React.FC<Props> = ({ roomId, isOffline, profile, onLeaveR
                   activeHuman
                 );
               }
-              setTimeout(playNextBotAction, 2000);
+              setTimeout(playNextBotAction, botPaymentDelay);
             }
           }
           updateMatchState({ ...activeMatch });
@@ -2251,7 +2368,7 @@ export const GameRoom: React.FC<Props> = ({ roomId, isOffline, profile, onLeaveR
                   activeHuman
                 );
               }
-              setTimeout(playNextBotAction, 2000);
+              setTimeout(playNextBotAction, botPaymentDelay);
             }
           }
           updateMatchState({ ...activeMatch });
@@ -2259,12 +2376,13 @@ export const GameRoom: React.FC<Props> = ({ roomId, isOffline, profile, onLeaveR
         } else {
           updateMatchState({ ...activeMatch });
           botActionsPlayedRef.current++;
-          setTimeout(playNextBotAction, 1500);
+          setTimeout(playNextBotAction, botFinishDelay);
         }
       }
     };
 
     const endBotTurn = () => {
+      setBotIsThinking(false);
       const activeMatch = matchRef.current;
       if (!activeMatch) return;
 
@@ -2320,7 +2438,7 @@ export const GameRoom: React.FC<Props> = ({ roomId, isOffline, profile, onLeaveR
 
     // Award XP/Coins to the profile
     if (winnerId === profile.id) {
-      sounds.playVictory(profile.settings);
+      sounds.playCelebration(profile.settings.celebrationSound, profile.settings);
       const updatedProfile = {
         ...profile,
         coins: profile.coins + 150,
@@ -2336,6 +2454,18 @@ export const GameRoom: React.FC<Props> = ({ roomId, isOffline, profile, onLeaveR
           if (q.currentValue >= q.targetValue) q.completed = true;
         }
       });
+
+      if (!updatedProfile.gamesHistory) updatedProfile.gamesHistory = [];
+      const dateStr = new Date().toLocaleDateString('tr-TR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+      updatedProfile.gamesHistory.unshift({
+        id: `match-offline-${Date.now()}`,
+        date: dateStr,
+        opponent: 'Bot Memo, Bot Can',
+        result: 'won',
+        coinsEarned: 150,
+        xpEarned: 100,
+      });
+
       onUpdateProfile(updatedProfile);
     } else {
       sounds.playDefeat(profile.settings);
@@ -2346,6 +2476,18 @@ export const GameRoom: React.FC<Props> = ({ roomId, isOffline, profile, onLeaveR
       };
       updatedProfile.stats.gamesPlayed++;
       updatedProfile.stats.gamesLost++;
+
+      if (!updatedProfile.gamesHistory) updatedProfile.gamesHistory = [];
+      const dateStr = new Date().toLocaleDateString('tr-TR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+      updatedProfile.gamesHistory.unshift({
+        id: `match-offline-${Date.now()}`,
+        date: dateStr,
+        opponent: 'Bot Memo, Bot Can',
+        result: 'lost',
+        coinsEarned: 30,
+        xpEarned: 30,
+      });
+
       onUpdateProfile(updatedProfile);
     }
   };
@@ -2362,6 +2504,7 @@ export const GameRoom: React.FC<Props> = ({ roomId, isOffline, profile, onLeaveR
         message: `${player.username} elinden ${card.name} kartını attı.`,
         timestamp: Date.now(),
       });
+      playCardDiscardSound();
       setMatch({ ...match });
     }
   };
@@ -2411,7 +2554,7 @@ export const GameRoom: React.FC<Props> = ({ roomId, isOffline, profile, onLeaveR
       });
       playPlaySound();
 
-      if (checkWinner(updatedPlayer.properties, match.settings?.winSetsTarget || 3)) {
+      if (checkWinnerWithSettings(updatedPlayer.properties)) {
         handleOfflineWinner(updatedPlayer.id);
         return;
       }
@@ -2446,10 +2589,9 @@ export const GameRoom: React.FC<Props> = ({ roomId, isOffline, profile, onLeaveR
       actionsCost = 2;
     }
 
-    const maxActions = match.settings?.gameMode === 'chaos' ? 99 : 3;
-    if (match.actionsPlayedThisTurn + actionsCost > maxActions) {
+    if (match.actionsPlayedThisTurn + actionsCost > 3) {
       playAlertSound();
-      alert(`Bu turda en fazla ${maxActions} hamle yapabilirsiniz! Lütfen turunuzu sonlandırın.`);
+      alert("Bu turda en fazla 3 hamle yapabilirsiniz! Lütfen turunuzu sonlandırın.");
       return;
     }
 
@@ -2480,8 +2622,8 @@ export const GameRoom: React.FC<Props> = ({ roomId, isOffline, profile, onLeaveR
   };
 
   const handleRespondActionRequest = (decision: 'just-say-no' | 'pay' | 'decline') => {
-    if (decision === 'pay' && match?.activeActionRequest) {
-      const amountDue = match.activeActionRequest.amountDue;
+    if (decision === 'pay' && myActiveRequest) {
+      const amountDue = myActiveRequest.amountDue;
 
       let totalBankValue = 0;
       localPlayer.bank.forEach((c) => totalBankValue += c.value);
@@ -2605,6 +2747,12 @@ export const GameRoom: React.FC<Props> = ({ roomId, isOffline, profile, onLeaveR
                 message: `🎯 ${sPlayer.username}, ${tPlayer.username} adlı oyuncunun tamamlanmış ${COLOR_LABELS[targetColor]} setini çaldı!`,
                 timestamp: Date.now(),
               });
+              setShowDealBreakerAnimation({
+                source: sPlayer.username,
+                target: tPlayer.username,
+                color: targetColor,
+              });
+              setTimeout(() => setShowDealBreakerAnimation(null), 4000);
             }
           }
 
@@ -2687,9 +2835,9 @@ export const GameRoom: React.FC<Props> = ({ roomId, isOffline, profile, onLeaveR
         }
 
         // Check winner
-        if (checkWinner(sPlayer.properties, match.settings?.winSetsTarget || 3)) {
+        if (checkWinnerWithSettings(sPlayer.properties)) {
           handleOfflineWinner(sPlayer.id);
-        } else if (checkWinner(tPlayer.properties, match.settings?.winSetsTarget || 3)) {
+        } else if (checkWinnerWithSettings(tPlayer.properties)) {
           handleOfflineWinner(tPlayer.id);
         }
       };
@@ -2705,6 +2853,8 @@ export const GameRoom: React.FC<Props> = ({ roomId, isOffline, profile, onLeaveR
             timestamp: Date.now(),
           });
           playJsnSound();
+          setShowShieldDefenseFor(targetPlayer.username);
+          setTimeout(() => setShowShieldDefenseFor(null), 3500);
 
           // Increment JSN count and swap roles
           activeReq.jsnCount = (activeReq.jsnCount || 0) + 1;
@@ -2716,7 +2866,7 @@ export const GameRoom: React.FC<Props> = ({ roomId, isOffline, profile, onLeaveR
           const newTargetPlayer = activeMatch.players.find((p) => p.id === activeReq.targetPlayerId);
           if (newTargetPlayer && newTargetPlayer.isBot) {
             const botHasJsn = newTargetPlayer.hand.some((c) => c.actionType === 'just-say-no');
-            if (botHasJsn && BotEngine.shouldPlayJustSayNo(newTargetPlayer)) {
+            if (botHasJsn) {
               const botJsnIdx = newTargetPlayer.hand.findIndex((c) => c.actionType === 'just-say-no');
               const botJsnCard = newTargetPlayer.hand.splice(botJsnIdx, 1)[0];
               activeMatch.discardPile.push(botJsnCard);
@@ -2726,6 +2876,8 @@ export const GameRoom: React.FC<Props> = ({ roomId, isOffline, profile, onLeaveR
                 timestamp: Date.now(),
               });
               playJsnSound();
+              setShowShieldDefenseFor(newTargetPlayer.username);
+              setTimeout(() => setShowShieldDefenseFor(null), 3500);
 
               // Increment JSN count and swap roles back to human
               activeReq.jsnCount = (activeReq.jsnCount || 0) + 1;
@@ -2763,7 +2915,7 @@ export const GameRoom: React.FC<Props> = ({ roomId, isOffline, profile, onLeaveR
                 // Defense succeeds, action is blocked
                 activeMatch.logs.push({
                   id: `jsn-win-bot-${Date.now()}`,
-                  message: `🛡️ Savunma başarılı oldu! Hamle engellendi.`,
+                  message: `🛡️ Savunma başarılı oldu! ${targetPlayer.username}'in hamlesi engellendi.`,
                   timestamp: Date.now(),
                 });
 
@@ -2854,13 +3006,24 @@ export const GameRoom: React.FC<Props> = ({ roomId, isOffline, profile, onLeaveR
         type: 'action_response',
         userId: profile.id,
         roomId,
-        actionRequestId: match?.activeActionRequest?.id,
+        actionRequestId: myActiveRequest?.id,
         decision,
         paymentCardIds: decision === 'pay' ? paymentSelection : [],
       })
     );
     setPaymentSelection([]);
   };
+
+  const myActiveRequest = React.useMemo(() => {
+    if (!match) return null;
+    if (match.activeActionRequests) {
+      return match.activeActionRequests.find((r) => r.targetPlayerId === profile.id) || null;
+    }
+    if (match.activeActionRequest && match.activeActionRequest.targetPlayerId === profile.id) {
+      return match.activeActionRequest;
+    }
+    return null;
+  }, [match?.activeActionRequests, match?.activeActionRequest, profile.id]);
 
   // Chat message send
   const [chatText, setChatText] = React.useState('');
@@ -2885,50 +3048,13 @@ export const GameRoom: React.FC<Props> = ({ roomId, isOffline, profile, onLeaveR
     setChatText('');
   };
 
-  // Render premium loading screen with stuck prevention button
-  if (!match) {
-    return (
-      <div className="min-h-screen w-screen bg-[#07090F] flex flex-col justify-center items-center p-4 relative overflow-hidden select-none">
-        {/* Glow background circles */}
-        <div className="absolute top-[30%] left-1/2 -translate-x-1/2 w-[350px] h-[350px] rounded-full bg-red-600/10 blur-3xl pointer-events-none" />
-        <div className="absolute bottom-[30%] left-1/2 -translate-x-1/2 w-[350px] h-[350px] rounded-full bg-purple-600/5 blur-3xl pointer-events-none" />
-
-        <div className="max-w-md w-full text-center space-y-6 z-10">
-          {/* Animated Spinner */}
-          <div className="relative w-16 h-16 mx-auto">
-            <div className="absolute inset-0 rounded-full border-4 border-white/5" />
-            <div className="absolute inset-0 rounded-full border-4 border-t-red-600 animate-spin" />
-          </div>
-
-          <div className="space-y-2">
-            <h3 className="text-lg font-black text-white uppercase italic tracking-wider">Oda Yükleniyor</h3>
-            <p className="text-xs text-slate-400">
-              Oyun sunucusu ile bağlantı kuruluyor ve oyun durumu senkronize ediliyor...
-            </p>
-          </div>
-
-          {/* Stuck prevention button shown after a brief delay */}
-          {showCancelLoading && (
-            <div className="pt-2 animate-fade-in">
-              <button
-                onClick={() => {
-                  if (sounds.playPlay) sounds.playPlay(profile.settings);
-                  onLeaveRoom();
-                }}
-                className="px-5 py-2.5 bg-white/5 hover:bg-white/10 border border-white/10 rounded-xl text-[10px] font-black uppercase tracking-wider text-slate-300 transition-all hover:text-white transform active:scale-95 shadow-lg"
-              >
-                🚪 Ana Menüye Dön (Bağlantıyı İptal Et)
-              </button>
-            </div>
-          )}
-        </div>
-      </div>
-    );
-  }
+  if (!match) return <div className="text-center py-20 text-white font-bold">Oda yükleniyor...</div>;
 
   const localPlayer = match.players.find((p) => p.id === profile.id) || match.players[0];
   const otherPlayers = match.players.filter((p) => p.id !== localPlayer.id);
   const isMyTurn = match.players[match.turnIndex]?.id === localPlayer.id;
+
+  const hasActiveRequest = !!match.activeActionRequest || (!!match.activeActionRequests && match.activeActionRequests.length > 0);
 
   const checkActionPlayability = (card: Card): { playable: boolean; reason?: string } => {
     if (card.actionType === 'just-say-no') {
@@ -3070,26 +3196,6 @@ export const GameRoom: React.FC<Props> = ({ roomId, isOffline, profile, onLeaveR
         background: 'radial-gradient(circle at 50% 50%, #171E31 0%, #07090F 100%)',
       }}
     >
-      {/* Confetti Overlay Particle System */}
-      {confettiActive && (
-        <div className="fixed inset-0 pointer-events-none z-[9999] overflow-hidden">
-          {confettiParticles.map((p) => (
-            <div
-              key={p.id}
-              className={`absolute animate-confetti-fall ${p.shape === 'circle' ? 'rounded-full' : 'rounded-sm'}`}
-              style={{
-                left: `${p.x}%`,
-                top: `${p.y}%`,
-                width: `${p.size}px`,
-                height: `${p.size}px`,
-                backgroundColor: p.color,
-                animationDelay: `${p.delay}s`,
-                opacity: 0.8,
-              }}
-            />
-          ))}
-        </div>
-      )}
       {/* Decorative board circle backgrounds matching Image 4 */}
       <div className="absolute top-[25%] left-1/2 -translate-x-1/2 w-[450px] h-[450px] rounded-full border border-white/[0.03] pointer-events-none z-0" />
       <div className="absolute top-[18%] left-1/2 -translate-x-1/2 w-[650px] h-[650px] rounded-full border border-white/[0.02] pointer-events-none z-0" />
@@ -3111,14 +3217,15 @@ export const GameRoom: React.FC<Props> = ({ roomId, isOffline, profile, onLeaveR
 
       {/* Table Top Header - Compact for Mobile space saving */}
       {!isHeaderHidden && (
-        <header className="border-b border-white/5 bg-black/45 backdrop-blur-md px-2 sm:px-4 py-1.5 sm:py-2 flex items-center justify-between z-40 flex-shrink-0 animate-fade-in">
-          <div className="flex items-center gap-1 sm:gap-2">
+        <header className="border-b border-white/5 bg-black/45 backdrop-blur-md px-2 py-1.5 sm:px-4 sm:py-2 flex items-center justify-between z-40 flex-shrink-0 animate-fade-in gap-1 sm:gap-2">
+          <div className="flex items-center gap-1.5 sm:gap-2">
             <button
               onClick={() => {
                 playPlaySound();
                 onLeaveRoom();
               }}
-              className="text-[10px] bg-white/5 hover:bg-white/10 border border-white/10 px-1.5 sm:px-2 py-1 rounded-lg transition-all font-bold"
+              className="text-[10px] bg-white/5 hover:bg-white/10 border border-white/10 px-1.5 py-1 sm:px-2 sm:py-1 rounded-lg transition-all font-bold"
+              title="Çıkış Yap"
             >
               ← <span className="hidden sm:inline">Çık</span>
             </button>
@@ -3128,17 +3235,17 @@ export const GameRoom: React.FC<Props> = ({ roomId, isOffline, profile, onLeaveR
                 playPlaySound();
                 setShowCareerPanel(true);
               }}
-              className="text-[10px] bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/30 text-amber-300 px-1.5 sm:px-2 py-1 rounded-lg transition-all font-bold flex items-center gap-1"
+              className="text-[10px] bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/30 text-amber-300 px-1.5 py-1 sm:px-2 sm:py-1 rounded-lg transition-all font-bold flex items-center gap-0.5"
               title="Kariyer İstatistiklerini Gör"
             >
               📊 <span className="hidden sm:inline">Kariyer</span>
             </button>
 
             <div>
-              <span className="text-[8px] uppercase font-black tracking-widest text-amber-400 block leading-none">
-                {isOffline ? 'YAPAY ZEKA PRATİK' : 'ÇOK OYUNCULU ODA'}
+              <span className="text-[7px] sm:text-[8px] uppercase font-black tracking-widest text-amber-400 block leading-none">
+                {isOffline ? 'PRATİK' : 'ONLINE'}
               </span>
-              <h2 className="font-extrabold text-[11px] text-slate-300 leading-tight">Oda: #{roomId}</h2>
+              <h2 className="font-extrabold text-[9px] sm:text-[11px] text-slate-300 leading-tight">#{roomId}</h2>
             </div>
           </div>
 
@@ -3147,10 +3254,10 @@ export const GameRoom: React.FC<Props> = ({ roomId, isOffline, profile, onLeaveR
             {/* Troubleshooting Cancel Button to resolve any game freezes */}
             <button
               onClick={() => handleForceCancelActiveAction('Kullanıcı talebiyle işlem iptal edildi ve oyun kurtarıldı.')}
-              className="p-1 sm:p-1.5 rounded-lg border border-red-500/30 bg-red-500/10 hover:bg-red-500/20 text-red-400 text-[10px] font-black transition-all flex items-center gap-1 cursor-pointer"
+              className="p-1 px-1.5 sm:p-1.5 rounded-lg border border-red-500/30 bg-red-500/10 hover:bg-red-500/20 text-red-400 text-[10px] font-black transition-all flex items-center gap-1 cursor-pointer"
               title="Takılmayı Gider: Herhangi bir takılma durumunda oyunu kurtarır ve sırayı devam ettirir"
             >
-              🛠️ <span className="hidden sm:inline">Takılmayı Gider (İptal)</span>
+              🛠️ <span className="hidden md:inline">Gider</span>
             </button>
 
             {/* Compact Layout Toggle Button */}
@@ -3159,13 +3266,13 @@ export const GameRoom: React.FC<Props> = ({ roomId, isOffline, profile, onLeaveR
                 playPlaySound();
                 setIsCompactLayout(!isCompactLayout);
               }}
-              className={`p-1 sm:p-1.5 rounded-lg border text-[10px] font-black transition-all flex items-center gap-1 ${isCompactLayout
+              className={`p-1 px-1.5 sm:p-1.5 rounded-lg border text-[10px] font-black transition-all flex items-center gap-1 ${isCompactLayout
                 ? 'bg-amber-500/20 border-amber-500/40 text-amber-300 hover:bg-amber-500/30 shadow-[0_0_8px_rgba(245,158,11,0.2)]'
                 : 'bg-slate-500/10 border-slate-500/30 text-slate-400 hover:bg-slate-500/20'
                 }`}
               title="Sıkışık Düzen: Mobil ekranlar için kartları küçültür ve boşluk ayarlar"
             >
-              📱 <span className="hidden sm:inline">{isCompactLayout ? 'Sıkışık Düzen' : 'Standart Düzen'}</span>
+              📱 <span className="hidden md:inline">{isCompactLayout ? 'Sıkışık' : 'Standart'}</span>
             </button>
 
             {/* Live Feed & Chat Toggle button */}
@@ -3178,19 +3285,40 @@ export const GameRoom: React.FC<Props> = ({ roomId, isOffline, profile, onLeaveR
                   setShowChatOverlay(!showChatOverlay);
                 }
               }}
-              className={`p-1 sm:p-1.5 rounded-lg border text-[10px] font-bold transition-all flex items-center gap-1 ${showChatPanel
+              className={`p-1 px-1.5 sm:p-1.5 rounded-lg border text-[10px] font-bold transition-all flex items-center gap-1 ${showChatPanel
                 ? 'bg-purple-500/15 border-purple-500/40 text-purple-300 hover:bg-purple-500/25'
                 : 'bg-slate-500/10 border-slate-500/30 text-slate-400 hover:bg-slate-500/20'
                 }`}
               title="Sohbet ve Akışı Aç/Kapat"
             >
-              💬 <span className="hidden sm:inline">{showChatPanel ? 'Sohbet' : 'Sohbet Aç'}</span>
+              💬 <span className="hidden md:inline">{showChatPanel ? 'Sohbet' : 'Aç'}</span>
             </button>
 
-            <div className="flex items-center gap-1 bg-black/40 border border-white/5 rounded-lg px-1.5 py-1 text-[9px] font-bold text-slate-400">
+            <div className="hidden sm:flex items-center gap-1 bg-black/40 border border-white/5 rounded-lg px-2 py-1 text-[9px] font-bold text-slate-400">
               <span className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-pulse" />
-              <span className="hidden sm:inline">Ses Aktif</span>
+              <span>Ses Aktif</span>
             </div>
+
+            {/* Background Music Player Toggle Button */}
+            <button
+              onClick={() => {
+                playPlaySound();
+                const newVal = !isMusicPlaying;
+                setIsMusicPlaying(newVal);
+                localStorage.setItem('bgm_enabled', String(newVal));
+              }}
+              className={`p-1 sm:p-1.5 rounded-lg border text-xs transition-all flex items-center gap-1 cursor-pointer select-none ${isMusicPlaying
+                ? 'bg-amber-500/15 border-amber-500/40 text-amber-400 shadow-[0_0_12px_rgba(245,158,11,0.25)]'
+                : 'bg-slate-800/60 border-slate-700 text-slate-400 hover:text-white hover:bg-slate-800'
+                }`}
+              title={isMusicPlaying ? "Müziği Kapat" : "Müziği Aç"}
+            >
+              <span>{isMusicPlaying ? '🎵' : '🔇'}</span>
+              <span className="hidden md:inline font-black text-[9px]">
+                {isMusicPlaying ? 'MÜZİK AÇIK' : 'MÜZİK KAPALI'}
+              </span>
+            </button>
+
             <button
               onClick={() => {
                 playPlaySound();
@@ -3200,6 +3328,7 @@ export const GameRoom: React.FC<Props> = ({ roomId, isOffline, profile, onLeaveR
                 ? 'bg-red-500/10 border-red-500/30 text-red-400'
                 : 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400 hover:bg-emerald-500/20'
                 }`}
+              title={voiceMuted ? "Sesi Aç" : "Sesi Kapat"}
             >
               {voiceMuted ? '🔇' : '🎙️'}
             </button>
@@ -3260,296 +3389,272 @@ export const GameRoom: React.FC<Props> = ({ roomId, isOffline, profile, onLeaveR
       {/* LOBBY STATE / PRE-START SCREEN */}
       {match.status === 'lobby' && (
         <div className="flex-1 overflow-y-auto p-4 flex flex-col justify-center items-center z-10 relative">
-          <div className="bg-slate-900/80 border border-white/10 backdrop-blur-lg rounded-2xl p-6 text-center space-y-4 max-w-sm w-full shadow-2xl">
-            <span className="text-4xl">🃏</span>
-            <h3 className="text-xl font-black text-white">Monopoly Lobi Bekleme</h3>
-            <p className="text-[11px] text-slate-400">
-              Oyunun başlaması için en az 2 oyuncunun katılması gerekir. Aşağıdan bir yapay zeka bot ekleyebilir veya doğrudan oyunu başlatabilirsiniz!
-            </p>
+          <div className="bg-slate-900/95 border border-white/10 backdrop-blur-lg rounded-3xl p-6 md:p-8 max-w-3xl w-full shadow-2xl space-y-6 text-left">
 
-            <div className="flex items-center gap-2 py-2 bg-black/40 border border-white/5 rounded-xl px-4 justify-around text-[10px]">
-              <div>
-                <span className="text-slate-500 block">Kurucu:</span>
-                <span className="font-bold text-red-400">{localPlayer.username}</span>
-              </div>
-              <div className="w-px h-6 bg-white/10" />
-              <div>
-                <span className="text-slate-500 block">Oyuncular:</span>
-                <span className="font-bold text-red-400">{match.players.length} / 4</span>
-              </div>
-            </div>
-
-            {/* Lobby Custom Rules Settings */}
-            <div className="p-3 bg-black/45 border border-white/5 rounded-xl text-left space-y-3">
-              <span className="text-[10px] uppercase font-black tracking-wider text-slate-400 block border-b border-white/5 pb-1">🔧 OYUN KURALLARI</span>
-              
-              {(() => {
-                const isHost = match.players[0]?.id === profile.id;
-                const currentSettings = match.settings || {
-                  gameMode: 'classic',
-                  turnDuration: 30,
-                  winSetsTarget: 3,
-                  autoEndTurn: false
-                };
-
-                const updateSetting = (key: string, value: any) => {
-                  const updated = {
-                    ...currentSettings,
-                    [key]: value
-                  };
-
-                  // If speed mode is chosen, auto enforce 15s and 2 win sets target
-                  if (key === 'gameMode') {
-                    if (value === 'speed') {
-                      updated.turnDuration = 15;
-                      updated.winSetsTarget = 2;
-                    } else if (value === 'chaos') {
-                      updated.turnDuration = 30;
-                    }
-                  }
-
-                  if (isOffline) {
-                    setMatch(prev => {
-                      if (!prev) return null;
-                      return {
-                        ...prev,
-                        settings: updated
-                      };
-                    });
-                  } else {
-                    socketRef.current?.send(JSON.stringify({
-                      type: 'update_lobby_settings',
-                      roomId,
-                      userId: profile.id,
-                      settings: updated
-                    }));
-                  }
-                };
-
-                if (isHost) {
-                  return (
-                    <div className="space-y-2.5 text-xs">
-                      {/* Game Mode select */}
-                      <div className="space-y-1">
-                        <label className="text-[9px] font-bold text-slate-400 block">Oyun Modu</label>
-                        <select
-                          value={currentSettings.gameMode}
-                          onChange={(e) => updateSetting('gameMode', e.target.value)}
-                          className="w-full bg-slate-950/85 border border-white/10 rounded-lg px-2 py-1 text-slate-200 focus:outline-none focus:border-red-500 cursor-pointer"
-                        >
-                          <option value="classic">Klasik Monopoly</option>
-                          <option value="chaos">Kaos Modu (4 Kart / Sınırsız Hamle)</option>
-                          <option value="speed">Hızlı Monopoly (2 Set / 15s Süre)</option>
-                        </select>
-                      </div>
-
-                      {/* Turn Duration select */}
-                      <div className="space-y-1">
-                        <label className="text-[9px] font-bold text-slate-400 block">Tur Süresi</label>
-                        <select
-                          value={currentSettings.turnDuration}
-                          onChange={(e) => updateSetting('turnDuration', Number(e.target.value))}
-                          disabled={currentSettings.gameMode === 'speed'}
-                          className="w-full bg-slate-950/85 border border-white/10 rounded-lg px-2 py-1 text-slate-200 focus:outline-none focus:border-red-500 cursor-pointer disabled:opacity-50"
-                        >
-                          <option value={15}>15 Saniye (Yıldırım)</option>
-                          <option value={30}>30 Saniye (Standart)</option>
-                          <option value={60}>1 Dakika (Yavaş)</option>
-                          <option value={99999}>Sınırsız Süre</option>
-                        </select>
-                      </div>
-
-                      {/* Win Sets Target select */}
-                      <div className="space-y-1">
-                        <label className="text-[9px] font-bold text-slate-400 block">Gerekli Set Hedefi</label>
-                        <select
-                          value={currentSettings.winSetsTarget}
-                          onChange={(e) => updateSetting('winSetsTarget', Number(e.target.value))}
-                          disabled={currentSettings.gameMode === 'speed'}
-                          className="w-full bg-slate-950/85 border border-white/10 rounded-lg px-2 py-1 text-slate-200 focus:outline-none focus:border-red-500 cursor-pointer disabled:opacity-50"
-                        >
-                          <option value={2}>2 Tam Set (Kısa)</option>
-                          <option value={3}>3 Tam Set (Normal)</option>
-                          <option value={4}>4 Tam Set (Uzun)</option>
-                        </select>
-                      </div>
-
-                      {/* Auto End Turn checkbox */}
-                      <label className="flex items-center gap-2 cursor-pointer select-none py-1">
-                        <input
-                          type="checkbox"
-                          checked={currentSettings.autoEndTurn}
-                          onChange={(e) => updateSetting('autoEndTurn', e.target.checked)}
-                          className="rounded border-white/10 text-red-600 focus:ring-red-500/20"
-                        />
-                        <span className="text-[9.5px] font-bold text-slate-300">Sırayı Otomatik Bitir</span>
-                      </label>
-                    </div>
-                  );
-                } else {
-                  // Non-host read-only summary view
-                  const modeLabel = currentSettings.gameMode === 'speed' ? '⚡ Hızlı Monopoly' : currentSettings.gameMode === 'chaos' ? '💥 Kaos Modu' : 'Klasik';
-                  const timeLabel = currentSettings.turnDuration === 99999 ? 'Sınırsız' : `${currentSettings.turnDuration}s`;
-                  return (
-                    <div className="grid grid-cols-2 gap-2 text-[10px] text-slate-300">
-                      <div>
-                        <span className="text-slate-500 block">Mod:</span>
-                        <span className="font-bold text-slate-200">{modeLabel}</span>
-                      </div>
-                      <div>
-                        <span className="text-slate-500 block">Tur Süresi:</span>
-                        <span className="font-bold text-slate-200">{timeLabel}</span>
-                      </div>
-                      <div>
-                        <span className="text-slate-500 block">Kazanma Koşulu:</span>
-                        <span className="font-bold text-slate-200">{currentSettings.winSetsTarget} Set</span>
-                      </div>
-                      <div>
-                        <span className="text-slate-500 block">Otomatik Bitir:</span>
-                        <span className="font-bold text-slate-200">{currentSettings.autoEndTurn ? 'Açık' : 'Kapalı'}</span>
-                      </div>
-                    </div>
-                  );
-                }
-              })()}
-            </div>
-
-            {/* Player list in lobby */}
-            <div className="space-y-1.5 max-h-40 overflow-y-auto">
-              {match.players.map((p) => {
-                const isMe = p.id === profile.id;
-                const isHost = match.players[0]?.id === profile.id;
-                return (
-                  <div key={p.id} className="flex items-center justify-between p-2 bg-black/30 border border-white/5 rounded-lg gap-2">
-                    <div className="flex items-center gap-2">
-                      <span className="font-bold text-xs text-slate-300">{p.username}</span>
-                      {match.players[0]?.id === p.id && <span className="text-[8px] text-amber-400 font-extrabold bg-amber-500/10 px-1 py-0.5 rounded">ODA SAHİBİ</span>}
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <span className="text-[8px] uppercase tracking-wider text-red-400 font-bold px-1.5 py-0.5 bg-red-500/10 rounded">
-                        {p.isBot ? 'BOT' : 'OYUNCU'}
-                      </span>
-                      {isHost && !isMe && (
-                        <button
-                          onClick={() => {
-                            if (sounds.playPlay) sounds.playPlay(profile.settings);
-                            if (isOffline) {
-                              // Offline bot kick
-                              setMatch(prev => {
-                                if (!prev) return null;
-                                return {
-                                  ...prev,
-                                  players: prev.players.filter(x => x.id !== p.id),
-                                  logs: [...prev.logs, { id: `kick-${Date.now()}`, message: `${p.username} pratik lobisinden çıkarıldı.`, timestamp: Date.now() }]
-                                };
-                              });
-                            } else {
-                              // Online kick player message
-                              socketRef.current?.send(JSON.stringify({ type: 'kick_player', roomId, userId: profile.id, targetUserId: p.id }));
-                            }
-                          }}
-                          className="text-[9px] bg-red-950/40 hover:bg-red-600 border border-red-500/25 text-red-400 hover:text-white px-2 py-0.5 rounded font-black transition-all"
-                        >
-                          AT
-                        </button>
-                      )}
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-
-            {isOffline && (
-              <div className="space-y-2.5 p-3 bg-black/30 border border-white/5 rounded-xl text-left">
+            {/* Lobby Header */}
+            <div className="flex flex-col md:flex-row items-center md:items-start justify-between border-b border-white/10 pb-4 gap-4">
+              <div className="flex items-center gap-3">
+                <span className="text-4xl">🎲</span>
                 <div>
-                  <label className="text-[9.5px] font-black text-slate-400 block mb-1">🤖 YZ Zorluk Derecesi</label>
-                  <div className="grid grid-cols-3 gap-1">
-                    {[
-                      { id: 'easy', label: 'Kolay' },
-                      { id: 'medium', label: 'Orta' },
-                      { id: 'hard', label: 'Zor' }
-                    ].map((diff) => (
-                      <button
-                        key={diff.id}
-                        onClick={() => setSelectedDifficulty(diff.id as any)}
-                        className={`py-1 rounded-lg text-[9px] font-black border transition-all ${selectedDifficulty === diff.id
-                          ? 'bg-amber-500 border-amber-400 text-slate-950 font-black shadow-md shadow-amber-500/10'
-                          : 'bg-slate-950/60 border-white/5 text-slate-400 hover:text-white'
-                          }`}
-                      >
-                        {diff.label}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
-                <div>
-                  <label className="text-[9.5px] font-black text-slate-400 block mb-1">🎭 Bot Kişilik Yapısı</label>
-                  <div className="grid grid-cols-3 gap-1">
-                    {[
-                      { id: 'strategic', label: 'Stratejik' },
-                      { id: 'aggressive', label: 'Agresif' },
-                      { id: 'banker', label: 'Tutumlu' }
-                    ].map((pers) => (
-                      <button
-                        key={pers.id}
-                        onClick={() => setSelectedPersonality(pers.id as any)}
-                        className={`py-1 rounded-lg text-[9px] font-black border transition-all ${selectedPersonality === pers.id
-                          ? 'bg-purple-600 border-purple-500 text-white font-black shadow-md shadow-purple-500/10'
-                          : 'bg-slate-950/60 border-white/5 text-slate-400 hover:text-white'
-                          }`}
-                      >
-                        {pers.label}
-                      </button>
-                    ))}
-                  </div>
+                  <h3 className="text-xl font-black text-white">Deal Master PRO Lobi Salonu</h3>
+                  <p className="text-xs text-slate-400">Oda Kodu: <span className="font-mono bg-white/5 border border-white/10 px-1.5 py-0.5 rounded text-amber-400 select-all font-bold">{roomId}</span></p>
                 </div>
               </div>
-            )}
+              <button
+                onClick={handleLeaveLobby}
+                className="px-4 py-1.5 bg-white/5 border border-white/10 hover:bg-red-500/10 hover:border-red-500/20 text-slate-300 hover:text-red-400 font-bold rounded-xl text-xs transition-all active:scale-95"
+              >
+                🚪 Lobiden Ayrıl
+              </button>
+            </div>
 
-            <div className="flex flex-col gap-2 pt-2">
-              {isOffline ? (
-                <button
-                  onClick={handleStartOfflineGame}
-                  className="w-full py-2.5 bg-gradient-to-r from-red-600 to-red-500 text-white font-black rounded-xl text-xs transition-all shadow-lg active:scale-95"
-                >
-                  Pratik Maçını Başlat
-                </button>
-              ) : (
-                (() => {
-                  const isHost = match.players[0]?.id === profile.id;
-                  if (isHost) {
+            {/* Lobby Content Grid */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+
+              {/* Left Column: Players List & Waiting Info */}
+              <div className="space-y-4">
+                <div className="flex items-center justify-between">
+                  <h4 className="text-sm font-bold text-slate-300 flex items-center gap-2">
+                    <span>👥</span> Oyuncu Listesi ({match.players.length}/4)
+                  </h4>
+                  {isOffline && (
+                    <span className="text-[10px] text-emerald-400 font-semibold bg-emerald-500/10 border border-emerald-500/20 px-2 py-0.5 rounded-full">
+                      Pratik Modu
+                    </span>
+                  )}
+                </div>
+
+                <div className="space-y-2 max-h-56 overflow-y-auto pr-1">
+                  {match.players.map((p, index) => {
+                    const isRoomHost = index === 0;
+                    const canKickThisPlayer = (isOffline || match.players[0]?.id === profile.id) && p.id !== profile.id;
+
                     return (
-                      <div className="flex flex-col gap-2">
+                      <div key={p.id} className="flex items-center justify-between p-2.5 bg-black/40 border border-white/5 rounded-xl transition-all hover:bg-black/50">
+                        <div className="flex items-center gap-2">
+                          <AvatarWithFrame
+                            avatarId={p.avatarId || 'avatar_classic'}
+                            avatarUrl={p.avatarUrl}
+                            frameId={p.profileFrame || 'frame_none'}
+                            sizeClassName="w-7 h-7 text-[10px]"
+                          />
+                          <span className="font-bold text-xs text-slate-200">{p.username}</span>
+                          {p.id === profile.id && (
+                            <span className="text-[8px] font-extrabold text-blue-400 bg-blue-500/10 border border-blue-500/20 px-1 py-0.2 rounded uppercase">
+                              Sen
+                            </span>
+                          )}
+                        </div>
+                        <div className="flex items-center gap-2">
+                          {isRoomHost ? (
+                            <span className="text-[8px] font-extrabold text-amber-400 bg-amber-500/10 border border-amber-500/20 px-1.5 py-0.5 rounded flex items-center gap-1">
+                              👑 ODA SAHİBİ
+                            </span>
+                          ) : p.isBot ? (
+                            <span className="text-[8px] font-extrabold text-indigo-400 bg-indigo-500/10 border border-indigo-500/20 px-1.5 py-0.5 rounded">
+                              BOT
+                            </span>
+                          ) : (
+                            <span className="text-[8px] font-extrabold text-slate-400 bg-slate-500/10 border border-slate-500/20 px-1.5 py-0.5 rounded">
+                              OYUNCU
+                            </span>
+                          )}
+
+                          {/* KICK Button */}
+                          {canKickThisPlayer && (
+                            <button
+                              onClick={() => handleKickPlayer(p.id)}
+                              title="Lobiden At"
+                              className="p-1 text-red-400 hover:text-white bg-red-500/10 hover:bg-red-500 border border-red-500/20 rounded-lg transition-all"
+                            >
+                              <span className="text-xs font-black">✕</span>
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+
+                {/* Status Notice Banner */}
+                {(!isOffline && match.players[0]?.id !== profile.id) ? (
+                  <div className="p-3 bg-amber-500/10 border border-amber-500/20 rounded-xl text-amber-400 text-[10px] flex items-center gap-2 animate-pulse">
+                    <span>⌛</span> Kurucunun Oyunu Başlatması Bekleniyor...
+                  </div>
+                ) : (
+                  match.players.length < 2 && (
+                    <div className="p-3 bg-blue-500/10 border border-blue-500/20 rounded-xl text-blue-400 text-[10px]">
+                      💡 En az 2 oyuncu olmalıdır. Yan taraftan bot ekleyerek hemen maça başlayabilirsiniz!
+                    </div>
+                  )
+                )}
+
+                {/* Host Control Buttons */}
+                {(isOffline || match.players[0]?.id === profile.id) && (
+                  <div className="flex flex-col gap-2 pt-2">
+                    {isOffline ? (
+                      <button
+                        onClick={handleStartOfflineGame}
+                        className="w-full py-2.5 bg-gradient-to-r from-red-600 to-red-500 hover:from-red-500 hover:to-red-400 text-white font-black rounded-xl text-xs transition-all shadow-lg active:scale-95"
+                      >
+                        Pratik Maçını Başlat 🚀
+                      </button>
+                    ) : (
+                      <>
                         <button
                           onClick={handleAddBotMultiplayer}
-                          className="w-full py-2 bg-white/5 border border-white/10 text-white font-bold rounded-xl text-xs transition-all hover:bg-white/10"
+                          disabled={match.players.length >= 4}
+                          className="w-full py-2 bg-white/5 border border-white/10 hover:bg-white/10 disabled:opacity-40 text-white font-bold rounded-xl text-xs transition-all"
                         >
-                          🤖 Bot Ekle
+                          🤖 Yapay Zeka Bot Ekle
                         </button>
                         <button
                           onClick={handleStartGameMultiplayer}
-                          className="w-full py-2.5 bg-gradient-to-r from-red-600 to-red-500 text-white font-black rounded-xl text-xs transition-all shadow-lg active:scale-95"
+                          disabled={match.players.length < 2}
+                          className="w-full py-2.5 bg-gradient-to-r from-red-600 to-red-500 hover:from-red-500 hover:to-red-400 disabled:opacity-40 text-white font-black rounded-xl text-xs transition-all shadow-lg active:scale-95"
                         >
                           Oyunu Başlat 🚀
                         </button>
-                      </div>
-                    );
-                  } else {
-                    return (
-                      <div className="py-3 px-4 bg-slate-950/60 border border-white/5 rounded-xl text-center">
-                        <span className="text-[10px] text-amber-400 font-extrabold uppercase animate-pulse block">
-                          ⌛ Kurucunun Oyunu Başlatması Bekleniyor...
+                      </>
+                    )}
+                  </div>
+                )}
+              </div>
+
+              {/* Right Column: Admin Settings & Game Modes */}
+              <div className="space-y-4 bg-black/20 border border-white/5 p-4 rounded-2xl flex flex-col justify-between">
+                <div>
+                  <h4 className="text-sm font-bold text-slate-300 flex items-center gap-2 mb-3">
+                    <span>⚙️</span> Oda Ayarları & Kurallar
+                  </h4>
+
+                  {/* Preset Game Modes */}
+                  <div className="space-y-2 mb-4">
+                    <span className="text-[10px] font-bold text-slate-400 block">OYUN MODU SEÇİMİ</span>
+                    <div className="grid grid-cols-3 gap-1.5">
+                      {[
+                        { id: 'classic', label: '🎲 Klasik', desc: 'Klasik Deal Master PRO kuralları.' },
+                        { id: 'chaos', label: '🌀 Kaos', desc: '4 Kart çekilir, sınırsız hamle, 4 set hedefi.' },
+                        { id: 'speed', label: '⚡ Hızlı', desc: '15sn tur süresi, 2 set tamamlayan kazanır!' },
+                      ].map((m) => {
+                        const isSelected = localSettings.gameMode === m.id;
+                        const disabled = !(isOffline || match.players[0]?.id === profile.id);
+                        return (
+                          <button
+                            key={m.id}
+                            disabled={disabled}
+                            onClick={() => changeMatchSettings({ gameMode: m.id as any })}
+                            title={m.desc}
+                            className={`p-2 rounded-xl text-center border transition-all text-xs flex flex-col items-center justify-center gap-1 ${isSelected
+                              ? 'bg-red-500/15 border-red-500/50 text-red-400 font-extrabold shadow-md'
+                              : 'bg-black/30 border-white/5 text-slate-400 hover:bg-black/40 disabled:hover:bg-black/30'
+                              }`}
+                          >
+                            <span>{m.label}</span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  {/* Settings Fields */}
+                  <div className="space-y-3">
+
+                    {/* Set Target Selection */}
+                    <div>
+                      <div className="flex justify-between items-center mb-1">
+                        <span className="text-[10px] font-bold text-slate-400">SET HEDEFİ</span>
+                        <span className="text-[10px] text-amber-400 font-bold bg-amber-500/10 px-1.5 py-0.2 rounded">
+                          {localSettings.targetSets} Set Tamamla
                         </span>
-                        <span className="text-[9px] text-slate-500 block mt-1">
-                          Oda kurucusu oyunu başlattığında otomatik olarak masaya bağlanacaksınız.
+                      </div>
+                      <div className="grid grid-cols-3 gap-1.5">
+                        {[2, 3, 4].map((s) => {
+                          const isSelected = localSettings.targetSets === s;
+                          const disabled = !(isOffline || match.players[0]?.id === profile.id) || localSettings.gameMode !== 'classic';
+                          return (
+                            <button
+                              key={s}
+                              disabled={disabled}
+                              onClick={() => changeMatchSettings({ targetSets: s })}
+                              className={`py-1 rounded-lg text-center border transition-all text-xs ${isSelected
+                                ? 'bg-red-500/10 border-red-500/30 text-red-400 font-bold'
+                                : 'bg-black/20 border-white/5 text-slate-400 hover:bg-black/30 disabled:opacity-40'
+                                }`}
+                            >
+                              {s} Set
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+
+                    {/* Turn Time Limit Selection */}
+                    <div>
+                      <div className="flex justify-between items-center mb-1">
+                        <span className="text-[10px] font-bold text-slate-400">TUR SÜRESİ LİMİTİ</span>
+                        <span className="text-[10px] text-amber-400 font-bold bg-amber-500/10 px-1.5 py-0.2 rounded">
+                          {localSettings.turnLimit === 'unlimited' ? 'Sınırsız' : localSettings.turnLimit === '15s' ? '15 Saniye' : localSettings.turnLimit === '30s' ? '30 Saniye' : '1 Dakika'}
                         </span>
                       </div>
-                    );
-                  }
-                })()
-              )}
+                      <div className="grid grid-cols-4 gap-1.5">
+                        {[
+                          { id: '15s', label: '15sn' },
+                          { id: '30s', label: '30sn' },
+                          { id: '1m', label: '1dk' },
+                          { id: 'unlimited', label: 'Sınırsız' },
+                        ].map((t) => {
+                          const isSelected = localSettings.turnLimit === t.id;
+                          const disabled = !(isOffline || match.players[0]?.id === profile.id) || localSettings.gameMode !== 'classic';
+                          return (
+                            <button
+                              key={t.id}
+                              disabled={disabled}
+                              onClick={() => changeMatchSettings({ turnLimit: t.id as any })}
+                              className={`py-1 rounded-lg text-center border transition-all text-[10px] ${isSelected
+                                ? 'bg-red-500/10 border-red-500/30 text-red-400 font-bold'
+                                : 'bg-black/20 border-white/5 text-slate-400 hover:bg-black/30 disabled:opacity-40'
+                                }`}
+                            >
+                              {t.label}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+
+                    {/* Auto End Turn Toggle */}
+                    <div className="flex items-center justify-between p-2 bg-black/20 border border-white/5 rounded-xl mt-2">
+                      <div>
+                        <span className="text-[10px] font-bold text-slate-300 block">OTOMATİK TUR SONU</span>
+                        <span className="text-[8px] text-slate-400">3 Hamle dolunca turu otomatik sonlandırır.</span>
+                      </div>
+                      <button
+                        disabled={!(isOffline || match.players[0]?.id === profile.id) || localSettings.gameMode !== 'classic'}
+                        onClick={() => changeMatchSettings({ autoEndTurn: !localSettings.autoEndTurn })}
+                        className={`px-3 py-1 text-[9px] font-extrabold rounded-lg border transition-all ${localSettings.autoEndTurn
+                          ? 'bg-emerald-500/20 border-emerald-500/30 text-emerald-400'
+                          : 'bg-black/40 border-white/10 text-slate-400'
+                          }`}
+                      >
+                        {localSettings.autoEndTurn ? 'AÇIK' : 'KAPALI'}
+                      </button>
+                    </div>
+
+                  </div>
+                </div>
+
+                {/* Footer mode summary */}
+                <div className="border-t border-white/5 pt-3 mt-4 text-[9px] text-slate-500">
+                  <span className="font-semibold text-slate-400 block uppercase mb-1">Seçili Kuralların Özeti</span>
+                  {localSettings.gameMode === 'chaos' && '🌀 Kaos Modu Kuralları Aktif: Her tur 4 kart çek, sınırsız hamle yap, 4 set tamamlayan maçı kazanır!'}
+                  {localSettings.gameMode === 'speed' && '⚡ Hızlı Mod Kuralları Aktif: 15 saniyelik hamle süresi, 2 set tamamlayan hızlıca zafere ulaşır!'}
+                  {localSettings.gameMode === 'classic' && `🎲 Klasik Özelleştirilmiş Maç: Kazanmak için ${localSettings.targetSets} set gerekir. Tur süresi: ${localSettings.turnLimit === 'unlimited' ? 'Sınırsız' : localSettings.turnLimit}. Otomatik tur sonu: ${localSettings.autoEndTurn ? 'Açık' : 'Kapalı'}.`}
+                </div>
+              </div>
+
             </div>
+
           </div>
         </div>
       )}
@@ -3578,28 +3683,43 @@ export const GameRoom: React.FC<Props> = ({ roomId, isOffline, profile, onLeaveR
                         setShowOpponentAssetsModal(true);
                       }
                     }}
-                    className={`flex-shrink-0 w-[155px] p-2 rounded-xl bg-slate-900/80 border backdrop-blur-sm transition-all cursor-pointer hover:border-purple-500/50 hover:bg-slate-850/90 relative ${isCurrentTurn
-                      ? 'border-amber-400 shadow-[0_0_12px_rgba(251,191,36,0.5)] ring-1 ring-amber-400/30'
+                    className={`flex-shrink-0 w-[155px] p-2 rounded-xl bg-slate-900/80 border backdrop-blur-sm transition-all cursor-pointer hover:border-purple-500/50 hover:bg-slate-850/90 ${isCurrentTurn
+                      ? 'border-amber-400 shadow-[0_0_20px_rgba(245,158,11,0.65)] ring-2 ring-amber-400 animate-pulse-gentle'
                       : 'border-white/5'
                       }`}
                   >
-                    {/* Floating emoji reaction bubble */}
-                    {reactions[p.id] && (
-                      <div
-                        key={reactions[p.id].id}
-                        className="absolute -top-10 left-1/2 transform -translate-x-1/2 bg-slate-950/90 border border-amber-400/50 px-2 py-1 rounded-full text-2xl animate-float-emoji shadow-2xl z-[9999] pointer-events-none"
-                      >
-                        {reactions[p.id].emoji}
-                      </div>
-                    )}
                     {/* Player Info Line */}
                     <div className="flex items-center gap-1.5 justify-between">
                       <div className="flex items-center gap-1.5 min-w-0">
-                        <AvatarWithFrame
-                          avatarId={p.avatarId || 'avatar_classic'}
-                          frameId={p.profileFrame || 'frame_none'}
-                          sizeClassName="w-8 h-8 text-[11px] flex-shrink-0"
-                        />
+                        {/* Avatar container with ripples, bot bubbles and speech indicators */}
+                        <div className="relative flex-shrink-0 select-none">
+                          {/* Pulsing speak halo ripple (Improvement #10) */}
+                          {(speakingList.includes(p.id) || (p as any).isSpeaking) && (
+                            <span className="absolute inset-0 rounded-full bg-emerald-500 animate-ping opacity-60 z-0 pointer-events-none" />
+                          )}
+                          <AvatarWithFrame
+                            avatarId={p.avatarId || 'avatar_classic'}
+                            avatarUrl={p.avatarUrl}
+                            frameId={p.profileFrame || 'frame_none'}
+                            sizeClassName={`w-8 h-8 text-[11px] flex-shrink-0 relative z-10 ${(speakingList.includes(p.id) || (p as any).isSpeaking) ? 'ring-2 ring-emerald-400' : ''
+                              }`}
+                          />
+                          {/* Audio wavebars animation (Improvement #10) */}
+                          {(speakingList.includes(p.id) || (p as any).isSpeaking) && (
+                            <div className="absolute -bottom-1 -right-1 flex gap-[1px] items-end bg-slate-950/90 border border-emerald-400/40 rounded px-0.5 py-0.2 z-20 pointer-events-none scale-90">
+                              <span className="w-[1.5px] bg-emerald-400 rounded-full animate-bounce" style={{ height: '5px', animationDuration: '0.4s' }} />
+                              <span className="w-[1.5px] bg-emerald-400 rounded-full animate-bounce" style={{ height: '8px', animationDuration: '0.6s' }} />
+                              <span className="w-[1.5px] bg-emerald-400 rounded-full animate-bounce" style={{ height: '4px', animationDuration: '0.3s' }} />
+                            </div>
+                          )}
+                          {/* Bot thinking indicator (Improvement #9) */}
+                          {p.isBot && isCurrentTurn && botIsThinking && (
+                            <div className="absolute -top-3.5 -left-3.5 bg-blue-600 border border-blue-400/50 text-[6.5px] text-white font-extrabold px-1 py-0.5 rounded-md animate-bounce flex items-center gap-0.5 shadow-md shadow-blue-500/20 z-20">
+                              <span>💬 Düşünüyor</span>
+                              <span className="animate-pulse">...</span>
+                            </div>
+                          )}
+                        </div>
                         <div className="truncate leading-none">
                           <span className="font-extrabold text-[10px] text-slate-100 truncate block flex items-center gap-1">
                             {p.username.split(' ')[0]}
@@ -3712,14 +3832,47 @@ export const GameRoom: React.FC<Props> = ({ roomId, isOffline, profile, onLeaveR
               <div className="text-center space-y-0.5">
                 <span className="text-[7.5px] text-slate-400 uppercase tracking-widest block font-bold">DESTE</span>
                 <div
-                  className="w-10 h-14 rounded-lg border border-amber-500/30 flex flex-col justify-between p-1 cursor-pointer select-none active:scale-95 transition-transform shadow-[0_4px_10px_rgba(245,158,11,0.15)] mx-auto"
+                  className={`w-10 h-14 rounded-lg flex flex-col justify-between p-1 cursor-pointer select-none active:scale-95 transition-all relative overflow-hidden mx-auto ${profile.settings.cardBack === 'back_cosmic'
+                    ? 'border border-indigo-500 shadow-[0_0_12px_rgba(99,102,241,0.6)]'
+                    : profile.settings.cardBack === 'back_gold'
+                      ? 'border border-amber-400 shadow-[0_0_15px_rgba(245,158,11,0.75)] shadow-yellow-500/30'
+                      : profile.settings.cardBack === 'back_neon'
+                        ? 'border border-pink-500 shadow-[0_0_12px_rgba(236,72,153,0.75)] animate-bounce-subtle'
+                        : 'border border-red-500/50 shadow-[0_4px_8px_rgba(239,68,68,0.25)]'
+                    }`}
                   style={{
-                    background: 'linear-gradient(135deg, #78350F 0%, #D97706 100%)',
+                    background: cardBackBg,
+                  }}
+                  onClick={() => {
+                    playPlaySound();
                   }}
                 >
-                  <span className="text-white/30 text-left text-[5px] font-black leading-none">DEAL</span>
-                  <span className="text-white text-xs font-black self-center">🎲</span>
-                  <span className="text-white/30 text-right text-[5px] font-black leading-none">DEAL</span>
+                  {/* Internal floating particles for custom cards */}
+                  {profile.settings.cardBack !== 'back_classic' && (
+                    <div className="absolute inset-0 pointer-events-none overflow-hidden">
+                      {[...Array(4)].map((_, idx) => (
+                        <span
+                          key={idx}
+                          className="absolute rounded-full animate-float"
+                          style={{
+                            left: `${15 + Math.random() * 70}%`,
+                            bottom: '0px',
+                            width: '2px',
+                            height: '2px',
+                            backgroundColor: profile.settings.cardBack === 'back_cosmic' ? '#818CF8' : profile.settings.cardBack === 'back_gold' ? '#FBBF24' : '#F472B6',
+                            boxShadow: `0 0 6px ${profile.settings.cardBack === 'back_cosmic' ? '#818CF8' : '#FBBF24'}`,
+                            animationDelay: `${idx * 0.3}s`,
+                            animationDuration: '1.5s',
+                          }}
+                        />
+                      ))}
+                    </div>
+                  )}
+                  <span className="text-white/20 text-left text-[4px] font-black leading-none tracking-widest">Deal Master PRO</span>
+                  <span className="text-white text-xs font-black self-center drop-shadow-md">
+                    {profile.settings.cardBack === 'back_cosmic' ? '★' : profile.settings.cardBack === 'back_gold' ? '♛' : '◆'}
+                  </span>
+                  <span className="text-white/20 text-right text-[4px] font-black leading-none tracking-widest">DEAL</span>
                 </div>
                 <span className="text-[7px] text-amber-300 font-black block bg-amber-500/10 px-1 py-0.5 rounded-full inline-block">
                   {match.deckCount} Kart
@@ -3739,14 +3892,12 @@ export const GameRoom: React.FC<Props> = ({ roomId, isOffline, profile, onLeaveR
                     </>
                   ) : (
                     <>
-                      {match.settings?.turnDuration && match.settings.turnDuration >= 99999 ? (
-                        <span className="text-amber-400 text-[14px] font-black">∞</span>
-                      ) : (
-                        <>
-                          <div className="absolute inset-0 rounded-full border-2 border-amber-400 border-t-transparent animate-spin opacity-50" />
-                          <span className="text-amber-400 text-[10px] font-black">{timeLeft}s</span>
-                        </>
+                      {match?.settings?.turnLimit !== 'unlimited' && (
+                        <div className="absolute inset-0 rounded-full border-2 border-amber-400 border-t-transparent animate-spin opacity-50" />
                       )}
+                      <span className="text-amber-400 text-[10px] font-black">
+                        {match?.settings?.turnLimit === 'unlimited' ? '∞' : `${timeLeft}s`}
+                      </span>
                     </>
                   )}
                 </div>
@@ -3757,40 +3908,32 @@ export const GameRoom: React.FC<Props> = ({ roomId, isOffline, profile, onLeaveR
                     : (match.players[match.turnIndex].id === profile.id ? 'SIRA SENDE' : match.players[match.turnIndex].username.split(' ')[0])}
                 </span>
                 <div className="flex flex-col items-center gap-0.5 mt-0.5">
-                  {match.settings?.gameMode === 'chaos' ? (
-                    <span className="text-[6.5px] font-extrabold px-1.5 py-0.5 rounded-full tracking-wider leading-none border text-purple-400 bg-purple-950/60 border-purple-500/30 animate-pulse">
-                      💥 SINIRSIZ HAMLE
-                    </span>
-                  ) : (
-                    <>
-                      <div className="flex gap-1 justify-center">
-                        {[1, 2, 3].map((num) => {
-                          const isPlayed = match.actionsPlayedThisTurn >= num;
-                          const rem = 3 - match.actionsPlayedThisTurn;
-                          return (
-                            <div
-                              key={num}
-                              className={`w-1.5 h-1.5 rounded-full border transition-all duration-300 ${isPlayed
-                                ? 'bg-red-500/80 border-red-400 shadow-[0_0_8px_rgba(239,68,68,0.5)]'
-                                : rem === 1
-                                  ? 'bg-amber-500/20 border-amber-400 animate-pulse'
-                                  : 'bg-emerald-500/20 border-emerald-400 shadow-[0_0_4px_rgba(16,185,129,0.2)]'
-                                }`}
-                              title={isPlayed ? 'Hamle Yapıldı' : 'Kalan Hamle'}
-                            />
-                          );
-                        })}
-                      </div>
-                      <span className={`text-[6.5px] font-extrabold px-1.5 py-0.5 rounded-full tracking-wider leading-none border transition-all ${(3 - match.actionsPlayedThisTurn) === 0
-                        ? 'text-red-400 bg-red-950/60 border-red-500/30 animate-pulse'
-                        : (3 - match.actionsPlayedThisTurn) === 1
-                          ? 'text-amber-400 bg-amber-950/60 border-amber-500/30 animate-pulse font-black'
-                          : 'text-emerald-400 bg-emerald-950/60 border-emerald-500/20'
-                        }`}>
-                        {3 - match.actionsPlayedThisTurn} HAMLE
-                      </span>
-                    </>
-                  )}
+                  <div className="flex gap-1 justify-center">
+                    {[1, 2, 3].map((num) => {
+                      const isPlayed = match.actionsPlayedThisTurn >= num;
+                      const rem = 3 - match.actionsPlayedThisTurn;
+                      return (
+                        <div
+                          key={num}
+                          className={`w-1.5 h-1.5 rounded-full border transition-all duration-300 ${isPlayed
+                            ? 'bg-red-500/80 border-red-400 shadow-[0_0_8px_rgba(239,68,68,0.5)]'
+                            : rem === 1
+                              ? 'bg-amber-500/20 border-amber-400 animate-pulse'
+                              : 'bg-emerald-500/20 border-emerald-400 shadow-[0_0_4px_rgba(16,185,129,0.2)]'
+                            }`}
+                          title={isPlayed ? 'Hamle Yapıldı' : 'Kalan Hamle'}
+                        />
+                      );
+                    })}
+                  </div>
+                  <span className={`text-[6.5px] font-extrabold px-1.5 py-0.5 rounded-full tracking-wider leading-none border transition-all ${(3 - match.actionsPlayedThisTurn) === 0
+                    ? 'text-red-400 bg-red-950/60 border-red-500/30 animate-pulse'
+                    : (3 - match.actionsPlayedThisTurn) === 1
+                      ? 'text-amber-400 bg-amber-950/60 border-amber-500/30 animate-pulse font-black'
+                      : 'text-emerald-400 bg-emerald-950/60 border-emerald-500/20'
+                    }`}>
+                    {3 - match.actionsPlayedThisTurn} HAMLE
+                  </span>
                 </div>
               </div>
 
@@ -3900,9 +4043,9 @@ export const GameRoom: React.FC<Props> = ({ roomId, isOffline, profile, onLeaveR
               </div>
 
               {/* BENİM ARAZİLERİM (My Property sets - matches Image 4) */}
-              <div className={`bg-[#090C12]/40 border border-white/5 rounded-xl flex-1 flex flex-col min-h-0 overflow-hidden transition-all ${isCompactLayout ? 'p-1 sm:p-1.5 space-y-1' : 'p-2 space-y-1.5'
+              <div className={`bg-[#090C12]/40 border border-white/5 rounded-xl flex-1 flex flex-col justify-center min-h-0 transition-all ${isCompactLayout ? 'p-1 sm:p-1.5 space-y-1' : 'p-2 space-y-1.5'
                 }`}>
-                <span className="text-[9px] text-slate-400 uppercase tracking-wider block font-bold px-1">
+                <span className="text-[9px] text-slate-400 uppercase tracking-wider block font-bold">
                   BENİM ARAZİLERİM ({countCompletedSets(localPlayer.properties)}/3 SET)
                 </span>
 
@@ -3980,9 +4123,9 @@ export const GameRoom: React.FC<Props> = ({ roomId, isOffline, profile, onLeaveR
                     }
                   }}
                   className={(() => {
-                    return `flex-1 rounded-xl transition-all flex flex-wrap overflow-y-auto items-start content-start min-h-0 ${isCompactLayout
-                      ? 'gap-3 sm:gap-4 p-1'
-                      : 'gap-4 sm:gap-5 p-1.5'
+                    return `flex-1 rounded-xl transition-all flex flex-wrap overflow-auto items-start content-start ${isCompactLayout
+                      ? 'gap-1.5 sm:gap-2 p-1.5 max-h-[145px] sm:max-h-[190px]'
+                      : 'gap-2.5 sm:gap-3 p-2 max-h-[225px] sm:max-h-[300px]'
                       } ${isDragOverProperties
                         ? 'bg-amber-500/10 border-2 border-dashed border-amber-400 shadow-[inset_0_0_15px_rgba(245,158,11,0.2)] animate-pulse'
                         : draggingCard
@@ -3997,62 +4140,97 @@ export const GameRoom: React.FC<Props> = ({ roomId, isOffline, profile, onLeaveR
                     const set = localPlayer.properties[col];
                     if (!set || set.cards.length === 0) return null;
                     const isCompleted = set.cards.length >= MAX_IN_SET[col];
-                    const overlapClass = isCompactLayout
-                      ? '-mt-[50px] sm:-mt-[66px] md:-mt-[74px]'
-                      : '-mt-[62px] sm:-mt-[78px] md:-mt-[91px]';
+                    const isExpanded = expandedPropertyColor === col;
 
                     const hasCompletedSet = Object.keys(localPlayer.properties).some((c) => {
                       const s = localPlayer.properties[c as CardColor];
                       return s && s.cards.length >= (MAX_IN_SET[c as CardColor] || 0);
                     });
 
+                    // Calculate accordion minimum heights
+                    const cardsWrapperHeight = isExpanded
+                      ? (isCompactLayout ? 'min-h-[140px] sm:min-h-[175px]' : 'min-h-[175px] sm:min-h-[210px]')
+                      : (isCompactLayout ? 'min-h-[46px] sm:min-h-[58px]' : 'min-h-[58px] sm:min-h-[78px]');
+
+                    const rentVal = calculateSetRent(set.cards, col, set.hasHouse, set.hasHotel);
+
+                    // Neon pulse styles for rent badge
+                    const neonColor = COLOR_HEX[col] || '#34d399';
+                    const badgePulseStyle = isCompleted ? {
+                      boxShadow: `0 0 12px ${neonColor}, inset 0 0 3px ${neonColor}`,
+                      borderColor: neonColor,
+                      textShadow: `0 0 4px ${neonColor}`,
+                    } : {};
+
                     return (
                       <div
                         key={col}
                         onClick={() => {
-                          if (isMyTurn) {
-                            playPlaySound();
-                            setManagedSetColor(col);
-                          }
+                          playPlaySound();
+                          setExpandedPropertyColor(isExpanded ? null : col);
                         }}
-                        className={`flex flex-col items-center rounded-lg transition-all cursor-pointer group relative shrink-0 ${isCompactLayout
-                          ? 'w-[36px] sm:w-[46px] md:w-[52px] pb-1 space-y-1'
-                          : 'w-[44px] sm:w-[54px] md:w-[62px] pb-1.5 space-y-1.5'
-                          } ${isCompleted
-                            ? 'border border-amber-400 bg-amber-500/[0.04] shadow-[0_0_12px_rgba(251,191,36,0.2)]'
-                            : 'border border-white/5 bg-slate-900/40 hover:border-white/20'
-                          }`}
+                        onMouseDown={(e) => {
+                          e.stopPropagation();
+                          handleStartPress(col, localPlayer.username, set);
+                        }}
+                        onMouseUp={handleEndPress}
+                        onMouseLeave={() => {
+                          handleEndPress();
+                          setAnalyzedProperty(null);
+                        }}
+                        onTouchStart={(e) => {
+                          e.stopPropagation();
+                          handleStartPress(col, localPlayer.username, set);
+                        }}
+                        onTouchEnd={handleEndPress}
+                        onMouseEnter={() => setAnalyzedProperty({
+                          color: col,
+                          ownerName: localPlayer.username,
+                          cardsCount: set.cards.length,
+                          hasHouse: set.hasHouse,
+                          hasHotel: set.hasHotel,
+                          currentRent: rentVal
+                        })}
+                        className={`flex flex-col items-center rounded-xl transition-all duration-300 w-[48px] sm:w-[60px] md:w-[72px] shrink-0 relative cursor-pointer select-none ${isExpanded
+                          ? 'ring-2 ring-amber-400 bg-slate-950/80 shadow-[0_0_15px_rgba(245,158,11,0.35)]'
+                          : isCompleted
+                            ? 'border border-amber-400 bg-amber-500/10 shadow-[0_0_12px_rgba(251,191,36,0.4)]'
+                            : 'border border-white/5 bg-slate-900/40 hover:bg-slate-900/60'
+                          } ${isCompactLayout ? 'p-1' : 'p-1.5'}`}
                       >
-                        {/* Interactive Gear Icon */}
-                        {isMyTurn && (
-                          <div className="absolute top-1 right-1 bg-yellow-500 hover:bg-yellow-600 text-slate-950 text-[6px] w-3 h-3 rounded-full flex items-center justify-center shadow-md z-45" title="Seti Yönet">
-                            ⚙️
-                          </div>
-                        )}
-
                         {/* Stack of actual medium property cards (with overlap) */}
-                        <div className={`relative flex flex-col items-center w-full transition-all ${isCompactLayout ? 'min-h-[46px] sm:min-h-[62px]' : 'min-h-[56px] sm:min-h-[74px]'
-                          }`}>
+                        <div className={`relative flex flex-col items-center w-full transition-all duration-300 ease-out ${cardsWrapperHeight}`}>
                           {set.cards.map((card, idx) => {
                             const isWild = card.isWildcard || card.type === 'wildcard';
+                            // Calculate accordion spacing
+                            const cardSpacingClass = idx > 0
+                              ? (isExpanded
+                                ? ''
+                                : (isCompactLayout ? '-mt-[162%]' : '-mt-[162%]')
+                              )
+                              : '';
+
+                            // Fan out accordion style (yelpaze)
+                            const fanStyle = isExpanded ? {
+                              transform: `translateY(${idx * 16}px) rotate(${(idx - (set.cards.length - 1) / 2) * 6}deg) translateX(${(idx - (set.cards.length - 1) / 2) * 8}px)`,
+                              zIndex: 10 + idx,
+                            } : {};
+
                             return (
                               <div
                                 key={card.id}
                                 onClick={(e) => {
+                                  // Prevent double-triggering parent toggle if clicking card
+                                  e.stopPropagation();
                                   playPlaySound();
-                                  if (isMyTurn) {
-                                    e.stopPropagation();
-                                    setManagedSetColor(col);
-                                  } else {
-                                    e.stopPropagation();
-                                    setFocusedCard(card);
-                                    setFocusedCardZoom(window.innerWidth < 640 ? 1.4 : 1.8);
-                                  }
+                                  // Odak Modu (Zoom) tamamen kaldırıldı. Kart tıklaması sadece set detayını açar/kapatır.
+                                  setExpandedPropertyColor(isExpanded ? null : col);
                                 }}
-                                className={`${idx > 0 ? overlapClass : ''} w-full transition-all hover:z-30 relative cursor-pointer hover:scale-105 animate-play-card`}
-                                title="Seti Yönet veya Kartı Odakla"
+                                className={`${cardSpacingClass} w-full transition-all duration-300 hover:z-30 relative cursor-pointer hover:scale-105 animate-play-card`}
+                                style={fanStyle}
+                                title="Kartı Odakla / Genişlet"
                               >
-                                <GameCard card={card} size="medium" className="w-full" activeEffect={cardEffects[card.id] || null} />
+                                <GameCard card={card} size="medium" activeEffect={cardEffects[card.id] || null} />
                                 {isWild && isMyTurn && (
                                   <div className="absolute top-1 right-1 bg-yellow-500 text-slate-950 text-[6px] font-black w-4.5 h-4.5 rounded-full flex items-center justify-center animate-bounce shadow z-10" title="Grup Değiştirebilir">
                                     🔄
@@ -4061,25 +4239,21 @@ export const GameRoom: React.FC<Props> = ({ roomId, isOffline, profile, onLeaveR
                               </div>
                             );
                           })}
+
+
                         </div>
 
-                        {/* Unified Info Pill Badge - Stacked Vertically */}
-                        <div className="w-full text-center px-0.5 select-none flex flex-col gap-0.5 mt-1">
-                          <span className={`inline-block font-black px-1.5 py-0.5 rounded leading-none text-center shadow-sm whitespace-nowrap truncate w-full ${isCompleted
-                            ? 'bg-amber-400 text-slate-950 text-[6px] sm:text-[7px] font-black'
-                            : 'bg-slate-800 text-slate-300 text-[5.5px] sm:text-[6.5px] border border-white/5'
-                            }`}>
-                            {isCompleted
-                              ? (isCompactLayout ? '👑 SET' : '👑 TAM SET')
-                              : `${set.cards.length}/${MAX_IN_SET[col]}`
-                            }
-                          </span>
-                          <span className="inline-block bg-emerald-600/90 border border-emerald-500/20 text-white text-[5.5px] sm:text-[6.5px] font-black px-1.5 py-0.5 rounded leading-none text-center shadow-sm whitespace-nowrap truncate w-full">
-                            {isCompactLayout
-                              ? `${calculateSetRent(set.cards, col, set.hasHouse, set.hasHotel)}M`
-                              : `${calculateSetRent(set.cards, col, set.hasHouse, set.hasHotel)}M Kira`
-                            }
-                          </span>
+                        {/* Unified Neon Glowing Rent Badge */}
+                        <div
+                          className={`mt-1.5 px-2 w-full rounded-full flex items-center justify-between text-[8px] font-black border transition-all duration-300 select-none ${isCompleted
+                            ? 'bg-slate-950/95 border-emerald-400/50 text-white animate-pulse'
+                            : 'bg-slate-950/80 border-white/5 text-emerald-400'
+                            }`}
+                          style={{ height: '18px', ...badgePulseStyle }}
+                        >
+                          <span className="shrink-0 font-extrabold">{isCompleted ? '👑' : `${set.cards.length}/${MAX_IN_SET[col]}`}</span>
+                          <div className="h-2 w-[1px] bg-white/20 shrink-0" />
+                          <span className="font-mono text-[8.5px] font-black shrink-0">{rentVal}M</span>
                         </div>
                       </div>
                     );
@@ -4094,6 +4268,104 @@ export const GameRoom: React.FC<Props> = ({ roomId, isOffline, profile, onLeaveR
                     </div>
                   )}
                 </div>
+
+                {/* Mobile Bottom-Sheet Console Dock */}
+                <AnimatePresence>
+                  {expandedPropertyColor && (() => {
+                    const activeCol = expandedPropertyColor;
+                    const activeSet = localPlayer.properties[activeCol];
+                    if (!activeSet || activeSet.cards.length === 0) return null;
+                    const isSetComp = activeSet.cards.length >= MAX_IN_SET[activeCol];
+                    const activeRent = calculateSetRent(activeSet.cards, activeCol, activeSet.hasHouse, activeSet.hasHotel);
+                    const colorLabel = COLOR_LABELS[activeCol] || activeCol;
+                    const colorHex = COLOR_HEX[activeCol] || '#ffffff';
+
+                    return (
+                      <motion.div
+                        initial={{ opacity: 0, y: 30, scale: 0.95 }}
+                        animate={{ opacity: 1, y: 0, scale: 1 }}
+                        exit={{ opacity: 0, y: 20, scale: 0.95 }}
+                        transition={{ type: 'spring', stiffness: 350, damping: 28 }}
+                        className="mt-2 w-full bg-slate-950/95 border border-white/10 rounded-xl p-2.5 flex flex-col gap-2 shadow-[0_4px_24px_rgba(0,0,0,0.8)] relative overflow-hidden backdrop-blur-md z-30"
+                      >
+                        {/* Subtle Color Accent Line */}
+                        <div className="absolute top-0 left-0 right-0 h-[3px]" style={{ backgroundColor: colorHex }} />
+
+                        {/* Bottom Sheet Header */}
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-1.5">
+                            <div className="w-2.5 h-2.5 rounded-full border border-white/20 shadow-sm" style={{ backgroundColor: colorHex }} />
+                            <span className="text-[9px] font-black text-white tracking-wide uppercase">
+                              {colorLabel} SETİ DETAYI
+                            </span>
+                          </div>
+
+                          {/* Close / Collapse button */}
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              playPlaySound();
+                              setExpandedPropertyColor(null);
+                            }}
+                            className="text-slate-400 hover:text-white text-[9px] bg-white/5 hover:bg-white/10 w-4.5 h-4.5 rounded-full flex items-center justify-center transition-colors cursor-pointer"
+                          >
+                            ✕
+                          </button>
+                        </div>
+
+                        {/* Grid Layout of stats */}
+                        <div className="grid grid-cols-3 gap-1.5 items-center">
+                          {/* Card Count Block */}
+                          <div className="bg-white/[0.03] border border-white/5 rounded-lg p-1 flex flex-col items-center justify-center text-center">
+                            <span className="text-[10px] leading-none mb-0.5">🎴</span>
+                            <span className="text-[6.5px] text-slate-400 uppercase font-black tracking-tight leading-none mb-0.5">KARTLAR</span>
+                            <span className={`text-[9px] font-black leading-none ${isSetComp ? 'text-amber-400' : 'text-slate-200'}`}>
+                              {activeSet.cards.length}/{MAX_IN_SET[activeCol]} {isSetComp && '👑'}
+                            </span>
+                          </div>
+
+                          {/* Rent Value Block */}
+                          <div className="bg-white/[0.03] border border-white/5 rounded-lg p-1 flex flex-col items-center justify-center text-center relative overflow-hidden">
+                            <span className="text-[10px] leading-none mb-0.5 animate-pulse">💰</span>
+                            <span className="text-[6.5px] text-slate-400 uppercase font-black tracking-tight leading-none mb-0.5">KİRA GÜCÜ</span>
+                            <motion.span
+                              key={activeRent}
+                              initial={{ scale: 1.3, y: -2 }}
+                              animate={{ scale: 1, y: 0 }}
+                              className="text-[10px] font-black text-emerald-400 leading-none font-mono drop-shadow-[0_0_8px_rgba(52,211,153,0.3)]"
+                            >
+                              {activeRent}M
+                            </motion.span>
+                          </div>
+
+                          {/* House/Hotel count Block */}
+                          <div className="bg-white/[0.03] border border-white/5 rounded-lg p-1 flex flex-col items-center justify-center text-center">
+                            <span className="text-[10px] leading-none mb-0.5">🏠</span>
+                            <span className="text-[6.5px] text-slate-400 uppercase font-black tracking-tight leading-none mb-0.5">BİNALAR</span>
+                            <span className="text-[8.5px] font-black text-amber-300 leading-none truncate w-full">
+                              {activeSet.hasHotel ? '🏨 Otel' : activeSet.hasHouse ? '🏠 Ev' : 'Yok'}
+                            </span>
+                          </div>
+                        </div>
+
+                        {/* Large Action Button */}
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            playPlaySound();
+                            setManagedSetColor(activeCol);
+                          }}
+                          className={`w-full py-1.5 rounded-lg font-black text-[9px] flex items-center justify-center gap-1 transition-all border uppercase tracking-wider select-none ${isMyTurn
+                            ? 'bg-gradient-to-r from-amber-500 to-yellow-500 hover:from-amber-400 hover:to-yellow-400 text-slate-950 border-amber-300 shadow-[0_4px_12px_rgba(245,158,11,0.2)] active:scale-95 cursor-pointer'
+                            : 'bg-slate-900 text-slate-500 border-white/5 cursor-not-allowed opacity-50'
+                            }`}
+                        >
+                          <span>⚙️ SETİ DÜZENLE / BİNA YAP</span>
+                        </button>
+                      </motion.div>
+                    );
+                  })()}
+                </AnimatePresence>
               </div>
             </div>
 
@@ -4123,28 +4395,11 @@ export const GameRoom: React.FC<Props> = ({ roomId, isOffline, profile, onLeaveR
                   playPlaySound();
                   setIsHandExpanded(!isHandExpanded);
                 }}
-                className="flex items-center gap-1 text-[10px] font-extrabold text-slate-300 hover:text-white flex-shrink-0"
+                className="flex items-center gap-1 text-[10px] font-extrabold text-slate-300 hover:text-white"
               >
                 <span>🎴 KARTLARIM ({localPlayer.hand.length})</span>
                 <span className="text-[8px]">{isHandExpanded ? '▼' : '▲'}</span>
               </button>
-
-              {/* Quick Reactions Bar */}
-              <div className="flex items-center gap-1.5 bg-slate-950/80 border border-white/10 rounded-full px-2 py-0.5 shadow-lg select-none">
-                {['💸', '🛡️', '😂', '😠', '🎉', '🤝'].map((emoji) => (
-                  <button
-                    key={emoji}
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      sendReaction(emoji);
-                    }}
-                    className="text-xs hover:scale-130 active:scale-90 transition-all p-0.5 cursor-pointer duration-150"
-                    title={`Reaksiyon Gönder: ${emoji}`}
-                  >
-                    {emoji}
-                  </button>
-                ))}
-              </div>
 
               {/* Active Action Controls */}
               <div className="flex items-center gap-1.5">
@@ -4243,7 +4498,7 @@ export const GameRoom: React.FC<Props> = ({ roomId, isOffline, profile, onLeaveR
                             if (match.activeActionRequest) return;
                             handleTouchEnd(e);
                           }}
-                          className={`cursor-grab active:cursor-grabbing card-hover-effect select-none flex-shrink-0 ${draggingCard?.id === card.id ? 'opacity-40 scale-95' : ''
+                          className={`cursor-grab active:cursor-grabbing transition-transform hover:-translate-y-2 select-none flex-shrink-0 ${draggingCard?.id === card.id ? 'opacity-40 scale-95' : ''
                             }`}
                         >
                           <GameCard
@@ -4253,6 +4508,7 @@ export const GameRoom: React.FC<Props> = ({ roomId, isOffline, profile, onLeaveR
                             activeEffect={cardEffects[card.id] || null}
                             onClick={() => {
                               if (match.activeActionRequest) return;
+                              triggerHaptic('light');
                               setSelectedCard(card);
                               setShowCardMenu(true);
                               playPlaySound();
@@ -4326,33 +4582,117 @@ export const GameRoom: React.FC<Props> = ({ roomId, isOffline, profile, onLeaveR
         </div>
       )}
 
-      {/* GAME OVER STATE */}
+      {/* GAME OVER STATE - Premium Maç Özeti Kartı */}
       {match.status === 'finished' && (
-        <div className="flex-1 p-4 flex flex-col justify-center items-center z-10 relative">
-          <div className="bg-slate-900/90 border border-white/10 backdrop-blur-lg rounded-2xl p-6 text-center space-y-4 max-w-sm w-full shadow-2xl">
-            <span className="text-5xl animate-bounce block">👑</span>
-            <h3 className="text-2xl font-black text-red-500">OYUN BİTTİ!</h3>
+        <div className="fixed inset-0 bg-slate-950/90 backdrop-blur-md flex flex-col justify-center items-center p-4 z-50 overflow-y-auto">
+          <motion.div
+            initial={{ scale: 0.9, opacity: 0, y: 50 }}
+            animate={{ scale: 1, opacity: 1, y: 0 }}
+            transition={{ type: 'spring', damping: 20 }}
+            className="bg-slate-900/95 border border-slate-800 rounded-3xl p-6 text-center space-y-5 max-w-md w-full shadow-2xl relative overflow-hidden"
+          >
+            {/* Ambient Background Glow */}
+            <div className={`absolute -top-12 -left-12 w-32 h-32 rounded-full blur-3xl opacity-25 ${match.winnerId === profile.id ? 'bg-amber-400' : 'bg-red-500'
+              }`} />
+            <div className={`absolute -bottom-12 -right-12 w-32 h-32 rounded-full blur-3xl opacity-25 ${match.winnerId === profile.id ? 'bg-emerald-400' : 'bg-indigo-500'
+              }`} />
 
-            {(() => {
-              const winner = match.players.find((p) => p.id === match.winnerId);
-              return (
-                <div className="bg-black/40 border border-white/5 p-4 rounded-xl">
-                  <span className="text-slate-400 text-[10px] block mb-1 uppercase tracking-wider font-bold">Kazanan Şampiyon:</span>
-                  <span className="font-extrabold text-xl text-white">{winner?.username}</span>
+            {/* Crown or Defeat Icon */}
+            <div className="relative">
+              {match.winnerId === profile.id ? (
+                <div className="w-20 h-20 mx-auto rounded-full bg-gradient-to-br from-amber-400 to-yellow-600 border border-white/20 flex items-center justify-center shadow-[0_0_25px_rgba(245,158,11,0.6)] animate-bounce">
+                  <span className="text-4xl">👑</span>
                 </div>
-              );
-            })()}
+              ) : (
+                <div className="w-20 h-20 mx-auto rounded-full bg-gradient-to-br from-slate-700 to-slate-900 border border-white/10 flex items-center justify-center shadow-lg animate-pulse">
+                  <span className="text-4xl">💔</span>
+                </div>
+              )}
+            </div>
 
+            {/* Header Title */}
+            <div>
+              <span className="text-[10px] font-black tracking-widest text-amber-400 uppercase block">Deal Master PRO</span>
+              <h3 className="text-2xl font-black text-white mt-1 uppercase tracking-tight">Maç Özeti</h3>
+            </div>
+
+            {/* Result Tag */}
+            <div className={`py-1.5 px-4 rounded-full mx-auto w-fit text-[11px] font-black tracking-widest uppercase border shadow ${match.winnerId === profile.id
+              ? 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30'
+              : 'bg-red-500/15 text-red-400 border-red-500/30'
+              }`}>
+              {match.winnerId === profile.id ? 'MAÇI KAZANDINIZ! 🎉' : 'MAÇI KAYBETTİNİZ! 🥺'}
+            </div>
+
+            {/* Winner Details */}
+            <div className="bg-slate-950/60 border border-white/5 p-3.5 rounded-2xl space-y-1 select-none">
+              <span className="text-slate-500 text-[8px] block uppercase tracking-wider font-extrabold">Şampiyon</span>
+              <span className="font-black text-lg text-white">
+                {match.players.find((p) => p.id === match.winnerId)?.username}
+              </span>
+            </div>
+
+            {/* Stats & Progression Metrics */}
+            <div className="grid grid-cols-2 gap-3">
+              {/* Gold Coins Gained */}
+              <div className="bg-slate-950/40 border border-white/5 p-3 rounded-xl flex flex-col items-center justify-center space-y-1">
+                <span className="text-[20px] animate-pulse">🪙</span>
+                <span className="text-[8px] text-slate-500 font-bold uppercase tracking-wider">Kazanılan Altın</span>
+                <span className="font-extrabold text-sm text-amber-400">+{match.winnerId === profile.id ? '150' : '30'} Altın</span>
+              </div>
+
+              {/* XP Gained */}
+              <div className="bg-slate-950/40 border border-white/5 p-3 rounded-xl flex flex-col items-center justify-center space-y-1">
+                <span className="text-[20px] animate-pulse">💎</span>
+                <span className="text-[8px] text-slate-500 font-bold uppercase tracking-wider">Kazanılan XP</span>
+                <span className="font-extrabold text-sm text-indigo-400">+{match.winnerId === profile.id ? '100' : '30'} XP</span>
+              </div>
+            </div>
+
+            {/* Level & Progression Progress Bar */}
+            <div className="bg-slate-950/30 border border-white/5 p-4 rounded-2xl space-y-2 select-none text-left">
+              <div className="flex justify-between items-center">
+                <div className="flex items-center gap-1.5">
+                  <span className="text-slate-500 text-[9px] font-extrabold uppercase">Seviye İlerlemesi</span>
+                  <span className="px-1.5 py-0.2 bg-indigo-500/20 text-indigo-400 rounded text-[8px] font-black uppercase">
+                    Seviye {Math.floor(profile.xp / 100) + 1}
+                  </span>
+                </div>
+                <span className="text-[9px] font-bold text-slate-400">{profile.xp % 100} / 100 XP</span>
+              </div>
+              <div className="w-full h-2 bg-slate-950 rounded-full overflow-hidden border border-white/5 relative">
+                <motion.div
+                  initial={{ width: 0 }}
+                  animate={{ width: `${profile.xp % 100}%` }}
+                  transition={{ duration: 1.2, ease: 'easeOut' }}
+                  className="h-full rounded-full bg-gradient-to-r from-indigo-500 to-purple-600 shadow-[0_0_12px_rgba(99,102,241,0.5)]"
+                />
+              </div>
+            </div>
+
+            {/* Daily Quest Indicator */}
+            <div className="bg-slate-950/20 border border-white/5 p-3.5 rounded-2xl space-y-1.5 text-left select-none">
+              <span className="text-slate-500 text-[8px] font-extrabold uppercase tracking-wider block">Günlük Görev Güncellemesi</span>
+              <div className="flex items-center justify-between text-[9px] font-medium text-slate-300">
+                <div className="flex items-center gap-2">
+                  <span className="text-emerald-400">✓</span>
+                  <span>Bot Karşılaşması Tamamla</span>
+                </div>
+                <span className="font-mono text-emerald-400 font-extrabold">Başarılı</span>
+              </div>
+            </div>
+
+            {/* Exit Action Button */}
             <button
               onClick={() => {
                 playPlaySound();
                 onLeaveRoom();
               }}
-              className="w-full py-2.5 bg-red-600 hover:bg-red-500 text-white font-black rounded-xl text-xs transition-all shadow-lg shadow-red-600/20 active:scale-95"
+              className="w-full py-3 bg-gradient-to-r from-red-600 to-red-700 hover:from-red-500 hover:to-red-600 text-white font-black rounded-2xl text-xs transition-all shadow-lg shadow-red-600/30 active:scale-95 cursor-pointer uppercase tracking-wider"
             >
               Ana Menüye Dön
             </button>
-          </div>
+          </motion.div>
         </div>
       )}
 
@@ -4707,8 +5047,13 @@ export const GameRoom: React.FC<Props> = ({ roomId, isOffline, profile, onLeaveR
                       disabled={!hasProp}
                       onClick={() => {
                         const payload = useDoubleRent ? { isDoubleRent: true } : undefined;
-                        if (isOffline) handleOfflinePlayCard(rentColorPick.id, 'action', col, payload);
-                        else handlePlayCardMultiplayer(rentColorPick.id, 'action', col, payload);
+                        const isWildRent = rentColorPick.name === 'Her Renk Kira Kartı' || !rentColorPick.color;
+                        if (isWildRent) {
+                          setRentTargetSelect({ card: rentColorPick, color: col, payload });
+                        } else {
+                          if (isOffline) handleOfflinePlayCard(rentColorPick.id, 'action', col, payload);
+                          else handlePlayCardMultiplayer(rentColorPick.id, 'action', col, payload);
+                        }
                         setRentColorPick(null);
                         setUseDoubleRent(false);
                       }}
@@ -4746,6 +5091,64 @@ export const GameRoom: React.FC<Props> = ({ roomId, isOffline, profile, onLeaveR
 
             <button
               onClick={() => setRentColorPick(null)}
+              className="w-full py-1.5 bg-transparent hover:bg-white/5 text-slate-500 font-bold rounded-xl text-[10px] transition-all"
+            >
+              İptal Et
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Rent Target selector prompt (for Her Renk Kira Kartı) */}
+      {rentTargetSelect && (
+        <div className="fixed inset-0 bg-black/85 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-fade-in">
+          <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 w-full max-w-sm space-y-4 shadow-2xl">
+            <div className="text-center border-b border-white/5 pb-2">
+              <span className="text-[10px] font-bold text-amber-500 block uppercase tracking-wider">Kira Hedefi Seç</span>
+              <h3 className="text-xs text-slate-400 mt-1">Hangi rakipten kira tahsil etmek istersiniz?</h3>
+              <p className="text-[9px] text-slate-500 mt-1">Her Renk Kira Kartı sadece seçtiğiniz 1 oyuncudan kira tahsil eder.</p>
+            </div>
+
+            <div className="space-y-2.5 max-h-[350px] overflow-y-auto pr-1 scrollbar-thin">
+              {otherPlayers.map((op) => {
+                const bankTotal = op.bank.reduce((sum, c) => sum + c.value, 0);
+                const totalProperties = Object.values(op.properties).reduce((acc: number, set: any) => acc + (set?.cards?.length || 0), 0);
+                const completedSets = countCompletedSets(op.properties);
+
+                return (
+                  <button
+                    key={op.id}
+                    onClick={() => {
+                      const finalPayload = { ...rentTargetSelect.payload, targetPlayerId: op.id };
+                      if (isOffline) handleOfflinePlayCard(rentTargetSelect.card.id, 'action', rentTargetSelect.color, finalPayload);
+                      else handlePlayCardMultiplayer(rentTargetSelect.card.id, 'action', rentTargetSelect.color, finalPayload);
+                      setRentTargetSelect(null);
+                    }}
+                    className="w-full p-3.5 rounded-2xl border border-white/5 hover:border-amber-500 bg-slate-950/80 hover:bg-slate-900 text-white transition-all text-left flex flex-col space-y-2.5 shadow-lg"
+                  >
+                    <div className="flex justify-between items-center w-full">
+                      <div className="flex items-center gap-2">
+                        <div className="w-7 h-7 rounded-full bg-slate-800 border border-white/10 flex items-center justify-center text-sm shadow">
+                          {op.isBot ? '🤖' : '👤'}
+                        </div>
+                        <div className="flex flex-col">
+                          <span className="text-xs font-black tracking-tight">{op.username}</span>
+                          <span className="text-[8px] text-slate-400 font-bold uppercase tracking-wider">
+                            {op.isBot ? 'Yapay Zeka' : 'Oyuncu'}
+                          </span>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-1.5 text-[10px] font-mono text-emerald-400 font-bold bg-emerald-500/10 px-2 py-0.5 rounded-full border border-emerald-500/15">
+                        💵 {bankTotal}M
+                      </div>
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+
+            <button
+              onClick={() => setRentTargetSelect(null)}
               className="w-full py-1.5 bg-transparent hover:bg-white/5 text-slate-500 font-bold rounded-xl text-[10px] transition-all"
             >
               İptal Et
@@ -5232,12 +5635,43 @@ export const GameRoom: React.FC<Props> = ({ roomId, isOffline, profile, onLeaveR
         </div>
       )}
 
+      {/* Custom Alert Modal */}
+      {customAlert && (
+        <div className="fixed inset-0 bg-black/85 backdrop-blur-sm flex items-center justify-center p-4 z-[999] animate-fade-in">
+          <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 w-full max-w-sm space-y-4 shadow-2xl relative overflow-hidden">
+            {/* Top accent light */}
+            <div className="absolute top-0 inset-x-0 h-[3px] bg-gradient-to-r from-red-500 via-amber-500 to-red-500"></div>
+
+            <div className="text-center space-y-3">
+              <div className="w-12 h-12 rounded-full bg-amber-500/10 border border-amber-500/20 flex items-center justify-center mx-auto text-amber-500 text-xl animate-pulse">
+                ⚠️
+              </div>
+              <div className="space-y-1">
+                <h3 className="text-sm font-extrabold text-slate-100 tracking-tight uppercase">
+                  {customAlert.title}
+                </h3>
+                <p className="text-xs text-slate-300 font-medium leading-relaxed">
+                  {customAlert.message}
+                </p>
+              </div>
+            </div>
+
+            <button
+              onClick={() => setCustomAlert(null)}
+              className="w-full py-2.5 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-slate-950 font-black rounded-xl text-xs transition-all shadow-md active:scale-98 tracking-wide uppercase"
+            >
+              Tamam
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* 3. Multiplayer Payment Select interface overlay (matches Image 2, 3) */}
-      {match.activeActionRequest && match.activeActionRequest.targetPlayerId === profile.id && (
+      {myActiveRequest && (
         <div className="fixed inset-0 bg-black/85 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-fade-in">
           <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 w-full max-w-sm space-y-4 shadow-2xl">
 
-            {match.activeActionRequest.type === 'just-say-no' ? (
+            {myActiveRequest.type === 'just-say-no' ? (
               // JSN DEFENSE INTERFACE
               <div className="space-y-4">
                 <div className="text-center space-y-1 border-b border-slate-800 pb-3">
@@ -5247,7 +5681,7 @@ export const GameRoom: React.FC<Props> = ({ roomId, isOffline, profile, onLeaveR
                   </h3>
                   <p className="text-xs text-slate-400 mt-2">
                     {(() => {
-                      const req = match.activeActionRequest;
+                      const req = myActiveRequest;
                       const jsnCount = req.jsnCount || 0;
                       const sPlayer = match.players.find((p: any) => p.id === req.sourcePlayerId);
                       const actName = req.actionCard?.name || "Önemli Aksiyon";
@@ -5272,7 +5706,7 @@ export const GameRoom: React.FC<Props> = ({ roomId, isOffline, profile, onLeaveR
                 <div className="bg-black/35 border border-slate-800 rounded-xl p-3 text-xs text-slate-400 space-y-1 text-center">
                   <span className="text-[10px] font-bold text-slate-500 uppercase block mb-1">Hamle Detayı:</span>
                   {(() => {
-                    const req = match.activeActionRequest;
+                    const req = myActiveRequest;
                     const type = req.originalAction?.type || req.actionCard?.actionType || req.actionCard?.type;
                     if (type === 'sly-deal') return "Sinsi Anlaşma: Seçtiğin bir mülk çalınacak.";
                     if (type === 'deal-breaker') return "Anlaşma Bozan: Tamamlanmış bir setin çalınacak.";
@@ -5316,10 +5750,10 @@ export const GameRoom: React.FC<Props> = ({ roomId, isOffline, profile, onLeaveR
                 <div className="text-center space-y-1 border-b border-slate-800 pb-3">
                   <span className="text-[10px] font-bold text-red-400 block uppercase animate-pulse">⚠️ BORÇ TAHSİLATI</span>
                   <h3 className="text-sm font-bold text-slate-200">
-                    Sana karşı {match.activeActionRequest.actionCard.name} oynandı!
+                    Sana karşı {myActiveRequest.actionCard.name} oynandı!
                   </h3>
                   <p className="text-xs text-slate-400 mt-1">
-                    İstenen Toplam Miktar: <strong className="text-red-400">{match.activeActionRequest.amountDue}M</strong>
+                    İstenen Toplam Miktar: <strong className="text-red-400">{myActiveRequest.amountDue}M</strong>
                   </p>
                 </div>
 
@@ -5328,7 +5762,7 @@ export const GameRoom: React.FC<Props> = ({ roomId, isOffline, profile, onLeaveR
                   <div className="flex gap-1.5 justify-between">
                     <button
                       onClick={() => {
-                        const due = match.activeActionRequest?.amountDue || 0;
+                        const due = myActiveRequest?.amountDue || 0;
 
                         const bankCards = localPlayer.bank.map((c) => ({ id: c.id, value: c.value }));
                         const propertyCards: { id: string; value: number }[] = [];
@@ -5530,8 +5964,8 @@ export const GameRoom: React.FC<Props> = ({ roomId, isOffline, profile, onLeaveR
                     return (
                       <div className="flex justify-between items-center text-[9px] font-bold text-slate-300 bg-white/5 p-2 rounded-lg">
                         <span>Seçilen Toplam:</span>
-                        <span className={total >= (match.activeActionRequest?.amountDue || 0) ? 'text-emerald-400 font-black' : 'text-amber-400'}>
-                          {total}M / {match.activeActionRequest?.amountDue}M
+                        <span className={total >= (myActiveRequest?.amountDue || 0) ? 'text-emerald-400 font-black' : 'text-amber-400'}>
+                          {total}M / {myActiveRequest?.amountDue}M
                         </span>
                       </div>
                     );
@@ -6020,35 +6454,45 @@ export const GameRoom: React.FC<Props> = ({ roomId, isOffline, profile, onLeaveR
             initial={{ opacity: 0, y: -50, scale: 0.9 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: -20, scale: 0.95 }}
-            className="fixed top-16 left-1/2 -translate-x-1/2 w-[90vw] max-w-sm bg-slate-900/95 border-2 border-amber-500/50 backdrop-blur-md rounded-2xl p-4 shadow-2xl z-50 pointer-events-auto flex flex-col gap-3"
+            className={`fixed top-16 left-1/2 -translate-x-1/2 w-[90vw] max-w-sm bg-slate-950/80 border backdrop-blur-lg rounded-2xl p-4 shadow-[0_20px_50px_rgba(0,0,0,0.8)] z-50 pointer-events-auto flex flex-col gap-3 transition-colors duration-300 ${actionToast.type === 'rent'
+              ? 'border-emerald-500/30 shadow-[0_0_20px_rgba(16,185,129,0.1)]'
+              : actionToast.type === 'info'
+                ? 'border-indigo-500/30 shadow-[0_0_20px_rgba(99,102,241,0.1)]'
+                : 'border-amber-500/30 shadow-[0_0_20px_rgba(245,158,11,0.1)]'
+              }`}
           >
             <div className="flex items-start justify-between">
-              <div className="flex items-center gap-2">
-                <span className="text-xl">
+              <div className="flex items-center gap-2.5">
+                <div className={`w-8 h-8 rounded-full flex items-center justify-center text-base shrink-0 select-none ${actionToast.type === 'rent'
+                  ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
+                  : actionToast.type === 'info'
+                    ? 'bg-indigo-500/10 text-indigo-400 border border-indigo-500/20'
+                    : 'bg-amber-500/10 text-amber-400 border border-amber-500/20'
+                  }`}>
                   {actionToast.type === 'rent' ? '💰' : actionToast.type === 'info' ? 'ℹ️' : '⚡'}
-                </span>
+                </div>
                 <div>
-                  <h4 className="font-extrabold text-xs text-amber-300 uppercase tracking-wider">{actionToast.title}</h4>
+                  <h4 className="font-extrabold text-xs text-white uppercase tracking-wider">{actionToast.title}</h4>
                   <p className="text-[10px] text-slate-300 mt-0.5 leading-snug">{actionToast.message}</p>
                 </div>
               </div>
               <button
                 onClick={() => setActionToast(null)}
-                className="text-slate-400 hover:text-white font-black text-xs p-1"
+                className="text-slate-400 hover:text-white font-black text-xs p-1 cursor-pointer transition-colors"
               >
                 ✕
               </button>
             </div>
 
             {actionToast.victimName && (
-              <div className="bg-black/30 border border-white/5 rounded-xl p-2 flex items-center justify-between text-[10px]">
+              <div className="bg-black/40 border border-white/5 rounded-xl p-2.5 flex items-center justify-between text-[10px] select-none">
                 <div className="flex items-center gap-1.5">
                   <span className="text-xs">👤</span>
-                  <span className="font-bold text-slate-200">{actionToast.victimName} Kalan Durum:</span>
+                  <span className="font-extrabold text-slate-300">{actionToast.victimName} Kalan Durum:</span>
                 </div>
-                <div className="flex gap-3 text-[9px] font-mono">
+                <div className="flex gap-3 text-[9px] font-mono font-bold">
                   <span className="text-amber-400">💵 Para: {actionToast.remainingCash}M</span>
-                  <span className="text-emerald-400">🏢 Mülk: {actionToast.remainingPropsCount} adet</span>
+                  <span className="text-emerald-400">🏢 Mülk: {actionToast.remainingPropsCount}</span>
                 </div>
               </div>
             )}
@@ -6251,6 +6695,182 @@ export const GameRoom: React.FC<Props> = ({ roomId, isOffline, profile, onLeaveR
           <GameCard card={touchDragCard} size="normal" />
         </div>
       )}
+
+      {/* Just Say No / Shield Defense Energy Dome Animation Overlay (Improvement #9) */}
+      {showShieldDefenseFor && (
+        <div className="fixed inset-0 bg-indigo-950/40 backdrop-blur-[2px] z-[9999] flex flex-col items-center justify-center pointer-events-none animate-fade-in">
+          <div className="relative flex flex-col items-center justify-center">
+            {/* Glowing outer rotating energy rings */}
+            <div className="absolute w-44 h-44 rounded-full border-4 border-indigo-500/20 border-t-indigo-400 border-b-cyan-400 animate-spin" />
+            <div className="absolute w-36 h-36 rounded-full border-2 border-dashed border-purple-500/30 border-l-pink-400 border-r-indigo-400 animate-spin-reverse" />
+
+            {/* Safe Shield Core Icon */}
+            <div className="w-24 h-24 rounded-full bg-gradient-to-b from-indigo-600 to-indigo-900 border-2 border-indigo-400/80 flex items-center justify-center shadow-[0_0_40px_rgba(99,102,241,0.8)] animate-pulse z-10">
+              <span className="text-4xl">🛡️</span>
+            </div>
+
+            {/* Glowing shield wall aura */}
+            <div className="absolute w-52 h-52 rounded-full bg-radial from-indigo-500/10 via-indigo-500/5 to-transparent animate-ping" />
+
+            <div className="mt-8 text-center z-10 bg-slate-950/90 border border-indigo-500/30 px-5 py-2.5 rounded-2xl shadow-xl backdrop-blur-md">
+              <span className="text-[10px] font-black tracking-widest text-indigo-400 block uppercase">HAYIR TEŞEKKÜRLER!</span>
+              <h4 className="text-sm font-bold text-white mt-1">
+                <span className="text-indigo-300">{showShieldDefenseFor}</span> Saldırıyı Engelledi!
+              </h4>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Deal Breaker Lightning Bolt Special Animation Overlay (Improvement #19) */}
+      {showDealBreakerAnimation && (
+        <div className="fixed inset-0 bg-yellow-500/10 backdrop-blur-[1px] z-[9999] flex flex-col items-center justify-center pointer-events-none animate-fade-in">
+          <div className="relative flex flex-col items-center justify-center w-full h-full overflow-hidden">
+            {/* Split Screen Flash effect */}
+            <div className="absolute inset-x-0 top-0 h-1/2 bg-yellow-500/[0.05] animate-pulse" />
+            <div className="absolute inset-x-0 bottom-0 h-1/2 bg-indigo-500/[0.05] animate-pulse" />
+
+            {/* Lightning bolt vectors */}
+            <div className="absolute top-0 bottom-0 w-2 bg-gradient-to-b from-yellow-400 via-amber-300 to-indigo-500 blur-sm shadow-[0_0_50px_#f59e0b] animate-bounce-subtle" />
+            <div className="absolute top-0 bottom-0 w-1 bg-white animate-pulse" />
+
+            {/* Crackling sparks around center */}
+            <div className="absolute w-64 h-64 rounded-full border border-yellow-500/30 scale-110 animate-ping" />
+            <div className="absolute w-48 h-48 rounded-full border-2 border-indigo-400/20 scale-75 animate-ping" style={{ animationDelay: '0.4s' }} />
+
+            {/* Dramatic banner */}
+            <div className="z-10 bg-slate-950/95 border-2 border-yellow-500/50 p-6 rounded-3xl shadow-[0_15px_45px_rgba(245,158,11,0.4)] text-center max-w-sm backdrop-blur-md animate-scale-up">
+              <span className="text-[10px] font-black tracking-widest text-yellow-400 block uppercase animate-pulse">⚡ ANLAŞMA BOZAN ⚡</span>
+              <h4 className="text-lg font-black text-white mt-3 leading-tight">
+                {showDealBreakerAnimation.source}
+              </h4>
+              <p className="text-xs text-slate-400 mt-1">adlı oyuncu dehşet saçtı!</p>
+
+              <div className="my-4 p-2 bg-white/5 border border-white/10 rounded-xl flex items-center justify-center gap-2">
+                <span className="w-3 h-3 rounded-full animate-ping" style={{ backgroundColor: COLOR_HEX[showDealBreakerAnimation.color] }} />
+                <span className="text-xs font-black text-white uppercase" style={{ color: COLOR_HEX[showDealBreakerAnimation.color] }}>
+                  {COLOR_LABELS[showDealBreakerAnimation.color]} SETİ ÇALINDI!
+                </span>
+              </div>
+
+              <p className="text-[10px] text-slate-400 leading-normal">
+                {showDealBreakerAnimation.target} adlı oyuncunun tamamlanmış mülk seti elinden zorla söküldü!
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 5. Floating Rent Analysis Panel (Kira Analiz Penceresi) */}
+      <AnimatePresence>
+        {analyzedProperty && (() => {
+          const { color, ownerName, cardsCount, hasHouse, hasHotel, currentRent } = analyzedProperty;
+          const rents = RENT_VALUES[color] || [];
+          const maxInSet = MAX_IN_SET[color] || 0;
+          const hexColor = COLOR_HEX[color] || '#34d399';
+
+          // Calculate max potential rent for this set
+          const maxStandardRent = rents[rents.length - 1] || 0;
+          const potentialMaxRent = maxStandardRent + (hasHotel ? 4 : (hasHouse ? 3 : 0));
+
+          return (
+            <motion.div
+              initial={{ opacity: 0, scale: 0.9, y: 30 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.9, y: 30 }}
+              className="fixed bottom-24 right-4 md:right-8 z-40 w-64 bg-slate-950/90 border border-white/10 rounded-2xl p-4 shadow-2xl backdrop-blur-md text-white select-none"
+            >
+              {/* Close Button */}
+              <button
+                onClick={() => setAnalyzedProperty(null)}
+                className="absolute top-2.5 right-2.5 text-slate-400 hover:text-white text-xs font-black cursor-pointer"
+              >
+                ✕
+              </button>
+
+              <div className="flex items-center gap-1.5 border-b border-white/5 pb-2 mb-2.5">
+                <span className="text-[10px]">📊</span>
+                <h4 className="font-extrabold text-[10px] tracking-wider uppercase text-slate-300">Kira Analiz Paneli</h4>
+              </div>
+
+              <div className="space-y-3">
+                {/* Title and Color Tag */}
+                <div className="flex items-center justify-between">
+                  <div>
+                    <span className="font-black text-xs text-white block leading-tight">{COLOR_LABELS[color]} Seti</span>
+                    <span className="text-[8px] text-slate-400 block mt-0.5">{ownerName} adlı oyuncunun masasında</span>
+                  </div>
+                  <span className="w-5 h-5 rounded-full border border-white/20 shadow" style={{ backgroundColor: hexColor }} />
+                </div>
+
+                {/* Progress Mini Meter */}
+                <div className="space-y-1">
+                  <div className="flex justify-between text-[8px] font-bold text-slate-400">
+                    <span>Kart İlerlemesi:</span>
+                    <span className="text-white">{cardsCount}/{maxInSet}</span>
+                  </div>
+                  <div className="w-full h-1.5 bg-white/5 rounded-full overflow-hidden border border-white/5">
+                    <div
+                      className="h-full rounded-full transition-all duration-500"
+                      style={{
+                        width: `${Math.min(100, (cardsCount / maxInSet) * 100)}%`,
+                        backgroundColor: hexColor,
+                      }}
+                    />
+                  </div>
+                </div>
+
+                {/* Rent values steps */}
+                <div className="space-y-1 bg-black/30 p-2 rounded-lg">
+                  <span className="text-[7.5px] font-black text-slate-400 uppercase tracking-wide block">Kira Baremleri</span>
+                  <div className="space-y-1">
+                    {rents.map((r, idx) => {
+                      const isActive = cardsCount === (idx + 1);
+                      return (
+                        <div
+                          key={idx}
+                          className={`flex items-center justify-between text-[8.5px] px-1.5 py-0.5 rounded transition-all ${isActive
+                            ? 'bg-emerald-500/15 text-emerald-300 font-extrabold border border-emerald-500/20'
+                            : 'text-slate-400 font-medium'
+                            }`}
+                        >
+                          <span className="flex items-center gap-1">
+                            {isActive && <span className="text-[8px]">👉</span>}
+                            {idx + 1} Kart
+                          </span>
+                          <span>{r}M</span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {/* Houses and Hotels */}
+                <div className="flex justify-between items-center text-[8.5px] px-1">
+                  <span className="text-slate-400 font-bold">Ev / Otel İlavesi:</span>
+                  <div className="flex gap-1.5 font-extrabold">
+                    <span className={hasHouse ? 'text-amber-400' : 'text-slate-600'}>🏡 Ev {hasHouse ? '(+3M)' : ''}</span>
+                    <span className={hasHotel ? 'text-amber-400' : 'text-slate-600'}>🏨 Otel {hasHotel ? '(+4M)' : ''}</span>
+                  </div>
+                </div>
+
+                {/* Rent Summary Box */}
+                <div className="bg-slate-900 border border-white/5 p-2 rounded-xl flex items-center justify-between shadow-[inset_0_1px_3px_rgba(0,0,0,0.5)]">
+                  <div>
+                    <span className="text-[7px] text-slate-500 block font-extrabold uppercase leading-none">Mevcut Kira</span>
+                    <span className="text-emerald-400 font-black text-sm font-mono block mt-0.5">{currentRent}M</span>
+                  </div>
+                  <div className="h-6 w-[1px] bg-white/10" />
+                  <div className="text-right">
+                    <span className="text-[7px] text-slate-500 block font-extrabold uppercase leading-none">Potansiyel Maks</span>
+                    <span className="text-amber-400 font-black text-sm font-mono block mt-0.5">{rents[rents.length - 1] + (hasHotel ? 4 : (hasHouse ? 3 : 0))}M</span>
+                  </div>
+                </div>
+              </div>
+            </motion.div>
+          );
+        })()}
+      </AnimatePresence>
 
     </div>
   );

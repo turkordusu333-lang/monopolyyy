@@ -9,46 +9,9 @@ export default function App() {
   const [usernameInput, setUsernameInput] = React.useState('');
   const [authError, setAuthError] = React.useState<string | null>(null);
   const [loading, setLoading] = React.useState(false);
-  
+
   // Navigation states
   const [currentRoom, setCurrentRoom] = React.useState<{ roomId: string; isOffline: boolean } | null>(null);
-
-  // Auto-login and Reconnection Check on Mount
-  React.useEffect(() => {
-    const storedUsername = localStorage.getItem('deal_master_username');
-    if (storedUsername) {
-      setLoading(true);
-      fetch('/api/auth', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ username: storedUsername }),
-      })
-        .then((res) => {
-          if (res.ok) return res.json();
-          throw new Error();
-        })
-        .then((user) => {
-          setProfile(user);
-          // Check for active room after login
-          const activeRoom = localStorage.getItem('deal_master_active_room');
-          if (activeRoom) {
-            try {
-              const { roomId, isOffline } = JSON.parse(activeRoom);
-              setCurrentRoom({ roomId, isOffline });
-            } catch (e) {
-              localStorage.removeItem('deal_master_active_room');
-            }
-          }
-        })
-        .catch(() => {
-          localStorage.removeItem('deal_master_username');
-          localStorage.removeItem('deal_master_active_room');
-        })
-        .finally(() => {
-          setLoading(false);
-        });
-    }
-  }, []);
 
   // Authenticate user on startup or after input
   const handleAuth = async (e: React.FormEvent) => {
@@ -68,8 +31,7 @@ export default function App() {
       if (response.ok) {
         const user = await response.json();
         setProfile(user);
-        localStorage.setItem('deal_master_username', user.username);
-        
+
         // Play welcome sound!
         sounds.playCoin(user.settings);
       } else {
@@ -85,16 +47,34 @@ export default function App() {
 
   const handleUpdateProfile = (updated: UserProfile) => {
     setProfile(updated);
+
+    // Sync with the server database!
+    fetch('/api/profile/update', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        userId: updated.id,
+        avatarUrl: updated.avatarUrl,
+        gamesHistory: updated.gamesHistory,
+        coins: updated.coins,
+        xp: updated.xp,
+        stats: updated.stats,
+        dailyQuests: updated.dailyQuests,
+        achievements: updated.achievements,
+      }),
+    })
+      .then((res) => {
+        if (!res.ok) console.error('Profil sunucuyla senkronize edilemedi.');
+      })
+      .catch((err) => console.error('Senkronizasyon hatası:', err));
   };
 
   const handleJoinRoom = (roomId: string, isOffline: boolean) => {
     setCurrentRoom({ roomId, isOffline });
-    localStorage.setItem('deal_master_active_room', JSON.stringify({ roomId, isOffline }));
   };
 
   const handleLeaveRoom = () => {
     setCurrentRoom(null);
-    localStorage.removeItem('deal_master_active_room');
     // Refresh user profile stats on game completion
     if (profile) {
       fetch('/api/auth', {
@@ -114,7 +94,7 @@ export default function App() {
 
   return (
     <div className="min-h-screen bg-[#0A0C10] flex flex-col justify-between selection:bg-red-500 selection:text-white">
-      
+
       {/* 1. Login State */}
       {!profile ? (
         <div className="flex-1 flex flex-col justify-center items-center px-4 py-16">
@@ -136,7 +116,7 @@ export default function App() {
                 Kart Oyunu Arenası
               </h2>
               <p className="text-xs text-slate-400">
-                Eş zamanlı çok oyunculu, sesli sohbetli ve bot pratikli modern Monopoly Deal deneyimi.
+                Eş zamanlı çok oyunculu, sesli sohbetli ve bot pratikli modern Deal Master PRO deneyimi.
               </p>
             </div>
 
@@ -147,7 +127,7 @@ export default function App() {
                 </label>
                 <input
                   type="text"
-                  placeholder="Örn: MonopolyKralı"
+                  placeholder="Örn: Deal Master PRO Kralı"
                   value={usernameInput}
                   onChange={(e) => setUsernameInput(e.target.value)}
                   disabled={loading}

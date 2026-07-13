@@ -52,7 +52,7 @@ export const MAX_IN_SET: Record<CardColor, number> = {
   utility: 2,
 };
 
-// Generates a full standard Monopoly Deal deck (106 cards)
+// Generates a full standard Deal Master PRO Deal deck (106 cards)
 export function generateDeck(): Card[] {
   const deck: Omit<Card, 'id'>[] = [];
 
@@ -357,8 +357,8 @@ export function shuffleDeck(cards: Card[]): Card[] {
   return result;
 }
 
-// Check if a player has won (configurable complete property sets of different colors)
-export function checkWinner(properties: GamePlayer['properties'], target: number = 3): boolean {
+// Check if a player has won (complete property sets of different colors based on targetSets)
+export function checkWinner(properties: GamePlayer['properties'], targetSets: number = 3): boolean {
   let completedSetsCount = 0;
   const completedColors: CardColor[] = [];
 
@@ -376,5 +376,5 @@ export function checkWinner(properties: GamePlayer['properties'], target: number
     }
   }
 
-  return completedSetsCount >= target;
+  return completedSetsCount >= targetSets;
 }
