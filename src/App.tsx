@@ -1,17 +1,94 @@
-import React from 'react';
+import React, { Component } from 'react';
 import { UserProfile } from './types';
 import { MainMenu } from './components/MainMenu';
 import { GameRoom } from './components/GameRoom';
 import { sounds } from './lib/SoundSystem';
+import { initTranslations, addTranslationListener } from './lib/TranslationSystem';
+
+interface ErrorBoundaryProps {
+  children: React.ReactNode;
+  onReset: () => void;
+}
+
+interface ErrorBoundaryState {
+  hasError: boolean;
+}
+
+class GameRoomErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
+  public state: ErrorBoundaryState = {
+    hasError: false
+  };
+
+  public static getDerivedStateFromError(_: Error): ErrorBoundaryState {
+    return { hasError: true };
+  }
+
+  public componentDidCatch(error: Error, errorInfo: React.ErrorInfo) {
+    console.error("ErrorBoundary caught an error", error, errorInfo);
+  }
+
+  public render() {
+    if (this.state.hasError) {
+      return (
+        <div className="fixed inset-0 bg-slate-950 flex flex-col items-center justify-center p-6 text-center space-y-4 z-50 text-white font-sans">
+          <div className="w-16 h-16 border-4 border-t-transparent border-amber-500 rounded-full animate-spin" />
+          <h2 className="text-xl font-black text-amber-400 uppercase tracking-widest">Bağlantı Yenileniyor...</h2>
+          <p className="text-xs text-slate-400 max-w-xs">Bir arayüz hatası algılandı. Oyun durumunuz sunucu üzerinden otomatik olarak kurtarılıyor.</p>
+          <button
+            onClick={() => {
+              (this as any).setState({ hasError: false });
+              (this as any).props.onReset();
+            }}
+            className="px-4 py-2 bg-amber-500 hover:bg-amber-600 text-slate-950 font-bold rounded-xl text-xs transition-all cursor-pointer shadow-lg"
+          >
+            Yeniden Bağlan
+          </button>
+        </div>
+      );
+    }
+
+    return (this as any).props.children;
+  }
+}
 
 export default function App() {
   const [profile, setProfile] = React.useState<UserProfile | null>(null);
   const [usernameInput, setUsernameInput] = React.useState('');
   const [authError, setAuthError] = React.useState<string | null>(null);
   const [loading, setLoading] = React.useState(false);
+  const [adminSettings, setAdminSettings] = React.useState<any>(null);
 
   // Navigation states
   const [currentRoom, setCurrentRoom] = React.useState<{ roomId: string; isOffline: boolean } | null>(null);
+
+  // Translation update listener state
+  const [translationVersion, setTranslationVersion] = React.useState(0);
+
+  // Fetch admin settings & translations on mount
+  React.useEffect(() => {
+    fetch('/api/admin/settings')
+      .then((res) => {
+        if (res.ok) return res.json();
+      })
+      .then((data) => {
+        if (data) setAdminSettings(data);
+      })
+      .catch(console.error);
+
+    initTranslations();
+    const unsubscribe = addTranslationListener(() => {
+      setTranslationVersion((v) => v + 1);
+    });
+    return () => unsubscribe();
+  }, []);
+
+  // Sync profile language to localStorage
+  React.useEffect(() => {
+    if (profile?.settings?.language) {
+      localStorage.setItem('language', profile.settings.language);
+      initTranslations();
+    }
+  }, [profile]);
 
   // Authenticate user on startup or after input
   const handleAuth = async (e: React.FormEvent) => {
@@ -165,18 +242,23 @@ export default function App() {
         /* 2. Navigation Flow */
         <div className="flex-1 flex flex-col">
           {currentRoom ? (
-            <GameRoom
-              roomId={currentRoom.roomId}
-              isOffline={currentRoom.isOffline}
-              profile={profile}
-              onLeaveRoom={handleLeaveRoom}
-              onUpdateProfile={handleUpdateProfile}
-            />
+            <GameRoomErrorBoundary onReset={handleLeaveRoom}>
+              <GameRoom
+                roomId={currentRoom.roomId}
+                isOffline={currentRoom.isOffline}
+                profile={profile}
+                onLeaveRoom={handleLeaveRoom}
+                onUpdateProfile={handleUpdateProfile}
+                adminSettings={adminSettings}
+              />
+            </GameRoomErrorBoundary>
           ) : (
             <MainMenu
               profile={profile}
               onUpdateProfile={handleUpdateProfile}
               onJoinRoom={handleJoinRoom}
+              adminSettings={adminSettings}
+              onUpdateAdminSettings={(settings) => setAdminSettings(settings)}
             />
           )}
         </div>

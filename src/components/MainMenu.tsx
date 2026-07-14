@@ -5,12 +5,16 @@ import { ProfilePanel } from './ProfilePanel';
 import { CustomizationPanel } from './CustomizationPanel';
 import { sounds } from '../lib/SoundSystem';
 import { AvatarWithFrame } from './AvatarWithFrame';
+import { AdminDashboard } from './AdminDashboard';
 import { motion, AnimatePresence } from 'motion/react';
+import { t } from '../lib/TranslationSystem';
 
 interface Props {
   profile: UserProfile;
   onUpdateProfile: (updated: UserProfile) => void;
   onJoinRoom: (roomId: string, isOffline: boolean) => void;
+  adminSettings?: any;
+  onUpdateAdminSettings?: (settings: any) => void;
 }
 
 const PRESET_AVATARS = [
@@ -24,12 +28,18 @@ const PRESET_AVATARS = [
   { id: 'av_8', name: 'Usta Stratejist', url: 'https://images.unsplash.com/photo-1580489944761-15a19d654956?auto=format&fit=crop&w=150&q=80' },
 ];
 
-export const MainMenu: React.FC<Props> = ({ profile, onUpdateProfile, onJoinRoom }) => {
-  const [activeTab, setActiveTab] = React.useState<'play' | 'bot_practice' | 'tournaments' | 'shop' | 'customization' | 'profile' | 'rules' | 'leaderboard'>('play');
+export const MainMenu: React.FC<Props> = ({ profile, onUpdateProfile, onJoinRoom, adminSettings, onUpdateAdminSettings }) => {
+  const [activeTab, setActiveTab] = React.useState<'play' | 'bot_practice' | 'tournaments' | 'shop' | 'customization' | 'profile' | 'rules' | 'leaderboard' | 'admin'>('play');
   const [botDifficulty, setBotDifficulty] = React.useState<'easy' | 'medium' | 'hard'>('medium');
   const [rooms, setRooms] = React.useState<any[]>([]);
   const [customRoomId, setCustomRoomId] = React.useState('');
   const [tournamentJoined, setTournamentJoined] = React.useState(false);
+
+  React.useEffect(() => {
+    if (adminSettings && adminSettings.rankedLeagueEnabled === false && activeTab === 'leaderboard') {
+      setActiveTab('play');
+    }
+  }, [adminSettings, activeTab]);
 
   // Avatar ve Liderlik Tablosu Durumları
   const [showAvatarModal, setShowAvatarModal] = React.useState(false);
@@ -57,14 +67,30 @@ export const MainMenu: React.FC<Props> = ({ profile, onUpdateProfile, onJoinRoom
     }
   }, [activeTab]);
 
-  const handleSelectAvatar = (url: string) => {
+  const handleSelectAvatar = async (url: string) => {
     sounds.playCoin(profile.settings);
     const updated = {
       ...profile,
       avatarUrl: url,
+      avatarId: 'avatar_classic',
+      settings: {
+        ...profile.settings,
+        avatarId: 'avatar_classic'
+      }
     };
     onUpdateProfile(updated);
     setShowAvatarModal(false);
+
+    // Persist this change on server
+    try {
+      await fetch('/api/settings/save', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId: profile.id, settings: { avatarId: 'avatar_classic' } }),
+      });
+    } catch (e) {
+      console.error('Failed to sync avatar selection settings', e);
+    }
   };
   const [activeTournament, setActiveTournament] = React.useState<any>({
     id: 't-1',
@@ -186,6 +212,30 @@ export const MainMenu: React.FC<Props> = ({ profile, onUpdateProfile, onJoinRoom
               <div className="w-2.5 h-2.5 bg-yellow-400 rounded-full shadow-md shadow-yellow-500/20 animate-pulse"></div>
               <span className="text-[10px] sm:text-xs font-mono font-bold text-amber-300">💰 {profile.coins}</span>
             </div>
+
+            {/* Quick Language Toggle */}
+            <div className="flex items-center bg-black/40 px-2.5 py-1 rounded-full border border-white/5 text-[10px] sm:text-xs">
+              <button
+                onClick={async () => {
+                  const nextLang = (profile.settings.language || 'tr') === 'tr' ? 'en' : 'tr';
+                  const updated = {
+                    ...profile,
+                    settings: { ...profile.settings, language: nextLang }
+                  };
+                  onUpdateProfile(updated);
+                  sounds.playPlay(profile.settings);
+                  // Persist to server
+                  await fetch('/api/settings/save', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ userId: profile.id, settings: { language: nextLang } }),
+                  });
+                }}
+                className="hover:text-amber-400 transition-colors uppercase font-black cursor-pointer px-1 flex items-center gap-1"
+              >
+                🌐 {(profile.settings.language || 'tr') === 'tr' ? 'EN' : 'TR'}
+              </button>
+            </div>
           </div>
 
           <div
@@ -243,18 +293,26 @@ export const MainMenu: React.FC<Props> = ({ profile, onUpdateProfile, onJoinRoom
         <nav className="lg:col-span-1 flex flex-col gap-4">
           <div className="bg-black/20 border border-white/5 rounded-2xl p-2 sm:p-4 flex flex-row lg:flex-col gap-2 overflow-x-auto lg:overflow-x-visible pb-3 lg:pb-0 whitespace-nowrap scrollbar-none w-full">
             {[
-              { id: 'play', label: '🎮 Çok Oyunculu', color: 'hover:text-red-500' },
-              { id: 'bot_practice', label: '🤖 Bot Pratik', color: 'hover:text-red-500' },
-              { id: 'tournaments', label: '🏆 Turnuvalar', color: 'hover:text-red-500' },
-              { id: 'leaderboard', label: '🌍 Dünya Sıralaması', color: 'hover:text-red-500' },
-              { id: 'shop', label: '🛒 Mağaza', color: 'hover:text-red-500' },
-              { id: 'customization', label: '🎨 Özelleştir', color: 'hover:text-red-500' },
-              { id: 'profile', label: '👤 Profil & İstatistik', color: 'hover:text-red-500' },
-              { id: 'rules', label: '📜 Kurallar', color: 'hover:text-red-500' },
-            ].map((tab) => (
+              { id: 'play', label: t('tab_multiplayer', profile), color: 'hover:text-red-500' },
+              { id: 'bot_practice', label: t('tab_bot_practice', profile), color: 'hover:text-red-500' },
+              { id: 'tournaments', label: t('tab_tournaments', profile), color: 'hover:text-red-500' },
+              (!adminSettings || adminSettings.rankedLeagueEnabled !== false) && { id: 'leaderboard', label: t('tab_leaderboard', profile), color: 'hover:text-red-500' },
+              { id: 'shop', label: t('tab_shop', profile), color: 'hover:text-red-500' },
+              { id: 'customization', label: t('tab_customize', profile), color: 'hover:text-red-500' },
+              { id: 'profile', label: t('tab_profile', profile), color: 'hover:text-red-500' },
+              { id: 'rules', label: t('tab_rules', profile), color: 'hover:text-red-500' },
+              { id: 'admin', label: t('tab_admin', profile), color: 'hover:text-amber-500' },
+            ].filter(Boolean).map((tab: any) => (
               <button
                 key={tab.id}
                 onClick={() => {
+                  if (tab.id === 'admin') {
+                    const pass = prompt('Yönetici şifresini giriniz:');
+                    if (pass !== 'admin123') {
+                      alert('Hatalı şifre!');
+                      return;
+                    }
+                  }
                   setActiveTab(tab.id as any);
                   sounds.playPlay(profile.settings);
                 }}
@@ -343,7 +401,7 @@ export const MainMenu: React.FC<Props> = ({ profile, onUpdateProfile, onJoinRoom
         {/* Content Panel Area */}
         <div className="lg:col-span-3 space-y-6">
           {/* Daily Quests Widget on Main Menu */}
-          {(activeTab === 'play' || activeTab === 'bot_practice' || activeTab === 'tournaments') && profile.dailyQuests && (
+          {(activeTab === 'play' || activeTab === 'bot_practice' || activeTab === 'tournaments') && profile.dailyQuests && (!adminSettings || adminSettings.questsEnabled !== false) && (
             <div className="bg-black/30 border border-white/10 rounded-2xl p-4 sm:p-5 space-y-4 shadow-xl relative overflow-hidden backdrop-blur-sm">
               <div className="absolute top-0 right-0 w-32 h-32 bg-red-600/5 rounded-full filter blur-2xl pointer-events-none" />
               <div className="flex items-center justify-between border-b border-white/5 pb-2.5">
@@ -793,6 +851,11 @@ export const MainMenu: React.FC<Props> = ({ profile, onUpdateProfile, onJoinRoom
                     </div>
                   )}
                 </div>
+              )}
+
+              {/* TAB 9: Admin Dashboard */}
+              {activeTab === 'admin' && (
+                <AdminDashboard onSettingsUpdated={onUpdateAdminSettings} />
               )}
             </motion.div>
           </AnimatePresence>

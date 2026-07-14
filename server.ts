@@ -7,6 +7,25 @@ import { createServer as createViteServer } from 'vite';
 import { generateDeck, shuffleDeck, checkWinner, MAX_IN_SET } from './src/lib/deck';
 import { BotEngine } from './src/lib/BotEngine';
 import { UserProfile, MatchState, GamePlayer, Card, CardColor, GameLog, Friend, FriendRequest, Tournament, ActionRequest } from './src/types';
+import dotenv from 'dotenv';
+import { createClient } from '@supabase/supabase-js';
+
+dotenv.config();
+
+const supabaseUrl = process.env.SUPABASE_URL || '';
+const supabaseAnonKey = process.env.SUPABASE_ANON_KEY || '';
+
+let supabase: any = null;
+if (supabaseUrl && supabaseAnonKey) {
+  try {
+    supabase = createClient(supabaseUrl, supabaseAnonKey);
+    console.log('[Database] Supabase client initialized.');
+  } catch (e) {
+    console.error('[Database] Failed to initialize Supabase client:', e);
+  }
+} else {
+  console.log('[Database] Supabase credentials not found, using local fallback.');
+}
 
 function checkWinnerForMatch(match: MatchState, player: GamePlayer): boolean {
   return checkWinner(player.properties, match.settings?.targetSets || 3);
@@ -27,15 +46,53 @@ const DEFAULT_SHOP_ITEMS = [
   { id: 'avatar_neon', name: 'Cyberpunk Neon', category: 'avatar', price: 250, description: 'Neon parıltılı fütüristik tasarım.', isUnlocked: false },
   { id: 'avatar_golden', name: 'Altın Kral', category: 'avatar', price: 500, description: 'Zenginlik ve ihtişam simgesi.', isUnlocked: false },
 
+  // NEW AVATARS (12)
+  { id: 'avatar_alien', name: 'Siber Uzaylı', category: 'avatar', price: 120, description: 'Samanyolu dışından gelen siber zeka.', isUnlocked: false },
+  { id: 'avatar_ninja', name: 'Gölge Ninja', category: 'avatar', price: 180, description: 'Gizlilik ve sessizlik ustası gölge.', isUnlocked: false },
+  { id: 'avatar_wizard', name: 'Başbüyücü', category: 'avatar', price: 200, description: 'Kartların kaderini değiştiren büyücü.', isUnlocked: false },
+  { id: 'avatar_dragon', name: 'Kadim Ejderha', category: 'avatar', price: 350, description: 'Ateş saçan görkemli efsane.', isUnlocked: false },
+  { id: 'avatar_astronaut', name: 'Uzay Gezgini', category: 'avatar', price: 160, description: 'Derin uzay boşluğunda bir astronot.', isUnlocked: false },
+  { id: 'avatar_robot', name: 'Siber Mekanik', category: 'avatar', price: 140, description: 'Yapay zeka temelli mekanik zeka.', isUnlocked: false },
+  { id: 'avatar_dj', name: 'Ritmin Ustası DJ', category: 'avatar', price: 110, description: 'Arenaya kendi temposunu getiren DJ.', isUnlocked: false },
+  { id: 'avatar_ghost', name: 'Kabus Hayalet', category: 'avatar', price: 130, description: 'Rakiplerinin kabusu olan ruh.', isUnlocked: false },
+  { id: 'avatar_knight', name: 'Onurlu Şövalye', category: 'avatar', price: 220, description: 'Kraliyetin sadık koruyucusu.', isUnlocked: false },
+  { id: 'avatar_unicorn', name: 'Efsanevi Unicorn', category: 'avatar', price: 300, description: 'Gökkuşağının parlayan efsanesi.', isUnlocked: false },
+  { id: 'avatar_pharaoh', name: 'Mısır Firavunu', category: 'avatar', price: 280, description: 'Mısırın kadim altın hükümdarı.', isUnlocked: false },
+  { id: 'avatar_zombie', name: 'Zombi Saldırganı', category: 'avatar', price: 90, description: 'Karanlık geceden fırlayan zombi.', isUnlocked: false },
+
   { id: 'back_classic', name: 'Klasik Kırmızı', category: 'card_back', price: 0, description: 'Geleneksel kırmızı desenli kart arkalığı.', isUnlocked: true },
   { id: 'back_cosmic', name: 'Kozmik Siyah', category: 'card_back', price: 150, description: 'Samanyolu yıldızlı derin uzay tasarımı.', isUnlocked: false },
   { id: 'back_gold', name: 'V.I.P Altın', category: 'card_back', price: 300, description: 'Altın işlemeli ultra lüks kart arkalığı.', isUnlocked: false },
   { id: 'back_neon', name: 'Retro Dalga', category: 'card_back', price: 200, description: '80\'ler neon ve mor ızgara çizgileri.', isUnlocked: false },
 
+  // NEW CARD BACKS (10)
+  { id: 'back_fire', name: 'Volkanik Magma', category: 'card_back', price: 160, description: 'Kızıl lav efektli sıcak kart arkalığı.', isUnlocked: false },
+  { id: 'back_ice', name: 'Kutup Rüzgarı', category: 'card_back', price: 180, description: 'Kutup soğukluğu taşıyan kristal kartlar.', isUnlocked: false },
+  { id: 'back_void', name: 'Karanlık Rift', category: 'card_back', price: 220, description: 'Uzay boşluğu çeken kara delik deseni.', isUnlocked: false },
+  { id: 'back_matrix', name: 'Siber Kod Yağmuru', category: 'card_back', price: 250, description: 'Yeşil siber veri çizgileriyle akan kodlar.', isUnlocked: false },
+  { id: 'back_rainbow', name: 'Gökkuşağı Prizması', category: 'card_back', price: 210, description: 'Tüm renk tayfını yansıtan prizma.', isUnlocked: false },
+  { id: 'back_bubble', name: 'Deniz Köpüğü', category: 'card_back', price: 140, description: 'Su altı baloncuklu canlı tasarım.', isUnlocked: false },
+  { id: 'back_steampunk', name: 'Buharlı Çark', category: 'card_back', price: 190, description: 'Bronz çarklar ve buhar makineleri.', isUnlocked: false },
+  { id: 'back_laser', name: 'Retro Grid Lazer', category: 'card_back', price: 240, description: 'Lazer ışınlarıyla çizilmiş 80ler gridi.', isUnlocked: false },
+  { id: 'back_galaxy', name: 'Nebula Bulutu', category: 'card_back', price: 280, description: 'Yıldız tozu ve mor nebula süzülmesi.', isUnlocked: false },
+  { id: 'back_darkness', name: 'Gölgeler Diyarı', category: 'card_back', price: 170, description: 'Gizemli gözler ve koyu karanlık.', isUnlocked: false },
+
   { id: 'theme_slate', name: 'Kozmik Slate', category: 'board_theme', price: 0, description: 'Göz yormayan koyu gri minimalist masa.', isUnlocked: true },
   { id: 'theme_green', name: 'Nane Yeşili', category: 'board_theme', price: 100, description: 'Geleneksel yeşil masası.', isUnlocked: false },
   { id: 'theme_purple', name: 'Kraliyet Moru', category: 'board_theme', price: 250, description: 'Altın detaylı zengin mor masa teması.', isUnlocked: false },
   { id: 'theme_cyberpunk', name: 'Siber Izgara', category: 'board_theme', price: 400, description: 'Yüksek kontrastlı siberpunk masa gridi.', isUnlocked: false },
+
+  // NEW BOARD THEMES (10)
+  { id: 'theme_lava', name: 'Magma Krateri', category: 'board_theme', price: 220, description: 'Aktif yanardağ lavları üzerinde sıcak masa.', isUnlocked: false },
+  { id: 'theme_abyss', name: 'Karanlık Çukur', category: 'board_theme', price: 240, description: 'Denizin en karanlık dip noktasındaki su altı arenası.', isUnlocked: false },
+  { id: 'theme_gold', name: 'Hazine Odası', category: 'board_theme', price: 400, description: 'Saf altın külçelerle süslenmiş zengin kraliyet masası.', isUnlocked: false },
+  { id: 'theme_sakura', name: 'Sakura Vadisi', category: 'board_theme', price: 260, description: 'Kiraz çiçeklerinin süzüldüğü huzurlu masa.', isUnlocked: false },
+  { id: 'theme_ice', name: 'Kar Fırtınası', category: 'board_theme', price: 250, description: 'Kar fırtınası altında kalmış kristal buz masası.', isUnlocked: false },
+  { id: 'theme_retro', name: 'Atari Salonu', category: 'board_theme', price: 300, description: '80ler atari salonu neon çizgi desenli masa.', isUnlocked: false },
+  { id: 'theme_toxic', name: 'Zehirli Vaha', category: 'board_theme', price: 180, description: 'Yeşil asit havuzlu tekinsiz endüstriyel masa.', isUnlocked: false },
+  { id: 'theme_matrix', name: 'Sanal Matris', category: 'board_theme', price: 350, description: 'Yeşil akan kod yağmuru altında sanal masa.', isUnlocked: false },
+  { id: 'theme_space', name: 'Uzay İstasyonu', category: 'board_theme', price: 450, description: 'Dünya manzaralı uzay üssü gözlem masası.', isUnlocked: false },
+  { id: 'theme_desert', name: 'Kayıp Tapınak', category: 'board_theme', price: 150, description: 'Mısır kumları altındaki kadim çöl masası.', isUnlocked: false },
 
   { id: 'frame_none', name: 'Klasik Sınır', category: 'profile_frame', price: 0, description: 'Sıradan, ince beyaz çerçeve.', isUnlocked: true },
   { id: 'frame_neon', name: 'Neon Aura', category: 'profile_frame', price: 150, description: 'Siberpunk parlayan pembe neon çerçeve.', isUnlocked: false },
@@ -43,106 +100,309 @@ const DEFAULT_SHOP_ITEMS = [
   { id: 'frame_fire', name: 'Volkanik Ateş', category: 'profile_frame', price: 200, description: 'Kızıl lav efektli ateşli profil çerçevesi.', isUnlocked: false },
   { id: 'frame_royal', name: 'Kraliyet Elması', category: 'profile_frame', price: 450, description: 'Lüks mavi elmas süslemeli şampiyon çerçevesi.', isUnlocked: false },
 
+  // NEW PROFILE FRAMES (10)
+  { id: 'frame_plasma', name: 'Plazma Kalkanı', category: 'profile_frame', price: 225, description: 'Mavi elektrik arklarıyla parlayan plazma çerçeve.', isUnlocked: false },
+  { id: 'frame_rainbow', name: 'Gökkuşağı Spektrumu', category: 'profile_frame', price: 265, description: 'Sürekli renk değiştiren RGB spektrum çerçeve.', isUnlocked: false },
+  { id: 'frame_toxic', name: 'Radyoaktif Slime', category: 'profile_frame', price: 175, description: 'Yemyeşil zehir akıntılı hareketli slime çerçeve.', isUnlocked: false },
+  { id: 'frame_ice', name: 'Buz Kristali', category: 'profile_frame', price: 195, description: 'Kutup soğukluğu saçan parıltılı mavi buz çerçevesi.', isUnlocked: false },
+  { id: 'frame_steampunk', name: 'Buharlı Dişliler', category: 'profile_frame', price: 215, description: 'Dönen bronz dişli çarklar ve bakır çerçeve.', isUnlocked: false },
+  { id: 'frame_matrix', name: 'Matris Kod Hattı', category: 'profile_frame', price: 285, description: 'Aşağı akan yeşil binary siber kod çerçevesi.', isUnlocked: false },
+  { id: 'frame_thunder', name: 'Şimşek Hattı', category: 'profile_frame', price: 325, description: 'Etrafından sarı şimşekler fırlayan dinamik çerçeve.', isUnlocked: false },
+  { id: 'frame_darkness', name: 'Karanlık Duman', category: 'profile_frame', price: 245, description: 'Koyu mor gölge dumanları tüten gizemli çerçeve.', isUnlocked: false },
+  { id: 'frame_galaxy', name: 'Galaksi Sarmalı', category: 'profile_frame', price: 350, description: 'Dönen galaksi sarmalı ve yıldız tozu aurası.', isUnlocked: false },
+  { id: 'frame_dragon', name: 'Ejderha Pulları', category: 'profile_frame', price: 400, description: 'Kızıl ejderha pulları ve parıldayan pullu çerçeve.', isUnlocked: false },
+
   { id: 'sound_classic', name: 'Klasik Melodi', category: 'celebration_sound', price: 0, description: 'Klasik retro tınılı zafer melodisi.', isUnlocked: true },
   { id: 'sound_applause', name: 'Coşkulu Alkış', category: 'celebration_sound', price: 100, description: 'Kritik hamlelerinizde ve zaferlerinizde çalan coşkulu alkış efekti.', isUnlocked: false },
   { id: 'sound_fireworks', name: 'Havai Fişek', category: 'celebration_sound', price: 180, description: 'Gökyüzünde patlayan renkli ve heyecanlı şenlik efekti.', isUnlocked: false },
   { id: 'sound_laser', name: 'Siber Lazer', category: 'celebration_sound', price: 150, description: 'Cyberpunk arenalara özel fütüristik retro lazer şovu.', isUnlocked: false },
   { id: 'sound_fanfare', name: 'Şampiyon Fanfarı', category: 'celebration_sound', price: 250, description: 'Zafere ulaştığınızda çalacak asil ve muhteşem şampiyon melodisi.', isUnlocked: false },
+
+  // NEW CELEBRATION SOUNDS (8)
+  { id: 'sound_victory', name: 'Zafer Marşı', category: 'celebration_sound', price: 200, description: 'Trompet sesleriyle dolu epik zafer marşı.', isUnlocked: false },
+  { id: 'sound_arcade', name: '8-Bit Atari', category: 'celebration_sound', price: 120, description: 'Eski atari oyunları tarzı retro ses efektleri.', isUnlocked: false },
+  { id: 'sound_coins', name: 'Para Yağmuru', category: 'celebration_sound', price: 150, description: 'Kasanıza para girerken çalan jackpot şıkırtısı.', isUnlocked: false },
+  { id: 'sound_laser_zap', name: 'Lazer Silahı', category: 'celebration_sound', price: 130, description: 'Fütüristik siber lazer atış sesleri.', isUnlocked: false },
+  { id: 'sound_rock', name: 'Elektro Gitar Riffi', category: 'celebration_sound', price: 220, description: 'Zafere ulaştığınızda çalan havalı gitar solosu.', isUnlocked: false },
+  { id: 'sound_synthwave', name: 'Synthwave Bas', category: 'celebration_sound', price: 170, description: '80ler tarzı elektronik bas ritimleri.', isUnlocked: false },
+  { id: 'sound_thunder', name: 'Kuvvetli Yıldırım', category: 'celebration_sound', price: 250, description: 'Hamlelerinizi taçlandıracak güçlü gök gürültüsü.', isUnlocked: false },
+  { id: 'sound_magical', name: 'Sihirli Değnek', category: 'celebration_sound', price: 180, description: 'Kartlarınızı açtığınızda çalan parıltılı büyü melodisi.', isUnlocked: false }
 ];
 
 // Helper to load/save users
-function loadUsers(): Record<string, UserProfile> {
-  if (fs.existsSync(USERS_FILE)) {
+async function loadUsers(): Promise<Record<string, UserProfile>> {
+  let users: Record<string, UserProfile> = {};
+  let loadedFromSupabase = false;
+
+  if (supabase) {
     try {
-      const users = JSON.parse(fs.readFileSync(USERS_FILE, 'utf8'));
-      let changed = false;
-      for (const id in users) {
-        const u = users[id];
-        if (!u.achievements) {
-          u.achievements = [];
-          changed = true;
-        }
-
-        // Calculate streak from gamesHistory
-        let currentStreak = 0;
-        if (u.gamesHistory) {
-          for (const matchHistory of u.gamesHistory) {
-            if (matchHistory.result === 'won') {
-              currentStreak++;
-            } else {
-              break;
-            }
-          }
-        }
-
-        // Calculate collector unlocked count (total cosmetics minus 5 starting defaults)
-        const unlockedCount = u.unlockedItems ? Math.max(0, u.unlockedItems.length - 5) : 0;
-
-        const defaultAchievements = [
-          { id: 'ach-1', title: 'İlk Adım', description: 'Bir maç oyna.', targetValue: 1, currentValue: u.stats?.gamesPlayed || 0, completed: (u.stats?.gamesPlayed || 0) >= 1, rewardCoins: 100 },
-          { id: 'ach-2', title: 'Milyoner', description: 'Bankaya toplam 20M para ekle.', targetValue: 20, currentValue: u.stats?.totalMoneyBanked || 0, completed: (u.stats?.totalMoneyBanked || 0) >= 20, rewardCoins: 150 },
-          { id: 'ach-3', title: 'Sinsi Hırsız', description: 'Rakiplerinden 5 kez arsa çal.', targetValue: 5, currentValue: u.stats?.totalCardsStolen || 0, completed: (u.stats?.totalCardsStolen || 0) >= 5, rewardCoins: 200 },
-          { id: 'ach-streak', title: 'Galibiyet Serisi', description: 'Arka arkaya 10 maç kazan.', targetValue: 10, currentValue: currentStreak, completed: currentStreak >= 10, rewardCoins: 500 },
-          { id: 'ach-collector', title: 'Koleksiyoncu', description: 'Mağazadan 5 farklı kozmetik eşya aç.', targetValue: 5, currentValue: unlockedCount, completed: unlockedCount >= 5, rewardCoins: 300 },
-          { id: 'ach-fast', title: 'Hızlı Oyuncu', description: 'Bir turu 15 saniyeden kısa sürede bitir.', targetValue: 1, currentValue: u.achievements.find((a: any) => a.id === 'ach-fast')?.currentValue || 0, completed: !!u.achievements.find((a: any) => a.id === 'ach-fast')?.completed, rewardCoins: 150 }
-        ];
-
-        defaultAchievements.forEach(defAch => {
-          const existing = u.achievements.find((a: any) => a.id === defAch.id);
-          if (!existing) {
-            u.achievements.push(defAch);
-            changed = true;
-          } else {
-            existing.currentValue = defAch.currentValue;
-            if (defAch.completed && !existing.completed) {
-              existing.completed = true;
-              u.coins += defAch.rewardCoins;
-              changed = true;
-            }
-          }
+      const { data, error } = await supabase.from('users').select('*');
+      if (error) {
+        console.error('[Database] Failed to load users from Supabase:', error.message);
+      } else if (data) {
+        data.forEach((row: any) => {
+          users[row.id] = row.profile_data;
         });
-
-        if (!u.dailyQuests || u.dailyQuests.length === 0) {
-          u.dailyQuests = [
-            { id: 'q-1', description: 'Pratik Modunda botu yen.', targetValue: 1, currentValue: 0, completed: false, claimed: false, rewardCoins: 50, rewardXp: 40 },
-            { id: 'q-2', description: 'Bankaya 5M para yerleştir.', targetValue: 5, currentValue: 0, completed: false, claimed: false, rewardCoins: 40, rewardXp: 30 },
-            { id: 'q-3', description: 'Toplam 3 kira kartı oyna.', targetValue: 3, currentValue: 0, completed: false, claimed: false, rewardCoins: 60, rewardXp: 50 },
-          ];
-          changed = true;
-        } else {
-          u.dailyQuests.forEach((q: any) => {
-            if (q.rewardXp === undefined) {
-              if (q.id === 'q-1') q.rewardXp = 40;
-              else if (q.id === 'q-2') q.rewardXp = 30;
-              else if (q.id === 'q-3') q.rewardXp = 50;
-              else q.rewardXp = 30;
-              changed = true;
-            }
-          });
-        }
+        loadedFromSupabase = true;
+        console.log(`[Database] Successfully loaded ${data.length} users from Supabase.`);
       }
-      if (changed) {
-        fs.writeFileSync(USERS_FILE, JSON.stringify(users, null, 2), 'utf8');
-      }
-      return users;
     } catch (e) {
-      console.error('Error reading users file', e);
-      return {};
+      console.error('[Database] Exception loading users from Supabase:', e);
     }
   }
-  return {};
+
+  // Fallback to local file if Supabase fails or is disabled
+  if (!loadedFromSupabase) {
+    if (fs.existsSync(USERS_FILE)) {
+      try {
+        users = JSON.parse(fs.readFileSync(USERS_FILE, 'utf8'));
+        console.log(`[Database] Loaded users from local users.json fallback.`);
+      } catch (e) {
+        console.error('[Database] Error reading local users file:', e);
+        users = {};
+      }
+    }
+  }
+
+  // Run the default achievements / quests checking logic as before
+  let changed = false;
+  for (const id in users) {
+    const u = users[id];
+    if (!u.achievements) {
+      u.achievements = [];
+      changed = true;
+    }
+
+    // Calculate streak from gamesHistory
+    let currentStreak = 0;
+    if (u.gamesHistory) {
+      for (const matchHistory of u.gamesHistory) {
+        if (matchHistory.result === 'won') {
+          currentStreak++;
+        } else {
+          break;
+        }
+      }
+    }
+
+    // Calculate collector unlocked count (total cosmetics minus 5 starting defaults)
+    const unlockedCount = u.unlockedItems ? Math.max(0, u.unlockedItems.length - 5) : 0;
+
+    const defaultAchievements = [
+      { id: 'ach-1', title: 'İlk Adım', description: 'Bir maç oyna.', targetValue: 1, currentValue: u.stats?.gamesPlayed || 0, completed: (u.stats?.gamesPlayed || 0) >= 1, rewardCoins: 100 },
+      { id: 'ach-2', title: 'Milyoner', description: 'Bankaya toplam 20M para ekle.', targetValue: 20, currentValue: u.stats?.totalMoneyBanked || 0, completed: (u.stats?.totalMoneyBanked || 0) >= 20, rewardCoins: 150 },
+      { id: 'ach-3', title: 'Sinsi Hırsız', description: 'Rakiplerinden 5 kez arsa çal.', targetValue: 5, currentValue: u.stats?.totalCardsStolen || 0, completed: (u.stats?.totalCardsStolen || 0) >= 5, rewardCoins: 200 },
+      { id: 'ach-streak', title: 'Galibiyet Serisi', description: 'Arka arkaya 10 maç kazan.', targetValue: 10, currentValue: currentStreak, completed: currentStreak >= 10, rewardCoins: 500 },
+      { id: 'ach-collector', title: 'Koleksiyoncu', description: 'Mağazadan 5 farklı kozmetik eşya aç.', targetValue: 5, currentValue: unlockedCount, completed: unlockedCount >= 5, rewardCoins: 300 },
+      { id: 'ach-fast', title: 'Hızlı Oyuncu', description: 'Bir turu 15 saniyeden kısa sürede bitir.', targetValue: 1, currentValue: u.achievements.find((a: any) => a.id === 'ach-fast')?.currentValue || 0, completed: !!u.achievements.find((a: any) => a.id === 'ach-fast')?.completed, rewardCoins: 150 }
+    ];
+
+    defaultAchievements.forEach(defAch => {
+      const existing = u.achievements.find((a: any) => a.id === defAch.id);
+      if (!existing) {
+        u.achievements.push(defAch);
+        changed = true;
+      } else {
+        existing.currentValue = defAch.currentValue;
+        if (defAch.completed && !existing.completed) {
+          existing.completed = true;
+          u.coins += defAch.rewardCoins;
+          changed = true;
+        }
+      }
+    });
+
+    if (!u.dailyQuests || u.dailyQuests.length === 0) {
+      const pool = globalQuests.length > 0 ? globalQuests : [
+        { id: 'q-1', description: 'Pratik Modunda botu yen.', targetValue: 1, rewardCoins: 50, rewardXp: 40 },
+        { id: 'q-2', description: 'Bankaya 5M para yerleştir.', targetValue: 5, rewardCoins: 40, rewardXp: 30 },
+        { id: 'q-3', description: 'Toplam 3 kira kartı oyna.', targetValue: 3, rewardCoins: 60, rewardXp: 50 },
+      ];
+      u.dailyQuests = pool.map((q) => ({
+        id: q.id,
+        description: q.description,
+        targetValue: q.targetValue,
+        currentValue: 0,
+        completed: false,
+        claimed: false,
+        rewardCoins: q.rewardCoins,
+        rewardXp: q.rewardXp
+      }));
+      changed = true;
+    } else {
+      u.dailyQuests.forEach((q: any) => {
+        if (q.rewardXp === undefined) {
+          if (q.id === 'q-1') q.rewardXp = 40;
+          else if (q.id === 'q-2') q.rewardXp = 30;
+          else if (q.id === 'q-3') q.rewardXp = 50;
+          else q.rewardXp = 30;
+          changed = true;
+        }
+      });
+    }
+  }
+
+  if (changed) {
+    await saveUsers(users);
+  }
+
+  return users;
 }
 
-function saveUsers(users: Record<string, UserProfile>) {
+async function saveUsers(users: Record<string, UserProfile>): Promise<void> {
+  // 1. Always save to local backup file first for durability
   try {
     fs.writeFileSync(USERS_FILE, JSON.stringify(users, null, 2), 'utf8');
   } catch (e) {
-    console.error('Error saving users file', e);
+    console.error('[Database] Local fallback save error:', e);
+  }
+
+  // 2. Save/Upsert to Supabase
+  if (supabase) {
+    try {
+      const rows = Object.values(users).map((u) => ({
+        id: u.id,
+        username: u.username,
+        profile_data: u
+      }));
+      const { error } = await supabase.from('users').upsert(rows);
+      if (error) {
+        console.error('[Database] Failed to save users to Supabase:', error.message);
+      } else {
+        console.log(`[Database] Successfully saved ${rows.length} users to Supabase.`);
+      }
+    } catch (e) {
+      console.error('[Database] Exception saving users to Supabase:', e);
+    }
+  }
+}
+
+const ADMIN_SETTINGS_FILE = path.join(DATA_DIR, 'admin_settings.json');
+const GLOBAL_QUESTS_FILE = path.join(DATA_DIR, 'global_quests.json');
+
+let globalAdminSettings = {
+  enable3DCardFlip: true,
+  enablePropertySetGlow: true,
+  enableFloatingEmojis: true,
+  enableCoinFlyEffect: true,
+  enableBuildingSmoke: true,
+  enableHoverCardSidebar: true,
+  enableUndoInTraining: true,
+  questsEnabled: true,
+  codexTabEnabled: true,
+  rankedLeagueEnabled: true,
+  turnTimeoutSeconds: 35,
+  actionTimeoutSeconds: 20,
+  targetSets: 3,
+  turnActionLimit: 3,
+  goldMultiplier: 1.0,
+  maintenanceMode: false
+};
+
+let globalQuests: any[] = [
+  { id: 'q-1', description: 'Pratik Modunda botu yen.', targetValue: 1, rewardCoins: 50, rewardXp: 40 },
+  { id: 'q-2', description: 'Bankaya 5M para yerleştir.', targetValue: 5, rewardCoins: 40, rewardXp: 30 },
+  { id: 'q-3', description: 'Toplam 3 kira kartı oyna.', targetValue: 3, rewardCoins: 60, rewardXp: 50 },
+];
+
+async function loadAdminData() {
+  // Load Settings
+  let loadedSettings = false;
+  if (supabase) {
+    try {
+      const { data, error } = await supabase.from('admin_settings').select('*').eq('id', 'global').maybeSingle();
+      if (data) {
+        globalAdminSettings = { ...globalAdminSettings, ...data.settings };
+        loadedSettings = true;
+        console.log('[Database] Loaded admin settings from Supabase.');
+      }
+    } catch (e) {
+      console.error('[Database] Failed to load admin settings from Supabase:', e);
+    }
+  }
+  if (!loadedSettings && fs.existsSync(ADMIN_SETTINGS_FILE)) {
+    try {
+      globalAdminSettings = { ...globalAdminSettings, ...JSON.parse(fs.readFileSync(ADMIN_SETTINGS_FILE, 'utf-8')) };
+      console.log('[Database] Loaded admin settings from local fallback.');
+    } catch (e) {
+      console.error('[Database] Failed to read local admin settings:', e);
+    }
+  }
+
+  // Load Global Quests
+  let loadedQuests = false;
+  if (supabase) {
+    try {
+      const { data, error } = await supabase.from('global_quests').select('*');
+      if (data && data.length > 0) {
+        globalQuests = data.map((r: any) => ({
+          id: r.id,
+          description: r.description,
+          targetValue: r.target_value,
+          rewardCoins: r.reward_coins,
+          rewardXp: r.reward_xp
+        }));
+        loadedQuests = true;
+        console.log(`[Database] Loaded ${globalQuests.length} global quests from Supabase.`);
+      }
+    } catch (e) {
+      console.error('[Database] Failed to load global quests from Supabase:', e);
+    }
+  }
+  if (!loadedQuests && fs.existsSync(GLOBAL_QUESTS_FILE)) {
+    try {
+      globalQuests = JSON.parse(fs.readFileSync(GLOBAL_QUESTS_FILE, 'utf-8'));
+      console.log('[Database] Loaded global quests from local fallback.');
+    } catch (e) {
+      console.error('[Database] Failed to read local global quests:', e);
+    }
+  }
+}
+
+async function saveAdminSettings(settings: any) {
+  globalAdminSettings = { ...globalAdminSettings, ...settings };
+  try {
+    fs.writeFileSync(ADMIN_SETTINGS_FILE, JSON.stringify(globalAdminSettings, null, 2), 'utf-8');
+  } catch (e) {
+    console.error('[Database] Failed to save local admin settings:', e);
+  }
+  if (supabase) {
+    try {
+      await supabase.from('admin_settings').upsert({ id: 'global', settings: globalAdminSettings });
+    } catch (e) {
+      console.error('[Database] Failed to save admin settings to Supabase:', e);
+    }
+  }
+}
+
+async function saveGlobalQuests() {
+  try {
+    fs.writeFileSync(GLOBAL_QUESTS_FILE, JSON.stringify(globalQuests, null, 2), 'utf-8');
+  } catch (e) {
+    console.error('[Database] Failed to save local global quests:', e);
+  }
+  if (supabase) {
+    try {
+      await supabase.from('global_quests').delete().neq('id', 'dummy');
+      const rows = globalQuests.map((q) => ({
+        id: q.id,
+        description: q.description,
+        target_value: q.targetValue,
+        reward_coins: q.rewardCoins,
+        reward_xp: q.rewardXp
+      }));
+      if (rows.length > 0) {
+        await supabase.from('global_quests').insert(rows);
+      }
+    } catch (e) {
+      console.error('[Database] Failed to save global quests to Supabase:', e);
+    }
   }
 }
 
 // In-Memory active rooms and tournaments state
 const activeMatches: Record<string, MatchState> = {};
+const roomLocks: Record<string, Promise<any>> = {};
 let activeTournaments: Tournament[] = [
   {
     id: 't-1',
@@ -168,16 +428,181 @@ async function startServer() {
 
   app.use(express.json());
 
+  // Load administrative settings and custom quests from Supabase/Backup
+  await loadAdminData();
+
   // --- API ROUTES ---
 
+  // --- ADMIN PANEL API ENDPOINTS ---
+
+  // Admin login check
+  app.post('/api/admin/login', (req, res) => {
+    const { password } = req.body;
+    if (password === 'admin123') {
+      res.json({ success: true, token: 'admin-token-xyz' });
+    } else {
+      res.status(401).json({ error: 'Geçersiz yönetici şifresi.' });
+    }
+  });
+
+  // Get active admin settings
+  app.get('/api/admin/settings', (req, res) => {
+    res.json(globalAdminSettings);
+  });
+
+  // Update admin settings
+  app.post('/api/admin/settings', async (req, res) => {
+    const { settings } = req.body;
+    if (!settings) return res.status(400).json({ error: 'Geçersiz ayar verisi.' });
+
+    await saveAdminSettings(settings);
+
+    // Sync match settings dynamically for all active playing matches
+    for (const roomId in activeMatches) {
+      const match = activeMatches[roomId];
+      if (match) {
+        // Update sets target dynamically if present
+        (match as any).targetSets = globalAdminSettings.targetSets || 3;
+      }
+    }
+
+    res.json({ success: true, settings: globalAdminSettings });
+  });
+
+  // Get all registered players
+  app.get('/api/admin/players', async (req, res) => {
+    const users = await loadUsers();
+    const list = Object.values(users).map((u) => ({
+      id: u.id,
+      username: u.username,
+      level: u.level,
+      xp: u.xp,
+      coins: u.coins,
+      gamesWon: u.stats?.gamesWon || 0,
+      gamesPlayed: u.stats?.gamesPlayed || 0,
+      friendsCount: u.friends?.length || 0
+    }));
+    res.json(list);
+  });
+
+  // Update a player's profiles (xp, level, coins)
+  app.post('/api/admin/players/update', async (req, res) => {
+    const { userId, coins, xp, level } = req.body;
+    const users = await loadUsers();
+    const user = users[userId];
+    if (!user) return res.status(404).json({ error: 'Oyuncu bulunamadı.' });
+
+    if (coins !== undefined) user.coins = Number(coins);
+    if (xp !== undefined) user.xp = Number(xp);
+    if (level !== undefined) user.level = Number(level);
+
+    users[userId] = user;
+    await saveUsers(users);
+
+    res.json({ success: true, player: user });
+  });
+
+  // Get all global quests in the pool
+  app.get('/api/admin/quests', (req, res) => {
+    res.json(globalQuests);
+  });
+
+  // Add a new quest to the global pool
+  app.post('/api/admin/quests/add', async (req, res) => {
+    const { description, targetValue, rewardCoins, rewardXp } = req.body;
+    if (!description || !targetValue) {
+      return res.status(400).json({ error: 'Açıklama ve hedef değer gereklidir.' });
+    }
+
+    const newQuest = {
+      id: `q-custom-${Date.now()}`,
+      description,
+      targetValue: Number(targetValue),
+      rewardCoins: Number(rewardCoins || 50),
+      rewardXp: Number(rewardXp || 40)
+    };
+
+    globalQuests.push(newQuest);
+    await saveGlobalQuests();
+
+    res.json({ success: true, quests: globalQuests });
+  });
+
+  // Delete a quest from the global pool
+  app.post('/api/admin/quests/delete', async (req, res) => {
+    const { questId } = req.body;
+    globalQuests = globalQuests.filter((q) => q.id !== questId);
+    await saveGlobalQuests();
+
+    res.json({ success: true, quests: globalQuests });
+  });
+
+  // Create a new tournament
+  app.post('/api/admin/tournaments/create', (req, res) => {
+    const { name, participants } = req.body;
+    if (!name || !participants || participants.length < 2) {
+      return res.status(400).json({ error: 'Turnuva ismi ve en az 2 katılımcı gereklidir.' });
+    }
+
+    const newTournament: Tournament = {
+      id: `t-${Date.now()}`,
+      name,
+      participants,
+      rounds: [
+        {
+          roundNumber: 1,
+          matches: [
+            { id: `tm-c1-${Date.now()}`, player1: participants[0], player2: participants[1], status: 'pending' }
+          ]
+        }
+      ],
+      status: 'active'
+    };
+
+    activeTournaments.unshift(newTournament);
+    res.json({ success: true, tournaments: activeTournaments });
+  });
+
+  // Get system & database statistics
+  app.get('/api/admin/stats', async (req, res) => {
+    const users = await loadUsers();
+    const totalUsersCount = Object.keys(users).length;
+    let supabaseStatus = 'disconnected';
+    let rowCount = 0;
+
+    if (supabase) {
+      try {
+        const { count, error } = await supabase.from('users').select('*', { count: 'exact', head: true });
+        if (!error) {
+          supabaseStatus = 'connected';
+          rowCount = count || 0;
+        }
+      } catch (e) {
+        supabaseStatus = 'error';
+      }
+    }
+
+    res.json({
+      supabaseStatus,
+      supabaseRowCount: rowCount,
+      totalUsersInMemory: totalUsersCount,
+      activeRooms: Object.keys(activeMatches).length,
+      activeTournamentsCount: activeTournaments.length,
+      uptimeSeconds: Math.floor(process.uptime()),
+      cpuUsage: process.cpuUsage()
+    });
+  });
+
+  // --- STANDARD API ROUTES ---
+
   // Auth / Get Profile
-  app.post('/api/auth', (req, res) => {
+  app.post('/api/auth', async (req, res) => {
     const { username } = req.body;
     if (!username || username.trim() === '') {
       return res.status(400).json({ error: 'Kullanıcı adı geçerli olmalıdır.' });
     }
 
-    const users = loadUsers();
+    const users = await loadUsers();
     let user = Object.values(users).find((u) => u.username.toLowerCase() === username.toLowerCase());
 
     if (!user) {
@@ -230,13 +655,13 @@ async function startServer() {
         gamesHistory: [],
       };
       users[newId] = user;
-      saveUsers(users);
+      await saveUsers(users);
     } else {
       // Ensure gamesHistory exists for legacy profiles
       if (!user.gamesHistory) {
         user.gamesHistory = [];
         users[user.id] = user;
-        saveUsers(users);
+        await saveUsers(users);
       }
     }
 
@@ -244,9 +669,9 @@ async function startServer() {
   });
 
   // Shop purchase
-  app.post('/api/shop/buy', (req, res) => {
+  app.post('/api/shop/buy', async (req, res) => {
     const { userId, itemId } = req.body;
-    const users = loadUsers();
+    const users = await loadUsers();
     const user = users[userId];
 
     if (!user) {
@@ -283,7 +708,7 @@ async function startServer() {
     }
 
     users[userId] = user;
-    saveUsers(users);
+    await saveUsers(users);
 
     res.json({
       success: true,
@@ -294,9 +719,9 @@ async function startServer() {
   });
 
   // Save customization settings
-  app.post('/api/settings/save', (req, res) => {
+  app.post('/api/settings/save', async (req, res) => {
     const { userId, settings } = req.body;
-    const users = loadUsers();
+    const users = await loadUsers();
     const user = users[userId];
 
     if (!user) {
@@ -311,14 +736,57 @@ async function startServer() {
     }
 
     users[userId] = user;
-    saveUsers(users);
+    await saveUsers(users);
 
     res.json({ success: true, settings: user.settings, avatarId: user.avatarId, avatarUrl: user.avatarUrl });
   });
 
+  // Dynamic Translation Loading and Saving Endpoints
+  const TRANSLATIONS_PATH = path.join(process.cwd(), 'translations.json');
+  let translationsCache: any = {};
+
+  const loadTranslations = () => {
+    try {
+      if (fs.existsSync(TRANSLATIONS_PATH)) {
+        const raw = fs.readFileSync(TRANSLATIONS_PATH, 'utf8');
+        translationsCache = JSON.parse(raw);
+      } else {
+        translationsCache = { tr: {}, en: {} };
+      }
+    } catch (e) {
+      console.error('Failed to load translations file', e);
+      translationsCache = { tr: {}, en: {} };
+    }
+  };
+
+  const saveTranslations = (data: any) => {
+    try {
+      fs.writeFileSync(TRANSLATIONS_PATH, JSON.stringify(data, null, 2), 'utf8');
+      translationsCache = data;
+    } catch (e) {
+      console.error('Failed to save translations file', e);
+    }
+  };
+
+  // Pre-load on startup
+  loadTranslations();
+
+  app.get('/api/translations', (req, res) => {
+    res.json(translationsCache);
+  });
+
+  app.post('/api/translations/save', (req, res) => {
+    const { translations } = req.body;
+    if (!translations) {
+      return res.status(400).json({ error: 'Geçersiz veri gönderildi.' });
+    }
+    saveTranslations(translations);
+    res.json({ success: true, translations: translationsCache });
+  });
+
   // World Leaderboard endpoint
-  app.get('/api/leaderboard', (req, res) => {
-    const users = loadUsers();
+  app.get('/api/leaderboard', async (req, res) => {
+    const users = await loadUsers();
 
     // Convert to array of leaderboard items
     const realUsers = Object.values(users).map((u) => ({
@@ -359,9 +827,9 @@ async function startServer() {
   });
 
   // Custom profile updater endpoint
-  app.post('/api/profile/update', (req, res) => {
+  app.post('/api/profile/update', async (req, res) => {
     const { userId, avatarUrl, gamesHistory, coins, xp, stats, dailyQuests, achievements } = req.body;
-    const users = loadUsers();
+    const users = await loadUsers();
     const user = users[userId];
 
     if (!user) {
@@ -380,15 +848,15 @@ async function startServer() {
     if (achievements !== undefined) user.achievements = achievements;
 
     users[userId] = user;
-    saveUsers(users);
+    await saveUsers(users);
 
     res.json(user);
   });
 
   // Claim Daily Quest
-  app.post('/api/quests/claim', (req, res) => {
+  app.post('/api/quests/claim', async (req, res) => {
     const { userId, questId } = req.body;
-    const users = loadUsers();
+    const users = await loadUsers();
     const user = users[userId];
 
     if (!user) return res.status(404).json({ error: 'Kullanıcı bulunamadı.' });
@@ -405,15 +873,15 @@ async function startServer() {
     user.xp += xpReward;
     user.level = Math.floor(user.xp / 500) + 1;
     users[userId] = user;
-    saveUsers(users);
+    await saveUsers(users);
 
     res.json({ success: true, coins: user.coins, xp: user.xp, level: user.level, dailyQuests: user.dailyQuests });
   });
 
   // Friend Request system
-  app.post('/api/friends/add', (req, res) => {
+  app.post('/api/friends/add', async (req, res) => {
     const { userId, targetUsername } = req.body;
-    const users = loadUsers();
+    const users = await loadUsers();
     const user = users[userId];
     const targetUser = Object.values(users).find(
       (u) => u.username.toLowerCase() === targetUsername.trim().toLowerCase()
@@ -445,7 +913,7 @@ async function startServer() {
 
     users[userId] = user;
     users[targetUser.id] = targetUser;
-    saveUsers(users);
+    await saveUsers(users);
 
     res.json({ success: true, friends: user.friends });
   });
@@ -475,20 +943,18 @@ async function startServer() {
   wss.on('connection', (ws) => {
     let clientId = `client-${Math.random().toString(36).substr(2, 5)}`;
 
-    ws.on('message', (messageStr: string) => {
+    async function processClientMessage(payload: any, userId: string, roomId: string | undefined, clientId: string, ws: WebSocket) {
       try {
-        const payload = JSON.parse(messageStr);
-        const { type, userId, roomId } = payload;
-
+        const { type } = payload;
         switch (type) {
           case 'register':
             clients[clientId] = { ws, userId };
             // Update friend status
-            updateFriendStatus(userId, 'online');
+            await updateFriendStatus(userId, 'online');
             break;
 
           case 'join_room': {
-            const users = loadUsers();
+            const users = await loadUsers();
             const user = users[userId];
             if (!user) break;
 
@@ -564,6 +1030,7 @@ async function startServer() {
             match.status = 'playing';
             match.turnIndex = 0;
             match.actionsPlayedThisTurn = 0;
+            match.turnStartedAt = Date.now();
             match.logs.push({
               id: `start-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
               message: `Oyun başladı! Sıra ${match.players[0].username} adlı oyuncuda.`,
@@ -730,16 +1197,27 @@ async function startServer() {
             const { cardId, targetZone, extraColor } = payload;
             const player = match.players[match.turnIndex];
 
-            if (player.id !== userId) break; // Not their turn
+            if (player.id !== userId) {
+              console.warn(`[Anti-Cheat] Player ${userId} tried to play a card out of turn!`);
+              ws.send(JSON.stringify({ type: 'alert', message: '⚠️ Sıra sizde değil! Hamle engellendi.' }));
+              break;
+            }
             const isChaos = match.settings?.gameMode === 'chaos';
-            if (!isChaos && match.actionsPlayedThisTurn >= 3) break; // Max 3 actions unless Chaos Mode
+            if (!isChaos && match.actionsPlayedThisTurn >= (globalAdminSettings.turnActionLimit || 3)) {
+              ws.send(JSON.stringify({ type: 'alert', message: '⚠️ Bu turdaki hamle hakkınız doldu!' }));
+              break;
+            }
             if (match.activeActionRequest) {
               ws.send(JSON.stringify({ type: 'alert', message: 'Şu an aktif bir ödeme veya hamle talebi var, bu talep çözülene kadar yeni kart oynayamazsınız!' }));
               break;
             }
 
             const cardIdx = player.hand.findIndex((c) => c.id === cardId);
-            if (cardIdx === -1) break;
+            if (cardIdx === -1) {
+              console.warn(`[Anti-Cheat] Player ${userId} tried to play card ${cardId} which is not in hand!`);
+              ws.send(JSON.stringify({ type: 'alert', message: '⚠️ Hile Girişimi: Kart elinizde değil!' }));
+              break;
+            }
 
             const card = player.hand[cardIdx];
 
@@ -795,7 +1273,7 @@ async function startServer() {
 
               // Check if they won!
               if (checkWinnerForMatch(match, player)) {
-                handleMatchWinner(match, player.id);
+                await handleMatchWinner(match, player.id);
               }
             } else if (targetZone === 'action') {
               // Play as action card
@@ -803,7 +1281,7 @@ async function startServer() {
               match.discardPile.push(card);
 
               // Process different action card mechanics
-              processActionCard(match, player, card, payload);
+              await processActionCard(match, player, card, payload);
               match.actionsPlayedThisTurn++;
             }
 
@@ -910,6 +1388,9 @@ async function startServer() {
             const resolveRequest = (m: MatchState, rId: string) => {
               if (isMulti && m.activeActionRequests) {
                 m.activeActionRequests = m.activeActionRequests.filter((r) => r.id !== rId);
+                if (m.activeActionRequests.length === 0) {
+                  m.activeActionRequests = undefined;
+                }
               } else {
                 resolveActiveActionRequest(m);
               }
@@ -933,6 +1414,7 @@ async function startServer() {
                 req.sourcePlayerId = req.targetPlayerId;
                 req.targetPlayerId = prevSourceId;
                 req.jsnCount = (req.jsnCount || 0) + 1;
+                match.actionRequestStartedAt = Date.now();
               }
             } else if (decision === 'decline') {
               const jsnCount = req.jsnCount || 0;
@@ -1077,6 +1559,29 @@ async function startServer() {
                 resolveRequest(match, req.id);
               }
             }
+            // Auto end turn check (if 3 actions played and no active requests left)
+            const activePlayer = match.players[match.turnIndex];
+            const hasActiveAction = match.activeActionRequest || (match.activeActionRequests && match.activeActionRequests.length > 0);
+            if (!hasActiveAction && match.actionsPlayedThisTurn >= 3 && activePlayer) {
+              if (activePlayer.hand.length <= 7) {
+                match.turnIndex = (match.turnIndex + 1) % match.players.length;
+                match.actionsPlayedThisTurn = 0;
+                match.turnStartedAt = Date.now();
+
+                const nextPlayer = match.players[match.turnIndex];
+                match.logs.push({
+                  id: `turn-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
+                  message: `Sıra ${nextPlayer.username} adlı oyuncuda. (Önceki oyuncu 3 hamlesini tamamladı)`,
+                  timestamp: Date.now(),
+                });
+
+                triggerDrawForActivePlayer(match);
+
+                if (nextPlayer.isBot || nextPlayer.isDisconnected) {
+                  setTimeout(() => handleBotTurn(match), 1000);
+                }
+              }
+            }
 
             broadcastToRoom(roomId, {
               type: 'room_update',
@@ -1092,7 +1597,8 @@ async function startServer() {
             const player = match.players[match.turnIndex];
             if (player.id !== userId) break;
 
-            if (match.activeActionRequest) {
+            const hasActiveAction = match.activeActionRequest || (match.activeActionRequests && match.activeActionRequests.length > 0);
+            if (hasActiveAction) {
               ws.send(JSON.stringify({ type: 'alert', message: 'Aktif bir ödeme veya hamle talebi varken turunuzu sonlandıramazsınız!' }));
               break;
             }
@@ -1106,6 +1612,7 @@ async function startServer() {
             // Move to next player
             match.turnIndex = (match.turnIndex + 1) % match.players.length;
             match.actionsPlayedThisTurn = 0;
+            match.turnStartedAt = Date.now();
 
             const nextPlayer = match.players[match.turnIndex];
             match.logs.push({
@@ -1195,16 +1702,87 @@ async function startServer() {
             });
             break;
           }
+
+          case 'trigger_emoji': {
+            const { emoji } = payload;
+            const match = activeMatches[roomId!];
+            if (!match) break;
+            const sender = match.players.find((p) => p.id === userId);
+            const senderName = sender ? sender.username : 'Oyuncu';
+            broadcastToRoom(roomId!, {
+              type: 'emoji_broadcast',
+              userId,
+              username: senderName,
+              emoji
+            });
+            break;
+          }
+
+          case 'reset_afk': {
+            const match = activeMatches[roomId!];
+            if (match && match.status === 'playing') {
+              const activePlayer = match.players[match.turnIndex];
+              // Reset turn timer if it is active player's turn, or reset action request timer if target is responding
+              if (activePlayer && activePlayer.id === userId) {
+                match.turnStartedAt = Date.now();
+              }
+              if (match.activeActionRequest && match.activeActionRequest.targetPlayerId === userId) {
+                match.actionRequestStartedAt = Date.now();
+              } else if (match.activeActionRequests) {
+                const myReq = match.activeActionRequests.find(r => r.targetPlayerId === userId);
+                if (myReq) {
+                  match.actionRequestStartedAt = Date.now();
+                }
+              }
+            }
+            break;
+          }
+
+          case 'request_sync': {
+            const match = activeMatches[roomId!];
+            if (match) {
+              ws.send(JSON.stringify({
+                type: 'room_update',
+                matchState: match,
+              }));
+            }
+            break;
+          }
+        }
+      } catch (err) {
+        console.error('Error handling ws message', err);
+      }
+    }
+
+    ws.on('message', async (messageStr: string) => {
+      try {
+        const payload = JSON.parse(messageStr);
+        const { type, userId, roomId } = payload;
+
+        if (roomId) {
+          if (!roomLocks[roomId]) {
+            roomLocks[roomId] = Promise.resolve();
+          }
+          roomLocks[roomId] = roomLocks[roomId].then(async () => {
+            try {
+              await processClientMessage(payload, userId, roomId, clientId, ws);
+            } catch (err) {
+              console.error(`[Queue] Error processing message ${type} in room ${roomId}:`, err);
+            }
+          });
+          await roomLocks[roomId];
+        } else {
+          await processClientMessage(payload, userId, undefined, clientId, ws);
         }
       } catch (err) {
         console.error('Error handling ws message', err);
       }
     });
 
-    ws.on('close', () => {
+    ws.on('close', async () => {
       const c = clients[clientId];
       if (c) {
-        updateFriendStatus(c.userId, 'offline');
+        await updateFriendStatus(c.userId, 'offline');
         if (c.roomId) {
           const match = activeMatches[c.roomId];
           if (match) {
@@ -1279,13 +1857,24 @@ async function startServer() {
     if (serverDeck.length < 5) {
       const disc = [...match.discardPile];
       match.discardPile = [];
-      const shuffled = shuffleDeck(disc);
-      serverDeck.push(...shuffled);
-      match.logs.push({
-        id: `reshuffle-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
-        message: 'Deste bitti, kartlar yeniden karıştırıldı.',
-        timestamp: Date.now(),
-      });
+      if (disc.length > 0) {
+        const shuffled = shuffleDeck(disc);
+        serverDeck.push(...shuffled);
+        match.logs.push({
+          id: `reshuffle-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
+          message: 'Deste bitti, kartlar yeniden karıştırıldı.',
+          timestamp: Date.now(),
+        });
+      } else {
+        // EMERGENCY: Discard pile is also empty! Generate backup cards from generateDeck template
+        const backupCards = shuffleDeck(generateDeck());
+        serverDeck.push(...backupCards);
+        match.logs.push({
+          id: `emergency-deck-${Date.now()}`,
+          message: '⚠️ Atık kart bulunamadı! Acil durum yedek destesi üretildi.',
+          timestamp: Date.now(),
+        });
+      }
     }
 
     // Drawing rule: if player has 0 cards, draw 5, else draw 2 (or 4 in Chaos mode).
@@ -1310,13 +1899,15 @@ async function startServer() {
     if (pending.length > 0) {
       match.activeActionRequest = pending.shift();
       (match as any).pendingActionRequests = pending;
+      match.actionRequestStartedAt = Date.now();
     } else {
       match.activeActionRequest = undefined;
+      match.actionRequestStartedAt = undefined;
     }
   }
 
   // Handle action cards execution on server
-  function processActionCard(match: MatchState, player: GamePlayer, card: Card, payload: any) {
+  async function processActionCard(match: MatchState, player: GamePlayer, card: Card, payload: any) {
     if (card.actionType === 'pass-go') {
       const serverDeck: Card[] = (match as any).serverDeck || [];
       const drawn = serverDeck.splice(0, 2);
@@ -1349,6 +1940,9 @@ async function startServer() {
       });
       match.activeActionRequests = pending;
       match.activeActionRequest = undefined;
+      if (pending.length > 0) {
+        match.actionRequestStartedAt = Date.now();
+      }
       match.logs.push({
         id: `birthday-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
         message: `${player.username} Bugün Benim Doğum Günüm kartını oynadı! Herkesten 2M talep ediyor.`,
@@ -1372,6 +1966,7 @@ async function startServer() {
             actionCard: card,
             amountDue: 2,
           };
+          match.actionRequestStartedAt = Date.now();
         }
         match.logs.push({
           id: `debt-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
@@ -1414,7 +2009,9 @@ async function startServer() {
                   targetPlayerId: targetId,
                   actionCard: card,
                   amountDue: rentVal,
+                  chosenColor: chosenColor,
                 };
+                match.actionRequestStartedAt = Date.now();
               }
               match.logs.push({
                 id: `rent-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
@@ -1438,11 +2035,15 @@ async function startServer() {
                 targetPlayerId: tp.id,
                 actionCard: card,
                 amountDue: rentVal,
+                chosenColor: chosenColor,
               });
             }
           });
           match.activeActionRequests = pending;
           match.activeActionRequest = undefined;
+          if (pending.length > 0) {
+            match.actionRequestStartedAt = Date.now();
+          }
           match.logs.push({
             id: `rent-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
             message: `${player.username}, ${COLOR_LABELS[chosenColor]} mülkleri için herkesten ${rentVal}M kira talep etti!`,
@@ -1492,7 +2093,7 @@ async function startServer() {
               timestamp: Date.now(),
             });
             if (checkWinnerForMatch(match, player)) {
-              handleMatchWinner(match, player.id);
+              await handleMatchWinner(match, player.id);
             }
           }
         } else {
@@ -1511,6 +2112,7 @@ async function startServer() {
             },
             jsnCount: 0
           };
+          match.actionRequestStartedAt = Date.now();
           match.logs.push({
             id: `sly-req-${Date.now()}`,
             message: `📣 ${player.username}, ${targetPlayer.username} adlı oyuncunun mülkünü Sinsi Anlaşma ile çalmak istiyor!`,
@@ -1536,7 +2138,7 @@ async function startServer() {
               timestamp: Date.now(),
             });
             if (checkWinnerForMatch(match, player)) {
-              handleMatchWinner(match, player.id);
+              await handleMatchWinner(match, player.id);
             }
           }
         } else {
@@ -1555,6 +2157,7 @@ async function startServer() {
             },
             jsnCount: 0
           };
+          match.actionRequestStartedAt = Date.now();
           match.logs.push({
             id: `db-req-${Date.now()}`,
             message: `📣 ${player.username}, ${targetPlayer.username} adlı oyuncunun tamamlanmış ${COLOR_LABELS[targetColor]} setini çalan bir Anlaşma Bozan kartı oynadı!`,
@@ -1629,10 +2232,10 @@ async function startServer() {
             });
 
             if (checkWinnerForMatch(match, player)) {
-              handleMatchWinner(match, player.id);
+              await handleMatchWinner(match, player.id);
             }
             if (checkWinnerForMatch(match, targetPlayer)) {
-              handleMatchWinner(match, targetPlayer.id);
+              await handleMatchWinner(match, targetPlayer.id);
             }
           }
         } else {
@@ -1659,6 +2262,12 @@ async function startServer() {
           });
         }
       }
+    }
+
+    if (match.activeActionRequest || (match.activeActionRequests && match.activeActionRequests.length > 0)) {
+      match.actionRequestStartedAt = Date.now();
+    } else {
+      match.actionRequestStartedAt = undefined;
     }
   }
 
@@ -1723,7 +2332,7 @@ async function startServer() {
 
 
   // Direct bot turn automation
-  function handleBotTurn(match: MatchState) {
+  async function handleBotTurn(match: MatchState) {
     if (match.status !== 'playing') return;
 
     const bot = match.players[match.turnIndex];
@@ -1764,7 +2373,7 @@ async function startServer() {
         });
 
         if (checkWinnerForMatch(match, bot)) {
-          handleMatchWinner(match, bot.id);
+          await handleMatchWinner(match, bot.id);
           broadcastToRoom(match.roomId, { type: 'room_update', matchState: match });
           return;
         }
@@ -1778,7 +2387,7 @@ async function startServer() {
           timestamp: Date.now(),
         });
 
-        processActionCard(match, bot, card, {
+        await processActionCard(match, bot, card, {
           ...decision.payload,
           extraColor: decision.extraColor
         });
@@ -1802,6 +2411,7 @@ async function startServer() {
 
       match.turnIndex = (match.turnIndex + 1) % match.players.length;
       match.actionsPlayedThisTurn = 0;
+      match.turnStartedAt = Date.now();
 
       const nextPlayer = match.players[match.turnIndex];
       match.logs.push({
@@ -1822,16 +2432,41 @@ async function startServer() {
 
   // Broadcast helper
   function broadcastToRoom(roomId: string, message: any) {
+    let payloadToSend = message;
+    if (message && message.type === 'room_update' && message.matchState) {
+      const match = message.matchState;
+      const now = Date.now();
+      const hasActiveAction = match.activeActionRequest || (match.activeActionRequests && match.activeActionRequests.length > 0);
+      const actionDurationLimit = (globalAdminSettings.actionTimeoutSeconds || 20) * 1000;
+
+      if (hasActiveAction && match.actionRequestStartedAt) {
+        match.actionTimeLeft = Math.max(0, Math.ceil((actionDurationLimit - (now - match.actionRequestStartedAt)) / 1000));
+      } else {
+        match.actionTimeLeft = null;
+      }
+
+      const turnLimit = (globalAdminSettings.turnTimeoutSeconds || 35) * 1000;
+      if (match.turnStartedAt) {
+        match.turnTimeLeft = Math.max(0, Math.ceil((turnLimit - (now - match.turnStartedAt)) / 1000));
+      } else {
+        match.turnTimeLeft = null;
+      }
+
+      payloadToSend = {
+        ...message,
+        checksum: calculateMatchChecksum(message.matchState)
+      };
+    }
     Object.values(clients).forEach((client) => {
       if (client.roomId === roomId && client.ws.readyState === WebSocket.OPEN) {
-        client.ws.send(JSON.stringify(message));
+        client.ws.send(JSON.stringify(payloadToSend));
       }
     });
   }
 
   // Update online presence for friends panel
-  function updateFriendStatus(userId: string, status: 'online' | 'offline' | 'in_game') {
-    const users = loadUsers();
+  async function updateFriendStatus(userId: string, status: 'online' | 'offline' | 'in_game') {
+    const users = await loadUsers();
     const user = users[userId];
     if (user) {
       Object.values(users).forEach((u) => {
@@ -1840,7 +2475,7 @@ async function startServer() {
           fr.status = status;
         }
       });
-      saveUsers(users);
+      await saveUsers(users);
     }
   }
 
@@ -1858,6 +2493,169 @@ async function startServer() {
       res.sendFile(path.join(distPath, 'index.html'));
     });
   }
+
+  // Start background room tick timer for turn timeouts and action timeouts
+  setInterval(() => {
+    const now = Date.now();
+    for (const roomId in activeMatches) {
+      const match = activeMatches[roomId];
+      if (!match || match.status !== 'playing') continue;
+
+      const activePlayer = match.players[match.turnIndex];
+      if (!activePlayer) continue;
+
+      // Pause the turn timer if there are active action requests/payments/JSN defenses in progress
+      const hasActiveAction = match.activeActionRequest || (match.activeActionRequests && match.activeActionRequests.length > 0);
+      if (hasActiveAction) {
+        match.turnStartedAt = now;
+      }
+
+      // Calculate remaining action time
+      const actionDurationLimit = (globalAdminSettings.actionTimeoutSeconds || 20) * 1000;
+      if (hasActiveAction && match.actionRequestStartedAt) {
+        match.actionTimeLeft = Math.max(0, Math.ceil((actionDurationLimit - (now - match.actionRequestStartedAt)) / 1000));
+      } else {
+        match.actionTimeLeft = null;
+      }
+
+      // Calculate remaining turn time
+      const turnLimit = (globalAdminSettings.turnTimeoutSeconds || 35) * 1000;
+      if (match.turnStartedAt) {
+        match.turnTimeLeft = Math.max(0, Math.ceil((turnLimit - (now - match.turnStartedAt)) / 1000));
+      } else {
+        match.turnTimeLeft = null;
+      }
+
+      // 1. Turn Timeout (e.g. 35 seconds per turn)
+      const turnDurationLimit = (globalAdminSettings.turnTimeoutSeconds || 35) * 1000;
+      if (match.turnStartedAt && (now - match.turnStartedAt > turnDurationLimit)) {
+        match.logs.push({
+          id: `afk-turn-${Date.now()}`,
+          message: `⏱️ ${activePlayer.username} süre aşımı nedeniyle sırasını kaybetti! Sıra devrediliyor.`,
+          timestamp: Date.now()
+        });
+
+        // Force discard if hand > 7
+        while (activePlayer.hand.length > 7) {
+          const discarded = activePlayer.hand.splice(0, 1)[0];
+          match.discardPile.push(discarded);
+        }
+
+        match.turnIndex = (match.turnIndex + 1) % match.players.length;
+        match.actionsPlayedThisTurn = 0;
+        match.turnStartedAt = Date.now();
+
+        const nextPlayer = match.players[match.turnIndex];
+        match.logs.push({
+          id: `turn-next-${Date.now()}`,
+          message: `Sıra ${nextPlayer.username} adlı oyuncuda.`,
+          timestamp: Date.now()
+        });
+
+        triggerDrawForActivePlayer(match);
+        broadcastToRoom(roomId, { type: 'room_update', matchState: match });
+
+        if (nextPlayer.isBot || nextPlayer.isDisconnected) {
+          setTimeout(() => handleBotTurn(match), 1000);
+        }
+        continue;
+      }
+
+      // 2. Active Action Request Timeout (e.g. 20 seconds for JSN/payment response)
+      if (match.activeActionRequest && match.actionRequestStartedAt && (now - match.actionRequestStartedAt > actionDurationLimit)) {
+        const req = match.activeActionRequest;
+        const targetPlayer = match.players.find(p => p.id === req.targetPlayerId);
+        const sourcePlayer = match.players.find(p => p.id === req.sourcePlayerId);
+
+        if (targetPlayer && sourcePlayer) {
+          match.logs.push({
+            id: `afk-action-${Date.now()}`,
+            message: `⏱️ ${targetPlayer.username} yanıt süresini aştı! Sistem otomatik karar alıyor.`,
+            timestamp: Date.now()
+          });
+
+          if (req.originalAction) {
+            executeOriginalActionServer(match, req);
+          } else if (req.amountDue) {
+            processBotPayment(match, targetPlayer, sourcePlayer, req.amountDue);
+          }
+
+          resolveActiveActionRequest(match);
+          match.actionRequestStartedAt = undefined;
+
+          // Auto end turn check
+          const activePlayer = match.players[match.turnIndex];
+          const hasActiveAction = match.activeActionRequest || (match.activeActionRequests && match.activeActionRequests.length > 0);
+          if (!hasActiveAction && match.actionsPlayedThisTurn >= 3 && activePlayer) {
+            if (activePlayer.hand.length <= 7) {
+              match.turnIndex = (match.turnIndex + 1) % match.players.length;
+              match.actionsPlayedThisTurn = 0;
+              match.turnStartedAt = Date.now();
+
+              const nextPlayer = match.players[match.turnIndex];
+              match.logs.push({
+                id: `turn-afk-${Date.now()}`,
+                message: `Sıra ${nextPlayer.username} adlı oyuncuda. (Önceki oyuncu 3 hamlesini tamamladı)`,
+                timestamp: Date.now()
+              });
+
+              triggerDrawForActivePlayer(match);
+              if (nextPlayer.isBot || nextPlayer.isDisconnected) {
+                setTimeout(() => handleBotTurn(match), 1000);
+              }
+            }
+          }
+
+          broadcastToRoom(roomId, { type: 'room_update', matchState: match });
+        }
+      }
+
+      // 2.1 Multi Action Requests Timeout (Birthday / Rent)
+      if (match.activeActionRequests && match.activeActionRequests.length > 0 && match.actionRequestStartedAt && (now - match.actionRequestStartedAt > actionDurationLimit)) {
+        match.logs.push({
+          id: `afk-multi-action-${Date.now()}`,
+          message: `⏱️ Bazı oyuncular yanıt süresini aştı! Sistem otomatik ödeme yaptı.`,
+          timestamp: Date.now()
+        });
+
+        match.activeActionRequests.forEach((req) => {
+          const targetPlayer = match.players.find(p => p.id === req.targetPlayerId);
+          const sourcePlayer = match.players.find(p => p.id === req.sourcePlayerId);
+          if (targetPlayer && sourcePlayer && req.amountDue) {
+            processBotPayment(match, targetPlayer, sourcePlayer, req.amountDue);
+          }
+        });
+
+        match.activeActionRequests = undefined;
+        match.actionRequestStartedAt = undefined;
+
+        // Auto end turn check
+        const activePlayer = match.players[match.turnIndex];
+        const hasActiveAction = match.activeActionRequest || (match.activeActionRequests && match.activeActionRequests.length > 0);
+        if (!hasActiveAction && match.actionsPlayedThisTurn >= 3 && activePlayer) {
+          if (activePlayer.hand.length <= 7) {
+            match.turnIndex = (match.turnIndex + 1) % match.players.length;
+            match.actionsPlayedThisTurn = 0;
+            match.turnStartedAt = Date.now();
+
+            const nextPlayer = match.players[match.turnIndex];
+            match.logs.push({
+              id: `turn-afk-${Date.now()}`,
+              message: `Sıra ${nextPlayer.username} adlı oyuncuda. (Önceki oyuncu 3 hamlesini tamamladı)`,
+              timestamp: Date.now()
+            });
+
+            triggerDrawForActivePlayer(match);
+            if (nextPlayer.isBot || nextPlayer.isDisconnected) {
+              setTimeout(() => handleBotTurn(match), 1000);
+            }
+          }
+        }
+
+        broadcastToRoom(roomId, { type: 'room_update', matchState: match });
+      }
+    }
+  }, 1000);
 
   server.listen(PORT, '0.0.0.0', () => {
     console.log(`[Server] Deal Master PRO Deal running on http://0.0.0.0:${PORT}`);
@@ -1890,7 +2688,7 @@ const RENT_VALUES: Record<CardColor, number[]> = {
   utility: [1, 2],
 };
 
-function executeOriginalActionServer(match: any, req: any) {
+async function executeOriginalActionServer(match: any, req: any) {
   const sourcePlayer = match.players.find((p: any) => p.id === req.sourcePlayerId);
   const targetPlayer = match.players.find((p: any) => p.id === req.targetPlayerId);
   if (!sourcePlayer || !targetPlayer) return;
@@ -1933,7 +2731,7 @@ function executeOriginalActionServer(match: any, req: any) {
       });
 
       if (checkWinnerForMatch(match, sourcePlayer)) {
-        handleMatchWinner(match, sourcePlayer.id);
+        await handleMatchWinner(match, sourcePlayer.id);
       }
     }
 
@@ -1952,7 +2750,7 @@ function executeOriginalActionServer(match: any, req: any) {
         });
 
         if (checkWinnerForMatch(match, sourcePlayer)) {
-          handleMatchWinner(match, sourcePlayer.id);
+          await handleMatchWinner(match, sourcePlayer.id);
         }
       }
     }
@@ -2018,10 +2816,10 @@ function executeOriginalActionServer(match: any, req: any) {
       });
 
       if (checkWinnerForMatch(match, sourcePlayer)) {
-        handleMatchWinner(match, sourcePlayer.id);
+        await handleMatchWinner(match, sourcePlayer.id);
       }
       if (checkWinnerForMatch(match, targetPlayer)) {
-        handleMatchWinner(match, targetPlayer.id);
+        await handleMatchWinner(match, targetPlayer.id);
       }
     }
   }
@@ -2032,7 +2830,7 @@ startServer().catch((err) => {
 });
 
 // Handle Match Win State on Server
-function handleMatchWinner(match: any, winnerId: string) {
+async function handleMatchWinner(match: any, winnerId: string) {
   match.status = 'finished';
   match.winnerId = winnerId;
 
@@ -2044,7 +2842,7 @@ function handleMatchWinner(match: any, winnerId: string) {
   });
 
   // Award XP/Coins to the winner securely
-  const users = loadUsers();
+  const users = await loadUsers();
   const winnerUser = users[winnerId];
   const dateStr = new Date().toLocaleDateString('tr-TR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
 
@@ -2107,5 +2905,22 @@ function handleMatchWinner(match: any, winnerId: string) {
     }
   });
 
-  saveUsers(users);
+  await saveUsers(users);
+}
+
+function calculateMatchChecksum(match: MatchState): string {
+  let sum = 0;
+  match.players.forEach((p) => {
+    sum += p.hand.length * 17;
+    p.bank.forEach((c) => {
+      sum += c.value * 31;
+    });
+    Object.keys(p.properties).forEach((color) => {
+      const set = p.properties[color];
+      if (set && set.cards) {
+        sum += set.cards.length * 47;
+      }
+    });
+  });
+  return `chk-${sum}`;
 }

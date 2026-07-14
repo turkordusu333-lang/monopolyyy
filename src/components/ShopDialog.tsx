@@ -2,11 +2,65 @@ import React from 'react';
 import { UserProfile, StoreItem } from '../types';
 import { sounds } from '../lib/SoundSystem';
 import { AvatarWithFrame } from './AvatarWithFrame';
+import { t } from '../lib/TranslationSystem';
 
 interface Props {
   profile: UserProfile;
   onUpdateProfile: (updated: UserProfile) => void;
 }
+
+const AVATAR_EMOJIS: Record<string, string> = {
+  avatar_classic: '👑',
+  avatar_skater: '🛹',
+  avatar_neon: '🌌',
+  avatar_golden: '👑',
+  avatar_alien: '👽',
+  avatar_ninja: '🥷',
+  avatar_wizard: '🧙',
+  avatar_dragon: '🐉',
+  avatar_astronaut: '🧑‍🚀',
+  avatar_robot: '🤖',
+  avatar_dj: '🎧',
+  avatar_ghost: '👻',
+  avatar_knight: '🛡️',
+  avatar_unicorn: '🦄',
+  avatar_pharaoh: '👑',
+  avatar_zombie: '🧟',
+};
+
+const CARD_BACK_STYLES: Record<string, { color: string; symbol: string; bgClass?: string; pColor?: string }> = {
+  back_classic: { color: '#EF4444', symbol: '▲', pColor: '#FCA5A5' },
+  back_cosmic: { color: '#0F172A', symbol: '★', pColor: '#818CF8' },
+  back_gold: { color: '#D97706', symbol: '♛', pColor: '#FBBF24' },
+  back_neon: { color: '#EC407A', symbol: '▲', pColor: '#F472B6' },
+  back_fire: { color: '#B91C1C', symbol: '🔥', pColor: '#F59E0B', bgClass: 'bg-gradient-to-br from-red-700 to-yellow-600' },
+  back_ice: { color: '#0891B2', symbol: '❄️', pColor: '#22D3EE', bgClass: 'bg-gradient-to-br from-cyan-600 to-blue-500' },
+  back_void: { color: '#3B0764', symbol: '🌀', pColor: '#C084FC', bgClass: 'bg-gradient-to-br from-purple-950 to-black' },
+  back_matrix: { color: '#052E16', symbol: '💾', pColor: '#4ADE80', bgClass: 'bg-gradient-to-br from-green-950 to-black' },
+  back_rainbow: { color: '#475569', symbol: '🌈', pColor: '#F87171', bgClass: 'bg-gradient-to-r from-red-500 via-yellow-500 via-green-500 via-blue-500 to-purple-500' },
+  back_bubble: { color: '#38BDF8', symbol: '🫧', pColor: '#FFD6E8', bgClass: 'bg-gradient-to-br from-sky-400 to-pink-300' },
+  back_steampunk: { color: '#78350F', symbol: '⚙️', pColor: '#F59E0B', bgClass: 'bg-gradient-to-br from-amber-800 to-zinc-700' },
+  back_laser: { color: '#1E1B4B', symbol: '⚡', pColor: '#A78BFA', bgClass: 'bg-gradient-to-br from-violet-950 to-fuchsia-900' },
+  back_galaxy: { color: '#1E1B4B', symbol: '🌌', pColor: '#C084FC', bgClass: 'bg-gradient-to-br from-purple-950 to-indigo-900' },
+  back_darkness: { color: '#090514', symbol: '👁️', pColor: '#EC4899', bgClass: 'bg-gradient-to-br from-slate-950 to-purple-950' },
+};
+
+const BOARD_THEME_COLORS: Record<string, string> = {
+  theme_slate: '#0F172A',
+  theme_green: '#064E3B',
+  theme_purple: '#581C87',
+  theme_cyberpunk: '#090D16',
+  theme_lava: '#450A0A',
+  theme_abyss: '#020617',
+  theme_gold: '#78350F',
+  theme_sakura: '#500724',
+  theme_ice: '#1E3A8A',
+  theme_retro: '#311042',
+  theme_toxic: '#022C22',
+  theme_matrix: '#022C22',
+  theme_space: '#0F172A',
+  theme_desert: '#7C2D12',
+};
 
 const STORE_ITEMS: Omit<StoreItem, 'isUnlocked'>[] = [
   // Avatars
@@ -14,15 +68,53 @@ const STORE_ITEMS: Omit<StoreItem, 'isUnlocked'>[] = [
   { id: 'avatar_neon', name: 'Cyber Neon', category: 'avatar', price: 250, description: 'Gelecekten gelen neon parıltılı hacker siber tasarımı.' },
   { id: 'avatar_golden', name: 'Altın Kral', category: 'avatar', price: 500, description: 'Lüks altın taçlı şampiyon Deal Master PRO Deal kralı.' },
 
+  // NEW AVATARS (12)
+  { id: 'avatar_alien', name: 'Siber Uzaylı', category: 'avatar', price: 120, description: 'Samanyolu dışından gelen siber zeka.' },
+  { id: 'avatar_ninja', name: 'Gölge Ninja', category: 'avatar', price: 180, description: 'Gizlilik ve sessizlik ustası gölge.' },
+  { id: 'avatar_wizard', name: 'Başbüyücü', category: 'avatar', price: 200, description: 'Kartların kaderini değiştiren büyücü.' },
+  { id: 'avatar_dragon', name: 'Kadim Ejderha', category: 'avatar', price: 350, description: 'Ateş saçan görkemli efsane.' },
+  { id: 'avatar_astronaut', name: 'Uzay Gezgini', category: 'avatar', price: 160, description: 'Derin uzay boşluğunda bir astronot.' },
+  { id: 'avatar_robot', name: 'Siber Mekanik', category: 'avatar', price: 140, description: 'Yapay zeka temelli mekanik zeka.' },
+  { id: 'avatar_dj', name: 'Ritmin Ustası DJ', category: 'avatar', price: 110, description: 'Arenaya kendi temposunu getiren DJ.' },
+  { id: 'avatar_ghost', name: 'Kabus Hayalet', category: 'avatar', price: 130, description: 'Rakiplerinin kabusu olan ruh.' },
+  { id: 'avatar_knight', name: 'Onurlu Şövalye', category: 'avatar', price: 220, description: 'Kraliyetin sadık koruyucusu.' },
+  { id: 'avatar_unicorn', name: 'Efsanevi Unicorn', category: 'avatar', price: 300, description: 'Gökkuşağının parlayan efsanesi.' },
+  { id: 'avatar_pharaoh', name: 'Mısır Firavunu', category: 'avatar', price: 280, description: 'Mısırın kadim altın hükümdarı.' },
+  { id: 'avatar_zombie', name: 'Zombi Saldırganı', category: 'avatar', price: 90, description: 'Karanlık geceden fırlayan zombi.' },
+
   // Card Backs
   { id: 'back_cosmic', name: 'Kozmik Siyah', category: 'card_back', price: 150, description: 'Yıldızlar ve samanyolu desenli kozmik kart arkası.' },
   { id: 'back_gold', name: 'V.I.P Altın', category: 'card_back', price: 300, description: 'Altın kaplamalı elit kulüp lüks desen tasarımı.' },
   { id: 'back_neon', name: 'Retro Dalga', category: 'card_back', price: 200, description: '80\'lerin synthwave mor dalga çizgileri.' },
 
+  // NEW CARD BACKS (10)
+  { id: 'back_fire', name: 'Volkanik Magma', category: 'card_back', price: 160, description: 'Kızıl lav efektli sıcak kart arkalığı.' },
+  { id: 'back_ice', name: 'Kutup Rüzgarı', category: 'card_back', price: 180, description: 'Kutup soğukluğu taşıyan kristal kartlar.' },
+  { id: 'back_void', name: 'Karanlık Rift', category: 'card_back', price: 220, description: 'Uzay boşluğu çeken kara delik deseni.' },
+  { id: 'back_matrix', name: 'Siber Kod Yağmuru', category: 'card_back', price: 250, description: 'Yeşil siber veri çizgileriyle akan kodlar.' },
+  { id: 'back_rainbow', name: 'Gökkuşağı Prizması', category: 'card_back', price: 210, description: 'Tüm renk tayfını yansıtan prizma.' },
+  { id: 'back_bubble', name: 'Deniz Köpüğü', category: 'card_back', price: 140, description: 'Su altı baloncuklu canlı tasarım.' },
+  { id: 'back_steampunk', name: 'Buharlı Çark', category: 'card_back', price: 190, description: 'Bronz çarklar ve buhar makineleri.' },
+  { id: 'back_laser', name: 'Retro Grid Lazer', category: 'card_back', price: 240, description: 'Lazer ışınlarıyla çizilmiş 80ler gridi.' },
+  { id: 'back_galaxy', name: 'Nebula Bulutu', category: 'card_back', price: 280, description: 'Yıldız tozu ve mor nebula süzülmesi.' },
+  { id: 'back_darkness', name: 'Gölgeler Diyarı', category: 'card_back', price: 170, description: 'Gizemli gözler ve koyu karanlık.' },
+
   // Board Themes
   { id: 'theme_green', name: 'Nane Yeşili', category: 'board_theme', price: 100, description: 'Klasik Deal Master PRO yeşil keçe masa tasarımı.' },
   { id: 'theme_purple', name: 'Kraliyet Moru', category: 'board_theme', price: 250, description: 'Mor renk kadife üzerine altın işlemeli lüks masa.' },
   { id: 'theme_cyberpunk', name: 'Siber Izgara', category: 'board_theme', price: 400, description: 'Karanlık odada parlayan siber neon oyun masası.' },
+
+  // NEW BOARD THEMES (10)
+  { id: 'theme_lava', name: 'Magma Krateri', category: 'board_theme', price: 220, description: 'Aktif yanardağ lavları üzerinde sıcak masa.' },
+  { id: 'theme_abyss', name: 'Karanlık Çukur', category: 'board_theme', price: 240, description: 'Denizin en karanlık dip noktasındaki su altı arenası.' },
+  { id: 'theme_gold', name: 'Hazine Odası', category: 'board_theme', price: 400, description: 'Saf altın külçelerle süslenmiş zengin kraliyet masası.' },
+  { id: 'theme_sakura', name: 'Sakura Vadisi', category: 'board_theme', price: 260, description: 'Kiraz çiçeklerinin süzüldüğü huzurlu masa.' },
+  { id: 'theme_ice', name: 'Kar Fırtınası', category: 'board_theme', price: 250, description: 'Kar fırtınası altında kalmış kristal buz masası.' },
+  { id: 'theme_retro', name: 'Atari Salonu', category: 'board_theme', price: 300, description: '80ler atari salonu neon çizgi desenli masa.' },
+  { id: 'theme_toxic', name: 'Zehirli Vaha', category: 'board_theme', price: 180, description: 'Yeşil asit havuzlu tekinsiz endüstriyel masa.' },
+  { id: 'theme_matrix', name: 'Sanal Matris', category: 'board_theme', price: 350, description: 'Yeşil akan kod yağmuru altında sanal masa.' },
+  { id: 'theme_space', name: 'Uzay İstasyonu', category: 'board_theme', price: 450, description: 'Dünya manzaralı uzay üssü gözlem masası.' },
+  { id: 'theme_desert', name: 'Kayıp Tapınak', category: 'board_theme', price: 150, description: 'Mısır kumları altındaki kadim çöl masası.' },
 
   // Profile Frames
   { id: 'frame_neon', name: 'Neon Aura Çerçevesi', category: 'profile_frame', price: 150, description: 'Profil fotoğrafınızın etrafında harika pembe neon parlaması yaratır.' },
@@ -30,12 +122,34 @@ const STORE_ITEMS: Omit<StoreItem, 'isUnlocked'>[] = [
   { id: 'frame_fire', name: 'Volkanik Ateş Çerçevesi', category: 'profile_frame', price: 200, description: 'Ateş kırmızısı ve lav akışı efektli çarpıcı çerçeve.' },
   { id: 'frame_royal', name: 'Kraliyet Elması Çerçevesi', category: 'profile_frame', price: 450, description: 'Göz kamaştırıcı mavi elmas süslemeleriyle şampiyonlara özel.' },
 
+  // NEW PROFILE FRAMES (10)
+  { id: 'frame_plasma', name: 'Plazma Kalkanı', category: 'profile_frame', price: 225, description: 'Mavi elektrik arklarıyla parlayan plazma çerçeve.' },
+  { id: 'frame_rainbow', name: 'Gökkuşağı Spektrumu', category: 'profile_frame', price: 265, description: 'Sürekli renk değiştiren RGB spektrum çerçeve.' },
+  { id: 'frame_toxic', name: 'Radyoaktif Slime', category: 'profile_frame', price: 175, description: 'Yemyeşil zehir akıntılı hareketli slime çerçeve.' },
+  { id: 'frame_ice', name: 'Buz Kristali', category: 'profile_frame', price: 195, description: 'Kutup soğukluğu saçan parıltılı mavi buz çerçevesi.' },
+  { id: 'frame_steampunk', name: 'Buharlı Dişliler', category: 'profile_frame', price: 215, description: 'Dönen bronz dişli çarklar ve bakır çerçeve.' },
+  { id: 'frame_matrix', name: 'Matris Kod Hattı', category: 'profile_frame', price: 285, description: 'Aşağı akan yeşil binary siber kod çerçevesi.' },
+  { id: 'frame_thunder', name: 'Şimşek Hattı', category: 'profile_frame', price: 325, description: 'Etrafından sarı şimşekler fırlayan dinamik çerçeve.' },
+  { id: 'frame_darkness', name: 'Karanlık Duman', category: 'profile_frame', price: 245, description: 'Koyu mor gölge dumanları tüten gizemli çerçeve.' },
+  { id: 'frame_galaxy', name: 'Galaksi Sarmalı', category: 'profile_frame', price: 350, description: 'Dönen galaksi sarmalı ve yıldız tozu aurası.' },
+  { id: 'frame_dragon', name: 'Ejderha Pulları', category: 'profile_frame', price: 400, description: 'Kızıl ejderha pulları ve parıldayan pullu çerçeve.' },
+
   // Celebration Sounds
   { id: 'sound_classic', name: 'Klasik Melodi', category: 'celebration_sound', price: 0, description: 'Klasik retro tınılı zafer melodisi.' },
   { id: 'sound_applause', name: 'Coşkulu Alkış', category: 'celebration_sound', price: 100, description: 'Kritik hamlelerinizde ve zaferlerinizde çalan coşkulu alkış efekti.' },
   { id: 'sound_fireworks', name: 'Havai Fişek', category: 'celebration_sound', price: 180, description: 'Gökyüzünde patlayan renkli ve heyecanlı şenlik efekti.' },
   { id: 'sound_laser', name: 'Siber Lazer', category: 'celebration_sound', price: 150, description: 'Cyberpunk arenalara özel fütüristik retro lazer şovu.' },
   { id: 'sound_fanfare', name: 'Şampiyon Fanfarı', category: 'celebration_sound', price: 250, description: 'Zafere ulaştığınızda çalacak asil ve muhteşem şampiyon melodisi.' },
+
+  // NEW CELEBRATION SOUNDS (8)
+  { id: 'sound_victory', name: 'Zafer Marşı', category: 'celebration_sound', price: 200, description: 'Trompet sesleriyle dolu epik zafer marşı.' },
+  { id: 'sound_arcade', name: '8-Bit Atari', category: 'celebration_sound', price: 120, description: 'Eski atari oyunları tarzı retro ses efektleri.' },
+  { id: 'sound_coins', name: 'Para Yağmuru', category: 'celebration_sound', price: 150, description: 'Kasanıza para girerken çalan jackpot şıkırtısı.' },
+  { id: 'sound_laser_zap', name: 'Lazer Silahı', category: 'celebration_sound', price: 130, description: 'Fütüristik siber lazer atış sesleri.' },
+  { id: 'sound_rock', name: 'Elektro Gitar Riffi', category: 'celebration_sound', price: 220, description: 'Zafere ulaştığınızda çalan havalı gitar solosu.' },
+  { id: 'sound_synthwave', name: 'Synthwave Bas', category: 'celebration_sound', price: 170, description: '80ler tarzı elektronik bas ritimleri.' },
+  { id: 'sound_thunder', name: 'Kuvvetli Yıldırım', category: 'celebration_sound', price: 250, description: 'Hamlelerinizi taçlandıracak güçlü gök gürültüsü.' },
+  { id: 'sound_magical', name: 'Sihirli Değnek', category: 'celebration_sound', price: 180, description: 'Kartlarınızı açtığınızda çalan parıltılı büyü melodisi.' }
 ];
 
 export const ShopDialog: React.FC<Props> = ({ profile, onUpdateProfile }) => {
@@ -118,13 +232,13 @@ export const ShopDialog: React.FC<Props> = ({ profile, onUpdateProfile }) => {
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-6 border-b border-white/10 pb-4">
         <div>
           <h2 className="text-2xl font-bold tracking-tight text-white flex items-center gap-2">
-            <span>🛒</span> Deal Master PRO Mağazası
+            <span>🛒</span> {t('shop_title_lbl', profile)}
           </h2>
-          <p className="text-slate-400 text-sm">Avatarlar, kartlar, lüks temalar ve özel sesler satın alın</p>
+          <p className="text-slate-400 text-sm">{t('shop_desc_lbl', profile)}</p>
         </div>
         <div className="flex items-center gap-2 bg-black/40 border border-white/5 px-4 py-2 rounded-xl">
           <div className="w-3.5 h-3.5 bg-yellow-400 rounded-full shadow-md shadow-yellow-500/20"></div>
-          <span className="font-bold text-amber-300 text-lg">{profile.coins} Altın</span>
+          <span className="font-bold text-amber-300 text-lg">{t('shop_coins_lbl', profile, profile.coins)}</span>
         </div>
       </div>
 
@@ -137,12 +251,12 @@ export const ShopDialog: React.FC<Props> = ({ profile, onUpdateProfile }) => {
       {/* Categories Tabs */}
       <div className="flex flex-wrap gap-2 mb-6">
         {[
-          { id: 'all', label: 'Tüm Ürünler' },
-          { id: 'avatar', label: '👤 Avatarlar' },
-          { id: 'card_back', label: '🃏 Kartlar' },
-          { id: 'board_theme', label: '🎨 Masa Temaları' },
-          { id: 'profile_frame', label: '🖼️ Çerçeveler' },
-          { id: 'celebration_sound', label: '🎉 Kutlama Sesleri' },
+          { id: 'all', label: t('shop_tab_all', profile) },
+          { id: 'avatar', label: t('shop_tab_avatars', profile) },
+          { id: 'card_back', label: t('shop_tab_card_backs', profile) },
+          { id: 'board_theme', label: t('shop_tab_themes', profile) },
+          { id: 'profile_frame', label: t('shop_tab_frames', profile) },
+          { id: 'celebration_sound', label: t('shop_tab_sounds', profile) },
         ].map((tab) => (
           <button
             key={tab.id}
@@ -188,34 +302,35 @@ export const ShopDialog: React.FC<Props> = ({ profile, onUpdateProfile }) => {
                   </div>
 
                   {item.category === 'avatar' && (
-                    <div className="w-16 h-16 rounded-full border-4 border-red-500 flex items-center justify-center text-3xl bg-slate-800 shadow-lg">
-                      {item.id === 'avatar_skater' ? '🛹' : item.id === 'avatar_neon' ? '🌌' : '👑'}
+                    <div className="w-16 h-16 rounded-full border-4 border-red-500 flex items-center justify-center text-3xl bg-slate-800 shadow-lg animate-bounce-subtle">
+                      {AVATAR_EMOJIS[item.id] || '👑'}
                     </div>
                   )}
 
-                  {item.category === 'card_back' && (
-                    <div
-                      className="w-16 h-24 rounded-lg border-2 border-white/15 flex items-center justify-center font-bold text-3xl shadow-2xl transition-transform"
-                      style={{
-                        backgroundColor:
-                          item.id === 'back_cosmic' ? '#0F172A' : item.id === 'back_gold' ? '#D97706' : '#EC407A',
-                      }}
-                    >
-                      <span className="text-white font-black">
-                        {item.id === 'back_cosmic' ? '★' : item.id === 'back_gold' ? '♛' : '▲'}
-                      </span>
-                    </div>
-                  )}
+                  {item.category === 'card_back' && (() => {
+                    const cBack = CARD_BACK_STYLES[item.id] || { color: '#EF4444', symbol: '▲' };
+                    return (
+                      <div
+                        className={`w-16 h-24 rounded-lg border-2 border-white/15 flex items-center justify-center font-bold text-3xl shadow-2xl transition-all duration-300 ${cBack.bgClass || ''} group-hover:scale-110`}
+                        style={{
+                          backgroundColor: cBack.bgClass ? undefined : cBack.color,
+                        }}
+                      >
+                        <span className="text-white font-black drop-shadow-md">
+                          {cBack.symbol}
+                        </span>
+                      </div>
+                    );
+                  })()}
 
                   {item.category === 'board_theme' && (
                     <div
-                      className="w-full h-full flex flex-col items-center justify-center"
+                      className="w-full h-full flex flex-col items-center justify-center transition-colors duration-300"
                       style={{
-                        backgroundColor:
-                          item.id === 'theme_green' ? '#064E3B' : item.id === 'theme_purple' ? '#581C87' : '#090D16',
+                        backgroundColor: BOARD_THEME_COLORS[item.id] || '#090D16',
                       }}
                     >
-                      <div className="w-12 h-12 rounded border-2 border-dashed border-white/20 flex items-center justify-center text-white/40 text-xs">
+                      <div className="w-12 h-12 rounded border border-dashed border-white/20 flex items-center justify-center text-white/40 text-[9px] font-black uppercase tracking-wider">
                         Masa
                       </div>
                     </div>
@@ -301,84 +416,85 @@ export const ShopDialog: React.FC<Props> = ({ profile, onUpdateProfile }) => {
               {/* Dynamic Animation Area */}
               <div className="bg-black/40 border border-white/5 rounded-2xl aspect-[1.5] flex items-center justify-center relative overflow-hidden p-6 mb-6">
                 {previewItem.category === 'avatar' && (
-                  <div className="flex flex-col items-center gap-3">
-                    <div className="w-24 h-24 rounded-full border-4 border-red-500 flex items-center justify-center text-5xl bg-slate-800 shadow-xl animate-bounce-subtle">
-                      {previewItem.id === 'avatar_skater' ? '🛹' : previewItem.id === 'avatar_neon' ? '🌌' : '👑'}
+                  <div className="flex flex-col items-center gap-3 relative">
+                    <div className="w-24 h-24 rounded-full border-4 border-red-500 flex items-center justify-center text-5xl bg-slate-800 shadow-xl animate-bounce-subtle z-10 relative">
+                      {AVATAR_EMOJIS[previewItem.id] || '👑'}
                     </div>
                     {/* Ripple background ring */}
-                    <div className="absolute inset-0 rounded-full border border-red-500/20 scale-50 animate-ping opacity-30 pointer-events-none" />
+                    <div className="absolute inset-0 w-32 h-32 rounded-full border border-red-500/20 scale-110 animate-ping opacity-30 pointer-events-none self-center top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2" />
                   </div>
                 )}
 
-                {previewItem.category === 'card_back' && (
-                  <div className="flex flex-col items-center">
-                    {/* Glowing particle container */}
-                    <div
-                      className={`w-28 h-40 rounded-xl border-2 flex flex-col justify-between p-3 shadow-2xl transition-all duration-500 relative overflow-hidden ${previewItem.id === 'back_cosmic'
-                          ? 'border-indigo-500 shadow-indigo-500/50 bg-gradient-to-br from-slate-950 to-indigo-950'
-                          : previewItem.id === 'back_gold'
-                            ? 'border-yellow-500 shadow-yellow-500/50 bg-gradient-to-br from-amber-950 to-amber-700'
-                            : 'border-pink-500 shadow-pink-500/50 bg-gradient-to-br from-rose-950 to-pink-600'
-                        }`}
-                    >
-                      {/* Particles inside card */}
-                      <div className="absolute inset-0 pointer-events-none">
-                        {[...Array(8)].map((_, idx) => (
-                          <span
-                            key={idx}
-                            className="absolute rounded-full animate-float"
-                            style={{
-                              left: `${10 + Math.random() * 80}%`,
-                              bottom: '-10px',
-                              width: `${3 + Math.random() * 4}px`,
-                              height: `${3 + Math.random() * 4}px`,
-                              backgroundColor: previewItem.id === 'back_cosmic' ? '#818CF8' : previewItem.id === 'back_gold' ? '#FBBF24' : '#F472B6',
-                              boxShadow: `0 0 8px ${previewItem.id === 'back_cosmic' ? '#818CF8' : '#FBBF24'}`,
-                              animationDelay: `${idx * 0.2}s`,
-                              animationDuration: '1.4s'
-                            }}
-                          />
-                        ))}
+                {previewItem.category === 'card_back' && (() => {
+                  const cBack = CARD_BACK_STYLES[previewItem.id] || { color: '#EF4444', symbol: '▲', pColor: '#FCA5A5' };
+                  return (
+                    <div className="flex flex-col items-center">
+                      <div
+                        className={`w-28 h-40 rounded-xl border-2 flex flex-col justify-between p-3 shadow-2xl transition-all duration-500 relative overflow-hidden ${cBack.bgClass || ''}`}
+                        style={{
+                          backgroundColor: cBack.bgClass ? undefined : cBack.color,
+                          borderColor: cBack.pColor || '#FFFFFF',
+                          boxShadow: `0 0 25px ${(cBack.pColor || '#FFFFFF')}80`
+                        }}
+                      >
+                        {/* Particles inside card */}
+                        <div className="absolute inset-0 pointer-events-none">
+                          {[...Array(12)].map((_, idx) => (
+                            <span
+                              key={idx}
+                              className="absolute rounded-full animate-float"
+                              style={{
+                                left: `${10 + Math.random() * 80}%`,
+                                bottom: '-10px',
+                                width: `${2 + Math.random() * 4}px`,
+                                height: `${2 + Math.random() * 4}px`,
+                                backgroundColor: cBack.pColor || '#FFFFFF',
+                                boxShadow: `0 0 8px ${cBack.pColor || '#FFFFFF'}`,
+                                animationDelay: `${idx * 0.15}s`,
+                                animationDuration: '1.6s'
+                              }}
+                            />
+                          ))}
+                        </div>
+
+                        <div className="text-white/25 text-left text-[8px] font-black tracking-widest leading-none select-none">Deal Master PRO</div>
+
+                        <span className="text-white text-5xl font-black self-center drop-shadow-xl animate-pulse">
+                          {cBack.symbol}
+                        </span>
+
+                        <div className="text-white/25 text-right text-[8px] font-black tracking-widest leading-none select-none">DEAL</div>
                       </div>
-
-                      <div className="text-white/20 text-left text-[8px] font-black tracking-widest leading-none">Deal Master PRO</div>
-
-                      <span className="text-white text-4xl font-black self-center drop-shadow-lg animate-pulse">
-                        {previewItem.id === 'back_cosmic' ? '★' : previewItem.id === 'back_gold' ? '♛' : '▲'}
+                      <span className="text-[10px] text-amber-400 font-bold mt-3 animate-pulse">
+                        ✨ HAREKETLİ TEKSTÜR VE EFEKTLER AKTİF ✨
                       </span>
-
-                      <div className="text-white/20 text-right text-[8px] font-black tracking-widest leading-none">DEAL</div>
                     </div>
-                    <span className="text-[10px] text-amber-400 font-bold mt-3 animate-pulse">
-                      ✨ ÖZEL PARÇACIK VE PARLAMA EFEKTİ AKTİF ✨
-                    </span>
-                  </div>
-                )}
+                  );
+                })()}
 
                 {previewItem.category === 'board_theme' && (
                   <div
-                    className="w-full h-full rounded-xl p-4 flex flex-col justify-between transition-colors duration-500"
+                    className="w-full h-full rounded-xl p-4 flex flex-col justify-between transition-colors duration-500 border border-white/10"
                     style={{
-                      backgroundColor:
-                        previewItem.id === 'theme_green' ? '#064E3B' : previewItem.id === 'theme_purple' ? '#3B0764' : '#050B14',
+                      backgroundColor: BOARD_THEME_COLORS[previewItem.id] || '#050B14',
                     }}
                   >
                     <div className="w-full flex justify-between items-center border-b border-white/5 pb-2">
                       <div className="flex gap-1.5">
                         <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse" />
-                        <span className="w-2 h-2 rounded-full bg-yellow-500 animate-pulse" />
-                        <span className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
+                        <span className="w-2 h-2 rounded-full bg-yellow-500 animate-pulse" style={{ animationDelay: '0.2s' }} />
+                        <span className="w-2 h-2 rounded-full bg-green-500 animate-pulse" style={{ animationDelay: '0.4s' }} />
                       </div>
-                      <span className="text-[9px] font-mono text-white/40">PREVIEW BOARD</span>
+                      <span className="text-[9px] font-mono text-white/40">CANLI MASA TEMASI</span>
                     </div>
 
                     <div className="grid grid-cols-3 gap-2 my-auto">
-                      <div className="bg-white/5 border border-white/10 rounded-lg p-2 text-center text-[10px] font-bold">Banka</div>
-                      <div className="bg-white/5 border border-white/10 rounded-lg p-2 text-center text-[10px] font-bold text-amber-400 animate-pulse">Deste</div>
-                      <div className="bg-white/5 border border-white/10 rounded-lg p-2 text-center text-[10px] font-bold">Mülkler</div>
+                      <div className="bg-white/5 border border-white/10 rounded-lg p-2.5 text-center text-[10px] font-bold shadow-sm">Banka</div>
+                      <div className="bg-amber-500/10 border border-amber-500/30 rounded-lg p-2.5 text-center text-[10px] font-bold text-amber-400 animate-pulse shadow-[0_0_10px_rgba(245,158,11,0.2)]">Deste 🃏</div>
+                      <div className="bg-white/5 border border-white/10 rounded-lg p-2.5 text-center text-[10px] font-bold shadow-sm">Mülkler</div>
                     </div>
 
-                    <div className="text-center text-[10px] text-white/30 font-bold">Masa Teması Deneyimi</div>
+                    <div className="text-center text-[9px] text-white/45 font-black uppercase tracking-wider animate-pulse">✨ {previewItem.name} Deneyimi ✨</div>
                   </div>
                 )}
 
@@ -394,8 +510,8 @@ export const ShopDialog: React.FC<Props> = ({ profile, onUpdateProfile }) => {
                         sizeClassName="w-28 h-28 text-5xl"
                       />
                     </div>
-                    <span className="text-[10px] text-amber-300 font-semibold tracking-wider animate-pulse mt-2">
-                      {previewItem.id === 'frame_fire' ? '🔥 Hareketli Lav Alevi Efekti' : previewItem.id === 'frame_neon' ? '🌌 Canlı Neon Aura Efekti' : previewItem.id === 'frame_gold' ? '👑 Saf Altın Işıltısı' : '💎 Parlayan Kraliyet Elması'}
+                    <span className="text-[10px] text-amber-300 font-black tracking-wider animate-pulse mt-2">
+                      ✨ HAREKETLİ VE PARILDAYAN ÖZEL ÇERÇEVE AKTİF ✨
                     </span>
                   </div>
                 )}
@@ -442,7 +558,7 @@ export const ShopDialog: React.FC<Props> = ({ profile, onUpdateProfile }) => {
                   onClick={() => setPreviewItem(null)}
                   className="flex-1 py-3 bg-white/5 hover:bg-white/10 text-slate-300 hover:text-white font-bold rounded-2xl text-sm transition-all cursor-pointer"
                 >
-                  Kapat
+                  {t('cancel', profile)}
                 </button>
 
                 {isUnlocked ? (
@@ -450,7 +566,7 @@ export const ShopDialog: React.FC<Props> = ({ profile, onUpdateProfile }) => {
                     disabled
                     className="flex-[2] py-3 bg-emerald-600/20 border border-emerald-500/30 text-emerald-400 font-bold rounded-2xl text-sm cursor-not-allowed flex items-center justify-center gap-2"
                   >
-                    <span>✓</span> Bu Ürüne Sahipsiniz
+                    {t('shop_unlocked_btn', profile)}
                   </button>
                 ) : (
                   <button
@@ -458,7 +574,7 @@ export const ShopDialog: React.FC<Props> = ({ profile, onUpdateProfile }) => {
                     disabled={buyingId !== null}
                     className="flex-[2] py-3 bg-red-600 hover:bg-red-500 text-white font-bold rounded-2xl text-sm transition-all flex items-center justify-center gap-2 shadow-lg shadow-red-600/20 active:scale-95 transform cursor-pointer"
                   >
-                    <span>💰</span> {previewItem.price} Altın - Satın Al
+                    <span>💰</span> {previewItem.price} {t('coins', profile)} - {t('buy', profile)}
                   </button>
                 )}
               </div>
@@ -472,10 +588,10 @@ export const ShopDialog: React.FC<Props> = ({ profile, onUpdateProfile }) => {
           <div className="bg-gradient-to-r from-yellow-500 via-amber-600 to-red-600 p-1 rounded-3xl shadow-[0_0_50px_rgba(245,158,11,0.5)] animate-bounce-subtle max-w-sm w-full">
             <div className="bg-slate-950 rounded-[22px] px-6 py-8 text-center flex flex-col items-center">
               <span className="text-5xl animate-pulse">🎉</span>
-              <h3 className="text-2xl font-black text-transparent bg-clip-text bg-gradient-to-r from-amber-300 to-yellow-500 mt-4 uppercase tracking-wider">TEBRİKLER!</h3>
+              <h3 className="text-2xl font-black text-transparent bg-clip-text bg-gradient-to-r from-amber-300 to-yellow-500 mt-4 uppercase tracking-wider">{t('shop_success_title', profile)}</h3>
               <p className="text-white text-sm font-bold mt-2">"{purchasedItemName}"</p>
-              <p className="text-emerald-400 text-xs font-semibold mt-1">Başarıyla satın alındı ve envanterine eklendi!</p>
-              <span className="text-[10px] text-slate-500 mt-6 block">Kişiselleştirme panelinden hemen kuşanabilirsiniz.</span>
+              <p className="text-emerald-400 text-xs font-semibold mt-1">{t('shop_success_desc', profile)}</p>
+              <span className="text-[10px] text-slate-500 mt-6 block">{t('shop_success_hint', profile)}</span>
             </div>
           </div>
           {/* Confetti Explosion Particles */}

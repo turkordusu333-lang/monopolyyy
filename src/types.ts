@@ -100,6 +100,7 @@ export interface UserSettings {
   clothesId: string; // ID of unlocked clothes item
   profileFrame?: string; // ID of unlocked profile frame
   celebrationSound?: string; // ID of unlocked celebration sound
+  language?: string; // Active system language code
 }
 
 export interface Friend {
@@ -210,6 +211,10 @@ export interface MatchState {
   isOffline: boolean;
   activeActionRequest?: ActionRequest; // For interactions like "Just Say No", payments, forced-deal target, etc.
   activeActionRequests?: ActionRequest[]; // For simultaneous payments/interactions (e.g., birthday or rent to everyone)
+  turnStartedAt?: number;
+  actionRequestStartedAt?: number;
+  actionTimeLeft?: number | null;
+  turnTimeLeft?: number | null;
   settings?: {
     targetSets: number;
     turnLimit: '15s' | '30s' | '1m' | 'unlimited';
@@ -230,6 +235,7 @@ export interface ActionRequest {
   targetCardId?: string;
   myCardId?: string;
   targetColor?: CardColor;
+  chosenColor?: CardColor;
   originalAction?: {
     type: 'sly-deal' | 'forced-deal' | 'deal-breaker' | 'rent' | 'debt-collector' | 'birthday';
     payload: any;

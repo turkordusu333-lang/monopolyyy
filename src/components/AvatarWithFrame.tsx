@@ -14,15 +14,23 @@ export const AvatarWithFrame: React.FC<AvatarWithFrameProps> = ({
   sizeClassName = 'w-16 h-16 text-3xl'
 }) => {
   const emoji = 
-    avatarId === 'avatar_classic' 
-      ? '🎩' 
-      : avatarId === 'avatar_skater' 
-      ? '🛹' 
-      : avatarId === 'avatar_neon' 
-      ? '🌌' 
-      : avatarId === 'avatar_golden'
-      ? '👑'
-      : '🎩';
+    avatarId === 'avatar_classic' ? '🎩' 
+    : avatarId === 'avatar_skater' ? '🛹' 
+    : avatarId === 'avatar_neon' ? '🌌' 
+    : avatarId === 'avatar_golden' ? '👑'
+    : avatarId === 'avatar_alien' ? '👽'
+    : avatarId === 'avatar_ninja' ? '🥷'
+    : avatarId === 'avatar_wizard' ? '🧙'
+    : avatarId === 'avatar_dragon' ? '🐉'
+    : avatarId === 'avatar_astronaut' ? '🧑‍🚀'
+    : avatarId === 'avatar_robot' ? '🤖'
+    : avatarId === 'avatar_dj' ? '🎧'
+    : avatarId === 'avatar_ghost' ? '👻'
+    : avatarId === 'avatar_knight' ? '🛡️'
+    : avatarId === 'avatar_unicorn' ? '🦄'
+    : avatarId === 'avatar_pharaoh' ? '👑'
+    : avatarId === 'avatar_zombie' ? '🧟'
+    : '🎩';
   
   // Custom frame styles
   let frameClass = 'border border-white/10';
@@ -48,6 +56,56 @@ export const AvatarWithFrame: React.FC<AvatarWithFrameProps> = ({
     glowStyle = { 
       boxShadow: '0 0 15px #22d3ee, inset 0 0 10px #3b82f6'
     };
+  } else if (frameId === 'frame_plasma') {
+    frameClass = 'border-[3px] border-sky-400 bg-gradient-to-r from-sky-400 via-indigo-500 to-cyan-400 animate-pulse';
+    glowStyle = { 
+      boxShadow: '0 0 20px #38bdf8, inset 0 0 10px #6366f1'
+    };
+  } else if (frameId === 'frame_rainbow') {
+    frameClass = 'border-[3px] border-rose-500 bg-gradient-to-r from-red-500 via-yellow-500 via-green-500 via-blue-500 to-purple-500';
+    glowStyle = { 
+      boxShadow: '0 0 20px #ec4899, inset 0 0 10px #3b82f6'
+    };
+  } else if (frameId === 'frame_toxic') {
+    frameClass = 'border-[3px] border-emerald-400 bg-gradient-to-r from-emerald-600 via-green-400 to-emerald-600 animate-pulse';
+    glowStyle = { 
+      boxShadow: '0 0 18px #34d399, inset 0 0 8px #059669'
+    };
+  } else if (frameId === 'frame_ice') {
+    frameClass = 'border-[3px] border-blue-200 bg-gradient-to-r from-blue-300 via-cyan-200 to-blue-300';
+    glowStyle = { 
+      boxShadow: '0 0 18px #93c5fd, inset 0 0 10px #22d3ee'
+    };
+  } else if (frameId === 'frame_steampunk') {
+    frameClass = 'border-[3px] border-amber-700 bg-gradient-to-r from-amber-800 via-zinc-600 to-amber-900';
+    glowStyle = { 
+      boxShadow: '0 0 15px #b45309, inset 0 0 10px #78350f'
+    };
+  } else if (frameId === 'frame_matrix') {
+    frameClass = 'border-[3px] border-green-500 bg-gradient-to-r from-green-600 via-black to-green-700 animate-pulse';
+    glowStyle = { 
+      boxShadow: '0 0 15px #22c55e, inset 0 0 10px #15803d'
+    };
+  } else if (frameId === 'frame_thunder') {
+    frameClass = 'border-[3px] border-yellow-400 bg-gradient-to-r from-yellow-500 via-amber-300 to-yellow-500 animate-bounce-subtle';
+    glowStyle = { 
+      boxShadow: '0 0 22px #facc15, inset 0 0 12px #ca8a04'
+    };
+  } else if (frameId === 'frame_darkness') {
+    frameClass = 'border-[3px] border-purple-950 bg-gradient-to-r from-slate-950 via-purple-900 to-black';
+    glowStyle = { 
+      boxShadow: '0 0 20px #581c87, inset 0 0 10px #3b0764'
+    };
+  } else if (frameId === 'frame_galaxy') {
+    frameClass = 'border-[3px] border-violet-400 bg-gradient-to-r from-indigo-950 via-purple-500 to-indigo-900 animate-pulse';
+    glowStyle = { 
+      boxShadow: '0 0 20px #8b5cf6, inset 0 0 10px #4f46e5'
+    };
+  } else if (frameId === 'frame_dragon') {
+    frameClass = 'border-[3px] border-rose-700 bg-gradient-to-r from-rose-900 via-red-500 to-rose-950';
+    glowStyle = { 
+      boxShadow: '0 0 20px #be123c, inset 0 0 10px #9f1239'
+    };
   }
   
   return (
@@ -57,7 +115,7 @@ export const AvatarWithFrame: React.FC<AvatarWithFrameProps> = ({
       style={glowStyle}
     >
       <div className="w-full h-full rounded-full bg-slate-900/95 flex items-center justify-center overflow-hidden">
-        {avatarUrl ? (
+        {avatarUrl && avatarId === 'avatar_classic' ? (
           <img 
             src={avatarUrl} 
             alt="Avatar" 

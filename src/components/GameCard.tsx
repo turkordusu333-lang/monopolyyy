@@ -3,6 +3,7 @@ import { Card, CardColor } from '../types';
 import { COLOR_HEX, COLOR_LABELS, RENT_VALUES, MAX_IN_SET } from '../lib/deck';
 import { motion } from 'motion/react';
 import { Holo } from './Holo';
+import { t } from '../lib/TranslationSystem';
 
 export type CardEffectType = 'steal' | 'rent' | 'bday' | 'gold' | 'house' | 'sly-shadow' | 'debt-seal' | 'birthday-confetti' | null;
 
@@ -233,6 +234,18 @@ export const TURKISH_NAMES: Record<string, string> = {
   // Utility (Kamu Kuruluşu)
   'Water Works': 'Sular İdaresi',
   'Electric Company': 'Elektrik İdaresi',
+  // Action Cards (Aksiyon Kartları)
+  'Sly Deal': 'Sinsi Anlaşma',
+  'Forced Deal': 'Zoraki Takas',
+  'Deal Breaker': 'Anlaşma Bozan',
+  'Debt Collector': 'Borç Tahsildarı',
+  'Its My Birthday': "Bugün Benim Doğum Günüm",
+  "It's My Birthday": "Bugün Benim Doğum Günüm",
+  'Double Rent': 'Çift Kira',
+  'Pass Go': 'Başlangıç Noktasından Geç',
+  'House': 'Ev',
+  'Hotel': 'Otel',
+  'Just Say No': 'Hayır Teşekkürler',
 };
 
 const TURKISH_COLOR_LABELS: Record<CardColor, string> = {
@@ -248,6 +261,124 @@ const TURKISH_COLOR_LABELS: Record<CardColor, string> = {
   utility: 'KAMU KURULUŞU',
 };
 
+const getSkinStyles = (cardBack?: string) => {
+  switch (cardBack) {
+    case 'back_cosmic':
+      return {
+        borderClass: 'border-indigo-950 bg-slate-950 text-indigo-300 font-mono shadow-[0_4px_12px_rgba(99,102,241,0.25)]',
+        fontClass: 'font-mono tracking-tight text-indigo-300',
+        cardBg: 'bg-slate-900',
+        bgOverlay: 'bg-gradient-to-br from-slate-950/20 via-indigo-950/25 to-slate-950/40',
+        borderColor: 'border-indigo-500/20',
+      };
+    case 'back_gold':
+      return {
+        borderClass: 'border-amber-600 bg-amber-950 text-yellow-100 font-serif shadow-[0_4px_16px_rgba(245,158,11,0.35)]',
+        fontClass: 'font-serif tracking-normal text-amber-200',
+        cardBg: 'bg-amber-950/40',
+        bgOverlay: 'bg-gradient-to-br from-amber-950/20 via-yellow-600/10 to-amber-950/30',
+        borderColor: 'border-amber-500/30',
+      };
+    case 'back_neon':
+      return {
+        borderClass: 'border-pink-500 bg-purple-950 text-pink-200 font-sans shadow-[0_4px_12px_rgba(236,72,153,0.3)]',
+        fontClass: 'font-sans tracking-wide uppercase text-pink-300',
+        cardBg: 'bg-purple-950/40',
+        bgOverlay: 'bg-gradient-to-br from-rose-950/20 via-purple-900/25 to-slate-950/30',
+        borderColor: 'border-pink-500/25',
+      };
+    case 'back_fire':
+      return {
+        borderClass: 'border-red-600 bg-red-950 text-red-200 font-sans shadow-[0_4px_16px_rgba(239,68,68,0.45)]',
+        fontClass: 'font-sans uppercase text-red-400',
+        cardBg: 'bg-red-950/40',
+        bgOverlay: 'bg-gradient-to-br from-red-950/30 via-orange-950/20 to-black/40',
+        borderColor: 'border-red-500/30',
+      };
+    case 'back_ice':
+      return {
+        borderClass: 'border-cyan-400 bg-cyan-950 text-cyan-200 font-sans shadow-[0_4px_16px_rgba(34,211,238,0.35)]',
+        fontClass: 'font-sans text-cyan-300',
+        cardBg: 'bg-cyan-950/30',
+        bgOverlay: 'bg-gradient-to-br from-cyan-900/20 via-blue-950/20 to-slate-900/30',
+        borderColor: 'border-cyan-400/25',
+      };
+    case 'back_void':
+      return {
+        borderClass: 'border-purple-600 bg-slate-950 text-purple-300 font-mono shadow-[0_4px_16px_rgba(147,51,234,0.35)]',
+        fontClass: 'font-mono text-purple-400',
+        cardBg: 'bg-slate-950',
+        bgOverlay: 'bg-gradient-to-br from-purple-950/25 via-black to-slate-950',
+        borderColor: 'border-purple-500/20',
+      };
+    case 'back_matrix':
+      return {
+        borderClass: 'border-emerald-500 bg-black text-emerald-300 font-mono shadow-[0_4px_16px_rgba(16,185,129,0.35)]',
+        fontClass: 'font-mono text-emerald-400 uppercase tracking-widest',
+        cardBg: 'bg-zinc-950',
+        bgOverlay: 'bg-gradient-to-b from-black/50 via-emerald-950/20 to-black',
+        borderColor: 'border-emerald-500/30',
+      };
+    case 'back_rainbow':
+      return {
+        borderClass: 'border-pink-500 bg-slate-900 text-pink-200 font-sans shadow-[0_4px_16px_rgba(244,63,94,0.35)]',
+        fontClass: 'font-sans text-pink-300',
+        cardBg: 'bg-slate-900/40',
+        bgOverlay: 'bg-gradient-to-r from-red-500/10 via-yellow-500/10 via-green-500/10 via-blue-500/10 to-purple-500/10',
+        borderColor: 'border-pink-500/30',
+      };
+    case 'back_bubble':
+      return {
+        borderClass: 'border-sky-400 bg-sky-950 text-sky-200 font-sans shadow-[0_4px_16px_rgba(56,189,248,0.35)]',
+        fontClass: 'font-sans text-sky-300',
+        cardBg: 'bg-sky-900/30',
+        bgOverlay: 'bg-gradient-to-br from-sky-500/10 via-pink-500/10 to-indigo-900/20',
+        borderColor: 'border-sky-400/25',
+      };
+    case 'back_steampunk':
+      return {
+        borderClass: 'border-amber-800 bg-amber-950 text-amber-200 font-serif shadow-[0_4px_16px_rgba(180,83,9,0.35)]',
+        fontClass: 'font-serif text-amber-300',
+        cardBg: 'bg-amber-950/40',
+        bgOverlay: 'bg-gradient-to-br from-amber-900/25 via-zinc-800/20 to-amber-950/30',
+        borderColor: 'border-amber-700/30',
+      };
+    case 'back_laser':
+      return {
+        borderClass: 'border-violet-500 bg-violet-950 text-violet-200 font-sans shadow-[0_4px_16px_rgba(139,92,246,0.35)]',
+        fontClass: 'font-sans text-violet-300',
+        cardBg: 'bg-violet-950/40',
+        bgOverlay: 'bg-gradient-to-br from-violet-950/20 via-fuchsia-950/20 to-slate-950',
+        borderColor: 'border-violet-500/20',
+      };
+    case 'back_galaxy':
+      return {
+        borderClass: 'border-indigo-500 bg-indigo-950 text-indigo-200 font-mono shadow-[0_4px_16px_rgba(99,102,241,0.35)]',
+        fontClass: 'font-mono text-indigo-300',
+        cardBg: 'bg-indigo-950/40',
+        bgOverlay: 'bg-gradient-to-br from-indigo-950/30 via-purple-950/20 to-black/40',
+        borderColor: 'border-indigo-500/20',
+      };
+    case 'back_darkness':
+      return {
+        borderClass: 'border-slate-800 bg-slate-950 text-slate-400 font-sans shadow-[0_4px_16px_rgba(15,23,42,0.5)]',
+        fontClass: 'font-sans text-slate-300',
+        cardBg: 'bg-slate-950',
+        bgOverlay: 'bg-gradient-to-br from-black via-slate-950 to-black',
+        borderColor: 'border-slate-800/30',
+      };
+    case 'back_classic':
+    default:
+      return {
+        borderClass: 'border-white bg-white text-slate-800 font-sans shadow-2xl',
+        fontClass: 'font-sans',
+        cardBg: 'bg-white',
+        bgOverlay: '',
+        borderColor: 'border-black/20',
+      };
+  }
+};
+
 export const GameCard: React.FC<GameCardProps> = ({
   card,
   size = 'normal',
@@ -255,7 +386,11 @@ export const GameCard: React.FC<GameCardProps> = ({
   onClick,
   className = '',
   activeEffect = null,
+  isFaceDown = false,
+  cardBack = 'back_classic',
+  disable3D = false,
 }) => {
+  const skin = getSkinStyles(cardBack);
   const [showTooltip, setShowTooltip] = React.useState(false);
   const cardRef = React.useRef<HTMLDivElement>(null);
   const [hoverCoords, setHoverCoords] = React.useState({ x: 50, y: 50 });
@@ -344,10 +479,41 @@ export const GameCard: React.FC<GameCardProps> = ({
     );
   };
 
-  // Mapped details for Turkish authentic look
+  // Mapped details for dynamic multilingual look
   const getCardDetails = () => {
+    const CARD_KEY_MAP: Record<string, string> = {
+      'Baltic Avenue': 'prop_baltic_ave',
+      'Mediterranean Avenue': 'prop_mediterranean_ave',
+      'Oriental Avenue': 'prop_oriental_ave',
+      'Vermont Avenue': 'prop_vermont_ave',
+      'Connecticut Avenue': 'prop_connecticut_ave',
+      'St. Charles Place': 'prop_st_charles_pl',
+      'States Avenue': 'prop_states_ave',
+      'Virginia Avenue': 'prop_virginia_ave',
+      'St. James Place': 'prop_st_james_pl',
+      'Tennessee Avenue': 'prop_tennessee_ave',
+      'New York Avenue': 'prop_new_york_ave',
+      'Kentucky Avenue': 'prop_kentucky_ave',
+      'Indiana Avenue': 'prop_indiana_ave',
+      'Illinois Avenue': 'prop_illinois_ave',
+      'Atlantic Avenue': 'prop_atlantic_ave',
+      'Ventnor Avenue': 'prop_ventnor_ave',
+      'Marvin Gardens': 'prop_marvin_gardens',
+      'Pacific Avenue': 'prop_pacific_ave',
+      'North Carolina Avenue': 'prop_north_carolina_ave',
+      'Pennsylvania Avenue': 'prop_pennsylvania_ave',
+      'Park Place': 'prop_park_place',
+      'Boardwalk': 'prop_boardwalk',
+      'Reading Railroad': 'station_reading',
+      'Pennsylvania Railroad': 'station_pennsylvania',
+      'B. & O. Railroad': 'station_b_o',
+      'Short Line Railroad': 'station_short_line',
+      'Water Works': 'utility_water',
+      'Electric Company': 'utility_electric',
+    };
+
     let name = card.name;
-    let typeLabel = 'TAPU';
+    let typeLabel = t('prop_label');
     let description = card.description;
     let shortDesc = '';
     let icon = '🏢';
@@ -357,10 +523,26 @@ export const GameCard: React.FC<GameCardProps> = ({
     let isRent = card.type === 'rent';
     let isWildcard = card.isWildcard === true;
 
+    // Helper to get translated color names
+    const getColorLabel = (c: CardColor): string => {
+      return t(`color_${c}`).toUpperCase();
+    };
+
+    // Helper to get translated property names
+    const getPropertyName = (origName: string): string => {
+      const key = CARD_KEY_MAP[origName];
+      if (key) {
+        const val = t(key);
+        return val !== key ? val : origName;
+      }
+      return origName;
+    };
+
     if (isMoney) {
-      typeLabel = 'PARA';
+      typeLabel = t('money_label');
       icon = '💵';
-      shortDesc = `${card.value}M Değerinde Nakit`;
+      shortDesc = t('card_money_desc', null, card.value);
+      description = shortDesc;
       if (card.value === 10) bgColor = '#FF9800'; // Vibrant Orange
       else if (card.value === 5) bgColor = '#9C27B0'; // Purple
       else if (card.value === 4) bgColor = '#4CAF50'; // Green
@@ -368,92 +550,94 @@ export const GameCard: React.FC<GameCardProps> = ({
       else if (card.value === 2) bgColor = '#EF5350'; // Red
       else bgColor = '#90A4AE'; // Silver/Grey
     } else if (card.type === 'property') {
-      typeLabel = 'TAPU';
+      typeLabel = t('prop_label');
       icon = '🏢';
-      name = TURKISH_NAMES[card.name] || card.name;
-      shortDesc = `${TURKISH_COLOR_LABELS[card.color!]} mülkü.`;
+      name = getPropertyName(card.name);
+      shortDesc = `${getColorLabel(card.color!)} ${t('card_rent').toLowerCase()}.`;
+      description = shortDesc;
     } else if (isWildcard) {
-      typeLabel = 'JOKER';
+      typeLabel = t('joker_label');
       icon = '🃏';
-      name = 'JOKER TAPU';
+      name = t('card_wildcard_name');
       if (!card.secondaryColor) {
-        shortDesc = 'TÜM RENKLERDE KULLANILABİLİR!';
+        shortDesc = t('card_wildcard_desc_any');
       } else {
-        shortDesc = `${TURKISH_COLOR_LABELS[card.color!]} veya ${TURKISH_COLOR_LABELS[card.secondaryColor!]}!`;
+        shortDesc = t('card_wildcard_desc_two', null, getColorLabel(card.color!), getColorLabel(card.secondaryColor!));
       }
+      description = shortDesc;
     } else if (isAction) {
-      typeLabel = 'HAMLE';
+      typeLabel = t('action_label');
       if (card.actionType === 'deal-breaker') {
-        name = 'HACİZ (ANLAŞMA BOZAN)';
-        description = 'Rakibin tamamlanmış 1 setini çal!';
-        shortDesc = 'Rakibin tamamlanmış 1 setini çal!';
+        name = t('card_deal_breaker_name');
+        description = t('card_deal_breaker_desc');
+        shortDesc = description;
         icon = '⚡';
         bgColor = '#9C27B0'; // Purple
       } else if (card.actionType === 'just-say-no') {
-        name = 'REDDET! (HAYIR)';
-        description = 'Sana yapılan hamleyi iptal et!';
-        shortDesc = 'Gelen hamleyi iptal et!';
+        name = t('card_just_say_no_name');
+        description = t('card_just_say_no_desc');
+        shortDesc = description;
         icon = '🛑';
         bgColor = '#4CAF50'; // Lime green
       } else if (card.actionType === 'sly-deal') {
-        name = 'TAPU DEVRİ';
-        description = 'Rakibin tamamlanmamış 1 mülkünü çal!';
-        shortDesc = 'Rakibin tamamlanmamış 1 mülkünü çal!';
+        name = t('card_sly_deal_name');
+        description = t('card_sly_deal_desc');
+        shortDesc = description;
         icon = '🥷';
         bgColor = '#00B0FF'; // Vibrant blue
       } else if (card.actionType === 'forced-deal') {
-        name = 'DEĞİŞ TOKUŞ';
-        description = 'Rakiple bir mülk takas et!';
-        shortDesc = 'Rakiple bir mülk takas et!';
+        name = t('card_forced_deal_name');
+        description = t('card_forced_deal_desc');
+        shortDesc = description;
         icon = '⇄';
         bgColor = '#00B0FF'; // Blue
       } else if (card.actionType === 'debt-collector') {
-        name = 'TAHSİLAT';
-        description = 'Seçtiğin bir oyuncudan 5M borç al!';
-        shortDesc = 'Bir oyuncudan 5M borç al!';
+        name = t('card_debt_collector_name');
+        description = t('card_debt_collector_desc');
+        shortDesc = description;
         icon = '💼';
         bgColor = '#00B0FF'; // Blue
       } else if (card.actionType === 'birthday') {
-        name = 'DOĞUM GÜNÜ';
-        description = 'Tüm oyunculardan 2M hediye al!';
-        shortDesc = 'Tüm oyunculardan 2M hediye al!';
+        name = t('card_birthday_name');
+        description = t('card_birthday_desc');
+        shortDesc = description;
         icon = '🎂';
         bgColor = '#EC407A'; // Hot pink
       } else if (card.actionType === 'pass-go') {
-        name = 'TEKRAR ÇEK';
-        description = 'Desteden 2 kart çek!';
-        shortDesc = 'Desteden 2 kart çek!';
+        name = t('card_pass_go_name');
+        description = t('card_pass_go_desc');
+        shortDesc = description;
         icon = '↩️';
         bgColor = '#FFFFFF'; // White action card base
       } else if (card.actionType === 'double-rent') {
-        name = 'İKİ KAT KİRA';
-        description = 'Kirayı iki katına çıkar!';
-        shortDesc = 'Kirayı iki katına çıkar!';
+        name = t('card_double_rent_name');
+        description = t('card_double_rent_desc');
+        shortDesc = description;
         icon = '💰';
         bgColor = '#FFFFFF'; // White action card base
       } else if (card.actionType === 'house') {
-        name = 'EV';
-        description = 'Setin kira değerine +3M ekle!';
-        shortDesc = 'Setin kira değerine +3M ekle!';
+        name = t('card_house_name');
+        description = t('card_house_desc');
+        shortDesc = description;
         icon = '🏠';
         bgColor = '#00B0FF'; // Blue
       } else if (card.actionType === 'hotel') {
-        name = 'OTEL';
-        description = 'Setin kira değerine +4M ekle!';
-        shortDesc = 'Setin kira değerine +4M ekle!';
+        name = t('card_hotel_name');
+        description = t('card_hotel_desc');
+        shortDesc = description;
         icon = '🏢';
         bgColor = '#4CAF50'; // Green
       }
     } else if (isRent) {
-      typeLabel = 'KİRA';
+      typeLabel = t('rent_label');
       icon = '💰';
-      name = 'KİRA KARTI';
+      name = t('card_rent_name');
       if (card.name.includes('Her Renk') || !card.color) {
-        description = 'Seçtiğin bir renk için herkesten kira al!';
-        shortDesc = 'Seçtiğin renk için herkesten kira al!';
+        description = t('card_rent_desc_any');
+        shortDesc = description;
       } else {
-        description = `${TURKISH_COLOR_LABELS[card.color]} / ${TURKISH_COLOR_LABELS[card.secondaryColor!]} kira al!`;
-        shortDesc = `${TURKISH_COLOR_LABELS[card.color]} / ${TURKISH_COLOR_LABELS[card.secondaryColor!]} kira al!`;
+        description = t('card_rent_desc_two', null, getColorLabel(card.color), getColorLabel(card.secondaryColor!));
+        shortDesc = description;
       }
     }
 
@@ -930,7 +1114,7 @@ export const GameCard: React.FC<GameCardProps> = ({
       <div
         id={`card-normal-${card.id}`}
         onClick={onClick}
-        className={`flex-shrink-0 w-[114px] h-[170px] rounded-2xl border-[3.5px] border-white shadow-2xl transition-all relative select-none flex flex-col justify-between cursor-pointer overflow-hidden p-0.5 bg-white ${holoClass} ${
+        className={`flex-shrink-0 w-[114px] h-[170px] rounded-2xl border-[3.5px] shadow-2xl transition-all relative select-none flex flex-col justify-between cursor-pointer overflow-hidden p-0.5 ${skin.borderClass} ${skin.fontClass} ${holoClass} ${
           isSelected
             ? 'ring-4 ring-amber-400 scale-105 z-20 shadow-[0_15px_30px_rgba(251,191,36,0.45)]'
             : 'hover:-translate-y-2'
