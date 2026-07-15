@@ -4,6 +4,7 @@ import { sounds } from '../lib/SoundSystem';
 import { AvatarWithFrame } from './AvatarWithFrame';
 import { PerformanceChart } from './PerformanceChart';
 import { t } from '../lib/TranslationSystem';
+import { API_BASE_URL } from '../lib/apiConfig';
 
 interface Props {
   profile: UserProfile;
@@ -23,7 +24,7 @@ export const ProfilePanel: React.FC<Props> = ({ profile, onUpdateProfile }) => {
     if (friendUsername.trim() === '') return;
 
     try {
-      const response = await fetch('/api/friends/add', {
+      const response = await fetch(`${API_BASE_URL}/api/friends/add`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ userId: profile.id, targetUsername: friendUsername }),
@@ -52,7 +53,7 @@ export const ProfilePanel: React.FC<Props> = ({ profile, onUpdateProfile }) => {
 
   const handleClaimQuest = async (questId: string) => {
     try {
-      const response = await fetch('/api/quests/claim', {
+      const response = await fetch(`${API_BASE_URL}/api/quests/claim`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ userId: profile.id, questId }),

@@ -1,13 +1,17 @@
-// Global configuration file for API endpoints.
-// Checks VITE_API_URL environment variable from Vite build.
-// On browser environments (web build), falls back to current location if env var is empty.
+// Tarayıcı dışındaki gerçek yerel Android/Capacitor uygulamasında mıyız kontrol et
+const isCapacitor = 
+  typeof window !== 'undefined' && 
+  ((window as any).Capacitor || 
+   window.location.protocol === 'file:' || 
+   (window.location.hostname === 'localhost' && !window.location.port));
 
-const rawUrl = import.meta.env.VITE_API_URL;
+// Web tarayıcısında istekleri '/' (göreceli) olarak gönder (CORS hatasını önler)
+// Sadece APK/Mobil içinde Render URL'sini zorunlu kıl
+export const API_BASE_URL = isCapacitor
+  ? "https://monopolyyy.onrender.com"
+  : "";
 
-// Ensure we don't have trailing slashes
-export const API_BASE_URL = rawUrl && rawUrl.trim() !== '' 
-  ? rawUrl.replace(/\/$/, '') 
-  : window.location.origin;
-
-// WebSocket protocol helper: translates http -> ws, https -> wss
-export const WS_BASE_URL = API_BASE_URL.replace(/^http/, 'ws');
+// WebSocket protocol helper:
+export const WS_BASE_URL = isCapacitor
+  ? "wss://monopolyyy.onrender.com"
+  : (window.location.protocol === 'https:' ? 'wss://' : 'ws://') + window.location.host;

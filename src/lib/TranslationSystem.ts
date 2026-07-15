@@ -1,4 +1,5 @@
 import { UserProfile } from '../types';
+import { API_BASE_URL } from './apiConfig';
 
 let translations: Record<string, Record<string, string>> = {
   tr: {},
@@ -9,7 +10,7 @@ const listeners = new Set<() => void>();
 
 export const initTranslations = async (): Promise<any> => {
   try {
-    const res = await fetch('/api/translations');
+    const res = await fetch(`${API_BASE_URL}/api/translations`);
     if (res.ok) {
       const data = await res.json();
       translations = data;
@@ -27,7 +28,7 @@ export const updateTranslationsDict = async (newDict: any) => {
   translations = newDict;
   notifyListeners();
   try {
-    await fetch('/api/translations/save', {
+    await fetch(`${API_BASE_URL}/api/translations/save`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ translations: newDict }),
