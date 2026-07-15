@@ -358,7 +358,8 @@
     "loading_leaderboard_lbl": "Liderlik tablosu yükleniyor...",
     "rank_lbl": "Sıra",
     "player_lbl": "Oyuncu",
-    "no_games_played_yet_lbl": "Henüz oyun oynanmadı.\nArenaya katılarak hemen başla!"
+    "no_games_played_yet_lbl": "Henüz oyun oynanmadı.\nArenaya katılarak hemen başla!",
+    "shop_tab_card_skins": "Kart Kaplama"
   },
   "en": {
     "game_title": "Deal Master PRO",
@@ -719,6 +720,7 @@
     "loading_leaderboard_lbl": "Loading leaderboard...",
     "rank_lbl": "Rank",
     "player_lbl": "Player",
-    "no_games_played_yet_lbl": "No games played yet.\nJoin the arena to start!"
+    "no_games_played_yet_lbl": "No games played yet.\nJoin the arena to start!",
+    "shop_tab_card_skins": "shop_tab_card_skins"
   }
 }

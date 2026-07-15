@@ -126,7 +126,19 @@ const DEFAULT_SHOP_ITEMS = [
   { id: 'sound_rock', name: 'Elektro Gitar Riffi', category: 'celebration_sound', price: 220, description: 'Zafere ulaştığınızda çalan havalı gitar solosu.', isUnlocked: false },
   { id: 'sound_synthwave', name: 'Synthwave Bas', category: 'celebration_sound', price: 170, description: '80ler tarzı elektronik bas ritimleri.', isUnlocked: false },
   { id: 'sound_thunder', name: 'Kuvvetli Yıldırım', category: 'celebration_sound', price: 250, description: 'Hamlelerinizi taçlandıracak güçlü gök gürültüsü.', isUnlocked: false },
-  { id: 'sound_magical', name: 'Sihirli Değnek', category: 'celebration_sound', price: 180, description: 'Kartlarınızı açtığınızda çalan parıltılı büyü melodisi.', isUnlocked: false }
+  { id: 'sound_magical', name: 'Sihirli Değnek', category: 'celebration_sound', price: 180, description: 'Kartlarınızı açtığınızda çalan parıltılı büyü melodisi.', isUnlocked: false },
+
+  // DYNAMIC BOARD THEMES (Live Mats)
+  { id: 'theme_atlantis', name: '🌊 Sualtı Krallığı (Atlantis)', category: 'board_theme', price: 800, description: 'Derin okyanus mavisi, yüzen kabarcıklar, ışık kırılması ve deniz tozu partikülleri ile yaşayan bir sualtı masa deneyimi.', isUnlocked: false },
+  { id: 'theme_volcano', name: '🌋 Volkanik Öfke (Lav Masası)', category: 'board_theme', price: 900, description: 'Nabız gibi atan lav çatlakları, kor parçacıkları ve ısı bozulması efektiyle volkanik bir arena.', isUnlocked: false },
+
+  // CARD SKINS (Live Skins)
+  { id: 'skin_holographic', name: '💠 Holografik Mavi Sektör', category: 'card_skin', price: 1200, description: 'Kartların üzerinde akan mavi veri ızgarası, hover titremesi ve set tamamlandığında radyal parıltı efekti.', isUnlocked: false },
+  { id: 'skin_rune', name: '🔮 Mistik Rün Parşömeni', category: 'card_skin', price: 1000, description: 'Kart kenarlarında parlayan kadim rünler, parşömen dokusu ve kira ödendiğinde mavi-kırmızı renk geçişi.', isUnlocked: false },
+
+  // ACTION VFX (Epic VFX)
+  { id: 'vfx_meteor', name: '☄️ Meteor Saldırısı', category: 'action_vfx', price: 1500, description: 'Deal Breaker oynandığında ekrana meteor düşer, darbe anında ekran sallanır ve altın parçacık patlaması tetiklenir.', isUnlocked: false },
+  { id: 'vfx_mirror_shield', name: '🛡️ Ayna Kalkan', category: 'action_vfx', price: 1300, description: 'Hayır Teşekkürler kartı oynandığında altıgen enerji kalkanı belirir, şok dalgası ve gökkuşağı kırılması efekti.', isUnlocked: false }
 ];
 
 // Helper to load/save users
@@ -1583,6 +1595,11 @@ async function startServer() {
               }
             }
 
+            // If it's a bot's turn and they have more actions left, resume their turn simulation!
+            if (!hasActiveAction && match.actionsPlayedThisTurn < 3 && activePlayer && (activePlayer.isBot || activePlayer.isDisconnected)) {
+              setTimeout(() => handleBotTurn(match), 1000);
+            }
+
             broadcastToRoom(roomId, {
               type: 'room_update',
               matchState: match,
@@ -2355,9 +2372,7 @@ async function startServer() {
     const bot = match.players[match.turnIndex];
     if (!bot || (!bot.isBot && !bot.isDisconnected)) return;
 
-    let botActions = 0;
-
-    while (botActions < 3) {
+    while (match.actionsPlayedThisTurn < 3) {
       const decision = BotEngine.selectPlayAction(bot, match);
       if (!decision) break;
 
@@ -2410,7 +2425,13 @@ async function startServer() {
         });
       }
 
-      botActions++;
+      // Check if this action created an active action request targeting a human
+      const hasActiveAction = match.activeActionRequest || (match.activeActionRequests && match.activeActionRequests.length > 0);
+      if (hasActiveAction) {
+        // Pause bot turn immediately to let humans respond.
+        broadcastToRoom(match.roomId, { type: 'room_update', matchState: match });
+        return;
+      }
     }
 
     // End Bot Turn
@@ -2623,6 +2644,11 @@ async function startServer() {
             }
           }
 
+          // If it's a bot's turn and they have more actions left, resume their turn simulation!
+          if (!hasActiveAction && match.actionsPlayedThisTurn < 3 && activePlayer && (activePlayer.isBot || activePlayer.isDisconnected)) {
+            setTimeout(() => handleBotTurn(match), 1000);
+          }
+
           broadcastToRoom(roomId, { type: 'room_update', matchState: match });
         }
       }
@@ -2667,6 +2693,11 @@ async function startServer() {
               setTimeout(() => handleBotTurn(match), 1000);
             }
           }
+        }
+
+        // If it's a bot's turn and they have more actions left, resume their turn simulation!
+        if (!hasActiveAction && match.actionsPlayedThisTurn < 3 && activePlayer && (activePlayer.isBot || activePlayer.isDisconnected)) {
+          setTimeout(() => handleBotTurn(match), 1000);
         }
 
         broadcastToRoom(roomId, { type: 'room_update', matchState: match });

@@ -149,16 +149,29 @@ const STORE_ITEMS: Omit<StoreItem, 'isUnlocked'>[] = [
   { id: 'sound_rock', name: 'Elektro Gitar Riffi', category: 'celebration_sound', price: 220, description: 'Zafere ulaştığınızda çalan havalı gitar solosu.' },
   { id: 'sound_synthwave', name: 'Synthwave Bas', category: 'celebration_sound', price: 170, description: '80ler tarzı elektronik bas ritimleri.' },
   { id: 'sound_thunder', name: 'Kuvvetli Yıldırım', category: 'celebration_sound', price: 250, description: 'Hamlelerinizi taçlandıracak güçlü gök gürültüsü.' },
-  { id: 'sound_magical', name: 'Sihirli Değnek', category: 'celebration_sound', price: 180, description: 'Kartlarınızı açtığınızda çalan parıltılı büyü melodisi.' }
+  { id: 'sound_magical', name: 'Sihirli Değnek', category: 'celebration_sound', price: 180, description: 'Kartlarınızı açtığınızda çalan parıltılı büyü melodisi.' },
+
+  // DYNAMIC BOARD THEMES (Live Mats)
+  { id: 'theme_atlantis', name: '🌊 Atlantis Krallığı', category: 'board_theme', price: 800, description: 'Derin okyanus mavisi, yüzen kabarcıklar, ışık kırılması ve deniz tozu partikülleri ile yaşayan bir sualtı masa deneyimi.' },
+  { id: 'theme_volcano', name: '🌋 Volkanik Öfke', category: 'board_theme', price: 900, description: 'Nabız gibi atan lav çatlakları, kor parçacıkları ve ısı bozulması efektiyle volkanik bir arena.' },
+
+  // CARD SKINS (Live Skins)
+  { id: 'skin_holographic', name: '💠 Holografik Mavi Sektör', category: 'card_skin', price: 1200, description: 'Kartların üzerinde akan mavi veri ızgarası, hover titremesi ve set tamamlandığında radyal parıltı efekti.' },
+  { id: 'skin_rune', name: '🔮 Mistik Rün Parşömeni', category: 'card_skin', price: 1000, description: 'Kart kenarlarında parlayan kadim rünler, parşömen dokusu ve kira ödendiğinde mavi-kırmızı renk geçişi.' },
+
+  // ACTION VFX (Epic VFX)
+  { id: 'vfx_meteor', name: '☄️ Meteor Saldırısı', category: 'action_vfx', price: 1500, description: 'Deal Breaker oynandığında ekrana meteor düşer, darbe anında ekran sallanır ve altın parçacık patlaması tetiklenir.' },
+  { id: 'vfx_mirror_shield', name: '🛡️ Ayna Kalkan', category: 'action_vfx', price: 1300, description: 'Hayır Teşekkürler kartı oynandığında altıgen enerji kalkanı belirir, şok dalgası ve gökkuşağı kırılması efekti.' }
 ];
 
 export const ShopDialog: React.FC<Props> = ({ profile, onUpdateProfile }) => {
-  const [activeCategory, setActiveCategory] = React.useState<'all' | 'avatar' | 'card_back' | 'board_theme' | 'profile_frame' | 'celebration_sound'>('all');
+  const [activeCategory, setActiveCategory] = React.useState<'all' | 'avatar' | 'card_back' | 'board_theme' | 'profile_frame' | 'celebration_sound' | 'card_skin' | 'action_vfx'>('all');
   const [buyingId, setBuyingId] = React.useState<string | null>(null);
   const [error, setError] = React.useState<string | null>(null);
   const [previewItem, setPreviewItem] = React.useState<typeof STORE_ITEMS[0] | null>(null);
   const [soundIsPlaying, setSoundIsPlaying] = React.useState<boolean>(false);
   const [purchasedItemName, setPurchasedItemName] = React.useState<string | null>(null);
+  const [vfxTrigger, setVfxTrigger] = React.useState<boolean>(false);
 
   const filteredItems = STORE_ITEMS.filter(
     (item) => activeCategory === 'all' || item.category === activeCategory
@@ -257,6 +270,8 @@ export const ShopDialog: React.FC<Props> = ({ profile, onUpdateProfile }) => {
           { id: 'board_theme', label: t('shop_tab_themes', profile) },
           { id: 'profile_frame', label: t('shop_tab_frames', profile) },
           { id: 'celebration_sound', label: t('shop_tab_sounds', profile) },
+          { id: 'card_skin', label: t('shop_tab_card_skins', profile) },
+          { id: 'action_vfx', label: t('shop_tab_action_vfx', profile) },
         ].map((tab) => (
           <button
             key={tab.id}
@@ -325,13 +340,15 @@ export const ShopDialog: React.FC<Props> = ({ profile, onUpdateProfile }) => {
 
                   {item.category === 'board_theme' && (
                     <div
-                      className="w-full h-full flex flex-col items-center justify-center transition-colors duration-300"
+                      className={`w-full h-full flex flex-col items-center justify-center transition-colors duration-300 ${
+                        item.id === 'theme_atlantis' ? 'theme-atlantis-bg' : item.id === 'theme_volcano' ? 'theme-volcano-bg' : ''
+                      }`}
                       style={{
-                        backgroundColor: BOARD_THEME_COLORS[item.id] || '#090D16',
+                        backgroundColor: (item.id === 'theme_atlantis' || item.id === 'theme_volcano') ? undefined : (BOARD_THEME_COLORS[item.id] || '#090D16'),
                       }}
                     >
                       <div className="w-12 h-12 rounded border border-dashed border-white/20 flex items-center justify-center text-white/40 text-[9px] font-black uppercase tracking-wider">
-                        Masa
+                        {item.id.includes('atlantis') || item.id.includes('volcano') ? 'Dinamik' : 'Masa'}
                       </div>
                     </div>
                   )}
@@ -348,6 +365,23 @@ export const ShopDialog: React.FC<Props> = ({ profile, onUpdateProfile }) => {
                   {item.category === 'celebration_sound' && (
                     <div className="w-14 h-14 rounded-full bg-amber-500/10 border-2 border-amber-500/30 flex items-center justify-center text-3xl text-amber-400">
                       🔊
+                    </div>
+                  )}
+
+                  {item.category === 'card_skin' && (
+                    <div className="w-16 h-24 rounded-lg border-2 border-white/10 bg-slate-800 flex items-center justify-center font-bold text-xs shadow-2xl relative overflow-hidden">
+                      <div className="absolute inset-0 bg-red-500/10 flex items-center justify-center">
+                        {item.id === 'skin_holographic' && <div className="skin-holographic-overlay absolute inset-0" />}
+                        {item.id === 'skin_rune' && <div className="skin-rune-overlay absolute inset-0" />}
+                      </div>
+                      <span className="text-white text-xs drop-shadow-md z-10">KAPLAMA</span>
+                    </div>
+                  )}
+
+                  {item.category === 'action_vfx' && (
+                    <div className="w-14 h-14 rounded-full bg-red-500/15 border-2 border-red-500/40 flex items-center justify-center text-3xl text-red-400 animate-pulse relative">
+                      {item.id === 'vfx_meteor' ? '☄️' : '🛡️'}
+                      <div className="absolute inset-0 rounded-full border border-red-400/20 scale-125 animate-ping" />
                     </div>
                   )}
 
@@ -474,9 +508,11 @@ export const ShopDialog: React.FC<Props> = ({ profile, onUpdateProfile }) => {
 
                 {previewItem.category === 'board_theme' && (
                   <div
-                    className="w-full h-full rounded-xl p-4 flex flex-col justify-between transition-colors duration-500 border border-white/10"
+                    className={`w-full h-full rounded-xl p-4 flex flex-col justify-between transition-colors duration-500 border border-white/10 ${
+                      previewItem.id === 'theme_atlantis' ? 'theme-atlantis-bg' : previewItem.id === 'theme_volcano' ? 'theme-volcano-bg' : ''
+                    }`}
                     style={{
-                      backgroundColor: BOARD_THEME_COLORS[previewItem.id] || '#050B14',
+                      backgroundColor: (previewItem.id === 'theme_atlantis' || previewItem.id === 'theme_volcano') ? undefined : (BOARD_THEME_COLORS[previewItem.id] || '#050B14'),
                     }}
                   >
                     <div className="w-full flex justify-between items-center border-b border-white/5 pb-2">
@@ -485,7 +521,9 @@ export const ShopDialog: React.FC<Props> = ({ profile, onUpdateProfile }) => {
                         <span className="w-2 h-2 rounded-full bg-yellow-500 animate-pulse" style={{ animationDelay: '0.2s' }} />
                         <span className="w-2 h-2 rounded-full bg-green-500 animate-pulse" style={{ animationDelay: '0.4s' }} />
                       </div>
-                      <span className="text-[9px] font-mono text-white/40">CANLI MASA TEMASI</span>
+                      <span className="text-[9px] font-mono text-white/40">
+                        {previewItem.id.includes('atlantis') || previewItem.id.includes('volcano') ? 'DİNAMİK MASA TEMASI' : 'KLASİK MASA TEMASI'}
+                      </span>
                     </div>
 
                     <div className="grid grid-cols-3 gap-2 my-auto">
@@ -495,6 +533,63 @@ export const ShopDialog: React.FC<Props> = ({ profile, onUpdateProfile }) => {
                     </div>
 
                     <div className="text-center text-[9px] text-white/45 font-black uppercase tracking-wider animate-pulse">✨ {previewItem.name} Deneyimi ✨</div>
+                  </div>
+                )}
+
+                {previewItem.category === 'card_skin' && (
+                  <div className="flex flex-col items-center">
+                    <div className="w-28 h-40 rounded-xl border-2 border-white/10 bg-slate-800 flex flex-col justify-between p-3 shadow-2xl relative overflow-hidden">
+                      {previewItem.id === 'skin_holographic' && <div className="skin-holographic-overlay absolute inset-0" />}
+                      {previewItem.id === 'skin_rune' && <div className="skin-rune-overlay absolute inset-0 animate-pulse" />}
+
+                      <div className="text-white/20 text-left text-[8px] font-black tracking-widest leading-none select-none">KART ÖRNEĞİ</div>
+                      <span className="text-white text-3xl font-black self-center drop-shadow-xl select-none">🃏</span>
+                      <div className="text-white/20 text-right text-[8px] font-black tracking-widest leading-none select-none">DEAL PRO</div>
+                    </div>
+                    <span className="text-[10px] text-amber-400 font-bold mt-3 animate-pulse">
+                      ✨ CANLI KART KAPLAMASI ÖNİZLEMESİ ✨
+                    </span>
+                  </div>
+                )}
+
+                {previewItem.category === 'action_vfx' && (
+                  <div className="flex flex-col items-center justify-center w-full h-full relative">
+                    {/* Preview box container with clipping for animations */}
+                    <div className={`w-full h-32 border border-white/10 bg-slate-950/80 rounded-xl relative overflow-hidden flex items-center justify-center ${vfxTrigger && previewItem.id === 'vfx_meteor' ? 'vfx-meteor-shake' : ''}`}>
+                      {vfxTrigger ? (
+                        <>
+                          {previewItem.id === 'vfx_meteor' && (
+                            <>
+                              <div className="vfx-meteor-rock" style={{ top: '10%', right: '10%' }} />
+                              <div className="vfx-meteor-shockwave animate-pulse" />
+                              <div className="absolute inset-0 bg-orange-500/10 pointer-events-none animate-ping" />
+                            </>
+                          )}
+                          {previewItem.id === 'vfx_mirror_shield' && (
+                            <div className="relative w-full h-full flex items-center justify-center">
+                              <div className="vfx-shield-hex-grid">
+                                {[...Array(9)].map((_, i) => (
+                                  <div key={i} className="vfx-shield-hex" />
+                                ))}
+                              </div>
+                              <div className="vfx-shield-shockwave" />
+                            </div>
+                          )}
+                        </>
+                      ) : (
+                        <span className="text-xs text-slate-500">Efekti görmek için aşağıdaki butona basın</span>
+                      )}
+                    </div>
+                    <button
+                      onClick={() => {
+                        setVfxTrigger(true);
+                        setTimeout(() => setVfxTrigger(false), 2000);
+                      }}
+                      disabled={vfxTrigger}
+                      className="mt-3 px-4 py-1.5 bg-red-600/20 hover:bg-red-600/40 border border-red-500/30 rounded-xl text-xs font-bold text-red-400 hover:text-white transition-all cursor-pointer"
+                    >
+                      {vfxTrigger ? 'Efekt Oynatılıyor...' : '💥 Efekti Test Et'}
+                    </button>
                   </div>
                 )}
 

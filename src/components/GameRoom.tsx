@@ -468,6 +468,8 @@ const CanvasBackground: React.FC<{ theme: string }> = ({ theme }) => {
       theme_matrix: '#011c08',
       theme_space: '#02020a',
       theme_desert: '#1f0d03',
+      theme_atlantis: '#010d14',
+      theme_volcano: '#180200',
     };
 
     const radialColors: Record<string, { start: string; end: string }> = {
@@ -485,6 +487,8 @@ const CanvasBackground: React.FC<{ theme: string }> = ({ theme }) => {
       theme_matrix: { start: 'rgba(22, 101, 52, 0.35)', end: 'rgba(2, 15, 5, 0.95)' },
       theme_space: { start: 'rgba(49, 46, 129, 0.3)', end: 'rgba(2, 2, 8, 0.95)' },
       theme_desert: { start: 'rgba(124, 45, 18, 0.35)', end: 'rgba(15, 6, 2, 0.95)' },
+      theme_atlantis: { start: 'rgba(0, 100, 160, 0.45)', end: 'rgba(1, 13, 20, 0.95)' },
+      theme_volcano: { start: 'rgba(180, 30, 10, 0.45)', end: 'rgba(18, 2, 0, 0.95)' },
     };
 
     const particles: Particle[] = [];
@@ -531,6 +535,14 @@ const CanvasBackground: React.FC<{ theme: string }> = ({ theme }) => {
       } else if (theme === 'theme_desert') {
         pColor = 'rgba(245, 158, 11, ';
         vxRange = 0.9; vyRange = 0.5; vyBase = 0.2;
+      } else if (theme === 'theme_atlantis') {
+        pColor = Math.random() > 0.6 ? 'rgba(56, 189, 248, ' : 'rgba(147, 197, 253, ';
+        vxRange = 0.4; vyRange = 0.6; vyBase = -0.2; // rising bubbles
+        pSizeMin = 1; pSizeRange = 2.5;
+      } else if (theme === 'theme_volcano') {
+        pColor = Math.random() > 0.5 ? 'rgba(239, 68, 68, ' : 'rgba(251, 146, 60, ';
+        vxRange = 0.8; vyRange = 1.6; vyBase = 0.6; // falling embers
+        pSizeMin = 1; pSizeRange = 3;
       }
 
       const isSideways = theme === 'theme_cyberpunk' || theme === 'theme_green' || theme === 'theme_space';
@@ -941,6 +953,25 @@ export const GameRoom: React.FC<Props> = ({ roomId, isOffline, profile, onLeaveR
   const [actionTimeLeft, setActionTimeLeft] = React.useState<number | null>(null);
   const [managedSetColor, setManagedSetColor] = React.useState<CardColor | null>(null);
   const [expandedPropertyColor, setExpandedPropertyColor] = React.useState<CardColor | null>(null);
+  const [isOpponentsGrid, setIsOpponentsGrid] = React.useState(false);
+
+  React.useEffect(() => {
+    if (!expandedPropertyColor) return;
+    const handler = (e: MouseEvent) => {
+      const target = e.target as HTMLElement;
+      if (target && !target.closest('.property-details-sheet') && !target.closest('.property-set-card-trigger')) {
+        setExpandedPropertyColor(null);
+      }
+    };
+    const timer = setTimeout(() => {
+      document.addEventListener('click', handler);
+    }, 50);
+    return () => {
+      clearTimeout(timer);
+      document.removeEventListener('click', handler);
+    };
+  }, [expandedPropertyColor]);
+
   const [showHint, setShowHint] = React.useState(false);
   const [showBankVaultModal, setShowBankVaultModal] = React.useState(false);
   const [showOpponentAssetsModal, setShowOpponentAssetsModal] = React.useState(false);
@@ -1548,6 +1579,12 @@ export const GameRoom: React.FC<Props> = ({ roomId, isOffline, profile, onLeaveR
           text,
           activePlayer || match.players[0]
         );
+
+        // Trigger Meteor Strike VFX (offline/bot games)
+        if (profile.settings.actionVfx === 'vfx_meteor') {
+          setShowDealBreakerAnimation({ source: '', target: '', color: 'brown' });
+          setTimeout(() => setShowDealBreakerAnimation(null), 2200);
+        }
       }
       // Detect "Zoraki Takas" play
       else if (!isBankPlacement && (text.includes('Zoraki Takas') || text.includes('forced-deal'))) {
@@ -1578,6 +1615,12 @@ export const GameRoom: React.FC<Props> = ({ roomId, isOffline, profile, onLeaveR
           text,
           activePlayer || match.players[0]
         );
+
+        // Trigger Mirror Shield VFX (offline/bot games)
+        if (profile.settings.actionVfx === 'vfx_mirror_shield') {
+          setShowShieldDefenseFor(profile.id);
+          setTimeout(() => setShowShieldDefenseFor(null), 2500);
+        }
       }
     });
   }, [match?.logs?.length, match?.players]);
@@ -1755,6 +1798,17 @@ export const GameRoom: React.FC<Props> = ({ roomId, isOffline, profile, onLeaveR
                 playStealSound();
               } else if (lastLog.includes('Hayır Teşekkürler') || lastLog.includes('Hayır Deme Hakkı') || lastLog.includes('Reddet')) {
                 playJsnSound();
+                // Trigger Mirror Shield VFX (online)
+                if (profile.settings.actionVfx === 'vfx_mirror_shield') {
+                  setShowShieldDefenseFor(profile.id);
+                  setTimeout(() => setShowShieldDefenseFor(null), 2500);
+                }
+              }
+
+              // Trigger Meteor Strike VFX for Deal Breaker (online)
+              if ((lastLog.includes('Anlaşma Bozan') || lastLog.includes('Set Çaldı')) && profile.settings.actionVfx === 'vfx_meteor') {
+                setShowDealBreakerAnimation({ source: '', target: '', color: 'brown' });
+                setTimeout(() => setShowDealBreakerAnimation(null), 2200);
               }
 
               // Detect rent/payment logs to trigger Coin Flying
@@ -3230,17 +3284,30 @@ export const GameRoom: React.FC<Props> = ({ roomId, isOffline, profile, onLeaveR
         }
       }
 
-      // End Bot Turn & Return to Human
-      activeMatch.turnIndex = 0;
+      // End Bot Turn & Move to Next Player
+      const nextTurnIdx = (activeMatch.turnIndex + 1) % activeMatch.players.length;
+      activeMatch.turnIndex = nextTurnIdx;
       activeMatch.actionsPlayedThisTurn = 0;
-      activeMatch.logs.push({
-        id: `turn-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
-        message: `Sıra tekrar senin! Başarılar.`,
-        timestamp: Date.now(),
-      });
 
-      triggerOfflineDraw(activeMatch);
-      updateMatchState({ ...activeMatch });
+      const nextPlayer = activeMatch.players[nextTurnIdx];
+      if (nextPlayer.isBot) {
+        activeMatch.logs.push({
+          id: `turn-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+          message: `Sıra ${nextPlayer.username} adlı yapay zekaya geçti.`,
+          timestamp: Date.now(),
+        });
+        triggerOfflineDraw(activeMatch);
+        updateMatchState({ ...activeMatch });
+        setTimeout(() => executeBotTurnOffline(), 1500);
+      } else {
+        activeMatch.logs.push({
+          id: `turn-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+          message: `Sıra tekrar senin! Başarılar.`,
+          timestamp: Date.now(),
+        });
+        triggerOfflineDraw(activeMatch);
+        updateMatchState({ ...activeMatch });
+      }
     };
 
     playNextBotAction();
@@ -4060,7 +4127,7 @@ export const GameRoom: React.FC<Props> = ({ roomId, isOffline, profile, onLeaveR
       onMouseMove={(e) => {
         setMousePos({ x: e.clientX, y: e.clientY });
       }}
-      className="h-[100dvh] w-screen overflow-hidden text-white font-sans flex flex-col justify-between select-none relative"
+      className={`h-[100dvh] w-screen overflow-hidden text-white font-sans flex flex-col justify-between select-none relative${showDealBreakerAnimation ? ' vfx-meteor-shake' : ''}`}
     >
       {/* 1. Dynamic Canvas Particle Background */}
       <CanvasBackground theme={profile.settings.boardTheme || 'theme_classic'} />
@@ -4084,6 +4151,58 @@ export const GameRoom: React.FC<Props> = ({ roomId, isOffline, profile, onLeaveR
             🟡
           </motion.div>
         ))}
+      </AnimatePresence>
+
+      {/* ☄️ Meteor Strike VFX Overlay (vfx_meteor) */}
+      <AnimatePresence>
+        {showDealBreakerAnimation && (
+          <motion.div
+            key="vfx-meteor"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="vfx-meteor-container"
+          >
+            <div className="vfx-meteor-rock" />
+            <div className="vfx-meteor-shockwave" />
+            {/* Particle burst */}
+            {Array.from({ length: 8 }).map((_, i) => (
+              <motion.div
+                key={i}
+                className="absolute w-2 h-2 rounded-full bg-amber-400"
+                style={{ top: '50%', left: '50%' }}
+                initial={{ x: 0, y: 0, opacity: 1, scale: 1 }}
+                animate={{
+                  x: Math.cos((i / 8) * Math.PI * 2) * (60 + Math.random() * 80),
+                  y: Math.sin((i / 8) * Math.PI * 2) * (60 + Math.random() * 80),
+                  opacity: 0,
+                  scale: 0,
+                }}
+                transition={{ duration: 0.8, delay: 0.9, ease: 'easeOut' }}
+              />
+            ))}
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* 🛡️ Mirror Shield VFX Overlay (vfx_mirror_shield) */}
+      <AnimatePresence>
+        {showShieldDefenseFor && (
+          <motion.div
+            key="vfx-shield"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0, transition: { duration: 0.5 } }}
+            className="vfx-shield-container"
+          >
+            <div className="vfx-shield-hex-grid">
+              {Array.from({ length: 9 }).map((_, i) => (
+                <div key={i} className="vfx-shield-hex" style={{ animationDelay: `${i * 0.07}s` }} />
+              ))}
+            </div>
+            <div className="vfx-shield-shockwave" />
+          </motion.div>
+        )}
       </AnimatePresence>
 
       {/* Floating Emojis Layer */}
@@ -4291,49 +4410,43 @@ export const GameRoom: React.FC<Props> = ({ roomId, isOffline, profile, onLeaveR
       {/* Dynamic Animated Warning/Recovery Toast Alert */}
       <AnimatePresence>
         {recoveryAlert && (
-          <div 
-            onClick={() => setRecoveryAlert(null)}
-            className="fixed inset-0 z-50 pointer-events-auto"
+          <motion.div
+            initial={{ opacity: 0, y: -50, scale: 0.9 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: -20, scale: 0.95 }}
+            transition={{ type: 'spring', stiffness: 350, damping: 25 }}
+            className="fixed top-16 left-1/2 -translate-x-1/2 z-50 w-full max-w-sm px-4"
           >
-            <motion.div
-              initial={{ opacity: 0, y: -50, scale: 0.9 }}
-              animate={{ opacity: 1, y: 0, scale: 1 }}
-              exit={{ opacity: 0, y: -20, scale: 0.95 }}
-              transition={{ type: 'spring', stiffness: 350, damping: 25 }}
-              className="absolute top-16 left-1/2 -translate-x-1/2 w-full max-w-sm px-4 pointer-events-auto"
-              onClick={(e) => e.stopPropagation()}
-            >
-              <div className={`p-4 rounded-2xl border flex items-start gap-3 shadow-2xl backdrop-blur-md ${recoveryAlert.type === 'warning'
-                ? 'bg-amber-950/90 border-amber-500/40 text-amber-200 shadow-amber-950/50'
-                : recoveryAlert.type === 'success'
-                  ? 'bg-emerald-950/90 border-emerald-500/40 text-emerald-200 shadow-emerald-950/50'
-                  : 'bg-blue-950/90 border-blue-500/40 text-blue-200 shadow-blue-950/50'
-                }`}>
-                <div className="text-lg flex-shrink-0 mt-0.5">
-                  {recoveryAlert.type === 'warning' ? '⚠️' : recoveryAlert.type === 'success' ? '✅' : '🛡️'}
-                </div>
-                <div className="space-y-1 flex-1">
-                  <h4 className="font-extrabold text-xs uppercase tracking-wider text-white">
-                    {recoveryAlert.type === 'warning'
-                      ? (profile.settings.language === 'en' ? 'System Notification' : 'Sistem Bildirimi')
-                      : recoveryAlert.type === 'success'
-                        ? (profile.settings.language === 'en' ? 'Action Success' : 'Başarılı Hamle')
-                        : (profile.settings.language === 'en' ? 'Game Info' : 'Oyun Bilgisi')
-                    }
-                  </h4>
-                  <p className="text-[10px] text-slate-300 leading-normal">
-                    {translateRecoveryMessage(recoveryAlert.message, profile)}
-                  </p>
-                </div>
-                <button
-                  onClick={() => setRecoveryAlert(null)}
-                  className="text-slate-400 hover:text-white text-xs font-bold px-1.5 py-0.5 rounded-md hover:bg-white/5 cursor-pointer"
-                >
-                  ✕
-                </button>
+            <div className={`p-4 rounded-2xl border flex items-start gap-3 shadow-2xl backdrop-blur-md ${recoveryAlert.type === 'warning'
+              ? 'bg-amber-950/90 border-amber-500/40 text-amber-200 shadow-amber-950/50'
+              : recoveryAlert.type === 'success'
+                ? 'bg-emerald-950/90 border-emerald-500/40 text-emerald-200 shadow-emerald-950/50'
+                : 'bg-blue-950/90 border-blue-500/40 text-blue-200 shadow-blue-950/50'
+              }`}>
+              <div className="text-lg flex-shrink-0 mt-0.5">
+                {recoveryAlert.type === 'warning' ? '⚠️' : recoveryAlert.type === 'success' ? '✅' : '🛡️'}
               </div>
-            </motion.div>
-          </div>
+              <div className="space-y-1 flex-1">
+                <h4 className="font-extrabold text-xs uppercase tracking-wider text-white">
+                  {recoveryAlert.type === 'warning'
+                    ? (profile.settings.language === 'en' ? 'System Notification' : 'Sistem Bildirimi')
+                    : recoveryAlert.type === 'success'
+                      ? (profile.settings.language === 'en' ? 'Action Success' : 'Başarılı Hamle')
+                      : (profile.settings.language === 'en' ? 'Game Info' : 'Oyun Bilgisi')
+                  }
+                </h4>
+                <p className="text-[10px] text-slate-300 leading-normal">
+                  {translateRecoveryMessage(recoveryAlert.message, profile)}
+                </p>
+              </div>
+              <button
+                onClick={() => setRecoveryAlert(null)}
+                className="text-slate-400 hover:text-white text-xs font-bold px-1.5 py-0.5 rounded-md hover:bg-white/5 cursor-pointer"
+              >
+                ✕
+              </button>
+            </div>
+          </motion.div>
         )}
       </AnimatePresence>
 
@@ -4616,7 +4729,26 @@ export const GameRoom: React.FC<Props> = ({ roomId, isOffline, profile, onLeaveR
 
           {/* 1. Opponents & My Profile Carousel Row at the top (matches Image 4) */}
           <div className="px-3 pt-2.5 flex-shrink-0">
-            <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-thin">
+            <div className="flex justify-between items-center mb-1 text-[8.5px] font-bold text-slate-400">
+              <span className="uppercase tracking-wide">{profile.settings.language === 'en' ? 'Players & Boards' : 'Oyuncular & Masalar'}</span>
+              <button
+                onClick={() => {
+                  playPlaySound();
+                  setIsOpponentsGrid(!isOpponentsGrid);
+                }}
+                className="px-2 py-0.5 rounded bg-white/5 border border-white/10 hover:bg-white/10 text-slate-300 text-[8px] cursor-pointer transition-all flex items-center gap-1 active:scale-95"
+              >
+                {isOpponentsGrid 
+                  ? (profile.settings.language === 'en' ? '↔️ Scroll View' : '↔️ Yatay Kaydır') 
+                  : (profile.settings.language === 'en' ? '🔢 Grid View' : '🔢 Izgara Görünümü')
+                }
+              </button>
+            </div>
+
+            <div className={isOpponentsGrid 
+              ? "grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 xl:grid-cols-8 gap-2 pb-1"
+              : "flex gap-2 overflow-x-auto pb-1 scrollbar-thin"
+            }>
               {match.players.map((p) => {
                 const isMe = p.id === profile.id;
                 const isCurrentTurn = match.players[match.turnIndex].id === p.id;
@@ -4735,13 +4867,15 @@ export const GameRoom: React.FC<Props> = ({ roomId, isOffline, profile, onLeaveR
                     </div>
 
                     {/* Stats & Mini Badge Info */}
-                    <div className="flex items-center justify-between mt-1 pt-1 border-t border-white/[0.04]">
-                      <span className="text-[8px] text-slate-400 font-bold flex items-center gap-0.5">
-                        🃏 x{p.hand.length}
-                      </span>
+                    <div className="flex flex-col mt-1 pt-1 border-t border-white/[0.04] gap-1">
+                      <div className="flex items-center justify-between">
+                        <span className="text-[8px] text-slate-400 font-bold flex items-center gap-0.5">
+                          🃏 {profile.settings.language === 'en' ? 'Hand:' : 'Eldeki:'} x{p.hand.length}
+                        </span>
+                      </div>
 
-                      {/* Display mini active set cards (matches Image 1 - opponents mini cards) */}
-                      <div className="flex gap-1 overflow-x-auto max-w-[95px] no-scrollbar py-0.5">
+                      {/* Display mini active set cards (Wrapping Layout, no scrollbar!) */}
+                      <div className="flex flex-wrap gap-1 justify-start py-0.5">
                         {Object.keys(p.properties).map((colorKey) => {
                           const col = colorKey as CardColor;
                           const set = p.properties[col];
@@ -4906,7 +5040,7 @@ export const GameRoom: React.FC<Props> = ({ roomId, isOffline, profile, onLeaveR
                         }}
                         title={profile.settings.language === 'en' ? "Inspect Last Move" : "Son Hamle Detayını İncele"}
                       >
-                        <GameCard card={topDiscard} size="mini" activeEffect={cardEffects[topDiscard.id] || null} disable3D={disable3D} cardBack={profile.settings.cardBack} />
+                        <GameCard card={topDiscard} size="mini" activeEffect={cardEffects[topDiscard.id] || null} disable3D={disable3D} cardBack={profile.settings.cardBack} cardSkin={profile.settings.cardSkin || 'skin_none'} />
                       </div>
                     );
                   })()
@@ -5147,7 +5281,7 @@ export const GameRoom: React.FC<Props> = ({ roomId, isOffline, profile, onLeaveR
                           hasHotel: set.hasHotel,
                           currentRent: rentVal
                         })}
-                        className={`flex flex-col items-center rounded-xl transition-all duration-300 w-[48px] sm:w-[60px] md:w-[72px] shrink-0 relative cursor-pointer select-none ${isExpanded
+                        className={`flex flex-col items-center rounded-xl transition-all duration-300 w-[48px] sm:w-[60px] md:w-[72px] shrink-0 relative cursor-pointer select-none property-set-card-trigger ${isExpanded
                           ? 'ring-2 ring-amber-400 bg-slate-950/80 shadow-[0_0_15px_rgba(245,158,11,0.35)]'
                           : isCompleted
                             ? 'border border-amber-400 bg-amber-500/10 shadow-[0_0_12px_rgba(251,191,36,0.4)]'
@@ -5188,7 +5322,7 @@ export const GameRoom: React.FC<Props> = ({ roomId, isOffline, profile, onLeaveR
                                 style={fanStyle}
                                 title="Kartı Odakla / Genişlet"
                               >
-                                <GameCard card={card} size="medium" activeEffect={cardEffects[card.id] || null} disable3D={disable3D} cardBack={profile.settings.cardBack} />
+                                <GameCard card={card} size="medium" activeEffect={cardEffects[card.id] || null} disable3D={disable3D} cardBack={profile.settings.cardBack} cardSkin={profile.settings.cardSkin || 'skin_none'} />
                                 {isWild && isMyTurn && (
                                   <div className="absolute top-1 right-1 bg-yellow-500 text-slate-950 text-[6px] font-black w-4.5 h-4.5 rounded-full flex items-center justify-center animate-bounce shadow z-10" title="Grup Değiştirebilir">
                                     🔄
@@ -5244,7 +5378,8 @@ export const GameRoom: React.FC<Props> = ({ roomId, isOffline, profile, onLeaveR
                         animate={{ opacity: 1, y: 0, scale: 1 }}
                         exit={{ opacity: 0, y: 20, scale: 0.95 }}
                         transition={{ type: 'spring', stiffness: 350, damping: 28 }}
-                        className="mt-2 w-full bg-slate-950/95 border border-white/10 rounded-xl p-2.5 flex flex-col gap-2 shadow-[0_4px_24px_rgba(0,0,0,0.8)] relative overflow-hidden backdrop-blur-md z-30"
+                        onClick={(e) => e.stopPropagation()}
+                        className="mt-2 w-full bg-slate-950/95 border border-white/10 rounded-xl p-2.5 flex flex-col gap-2 shadow-[0_4px_24px_rgba(0,0,0,0.8)] relative overflow-hidden backdrop-blur-md z-30 property-details-sheet"
                       >
                         {/* Subtle Color Accent Line */}
                         <div className="absolute top-0 left-0 right-0 h-[3px]" style={{ backgroundColor: colorHex }} />
@@ -5303,6 +5438,30 @@ export const GameRoom: React.FC<Props> = ({ roomId, isOffline, profile, onLeaveR
                             <span className="text-[8.5px] font-black text-amber-300 leading-none truncate w-full">
                               {activeSet.hasHotel ? '🏨 Otel' : activeSet.hasHouse ? '🏠 Ev' : 'Yok'}
                             </span>
+                          </div>
+                        </div>
+
+                        {/* Integrated Rent Scales Grid */}
+                        <div className="bg-white/[0.02] border border-white/5 p-1.5 rounded-lg flex flex-col gap-1.5">
+                          <span className="text-[7.5px] font-black text-slate-400 uppercase tracking-wide block text-left">
+                            {profile.settings.language === 'en' ? 'Rent Scales' : 'Kira Baremleri'}
+                          </span>
+                          <div className="flex gap-1.5 justify-around">
+                            {(RENT_VALUES[activeCol] || []).map((r, idx) => {
+                              const isActive = activeSet.cards.length === (idx + 1);
+                              return (
+                                <div
+                                  key={idx}
+                                  className={`flex-1 p-1 rounded-lg text-center transition-all border ${isActive
+                                    ? 'bg-emerald-500/10 border-emerald-500/25 text-emerald-400 font-extrabold shadow-[inset_0_1px_3px_rgba(16,185,129,0.1)]'
+                                    : 'bg-black/10 border-transparent text-slate-500 text-[8px]'
+                                    }`}
+                                >
+                                  <div className="text-[6.5px] uppercase font-extrabold leading-none mb-0.5">{idx + 1}K</div>
+                                  <div className="text-[8px] font-black font-mono leading-none">{r}M</div>
+                                </div>
+                              );
+                            })}
                           </div>
                         </div>
 
@@ -5550,7 +5709,7 @@ export const GameRoom: React.FC<Props> = ({ roomId, isOffline, profile, onLeaveR
                             isSelected={isSelected}
                             activeEffect={cardEffects[card.id] || null}
                             disable3D={disable3D}
-                            cardBack={profile.settings.cardBack}
+                            cardBack={profile.settings.cardBack} cardSkin={profile.settings.cardSkin || 'skin_none'}
                             onClick={() => {
                               if (match.activeActionRequest) return;
                               triggerHaptic('light');
@@ -5598,20 +5757,21 @@ export const GameRoom: React.FC<Props> = ({ roomId, isOffline, profile, onLeaveR
                 ))}
               </div>
 
-              {/* Quick Emojis Row */}
-              <div className="flex gap-2 justify-center py-2 mt-2 border-t border-white/5 flex-shrink-0 flex-wrap">
-                {['😂', '😭', '😠', '👍', '🎉', '😮'].map((emoji) => (
+              {/* Quick Emojis Grid */}
+              <div className="grid grid-cols-6 gap-1.5 py-1.5 mt-2 border-t border-white/5 flex-shrink-0">
+                {['😂', '😭', '😠', '👍', '🎉', '😮', '💩', '❤️', '🔥', '💸', '🎲', '👑'].map((emoji) => (
                   <button
                     key={emoji}
                     type="button"
                     onClick={() => {
+                      playPlaySound();
                       if (!isOffline && socketRef.current?.readyState === WebSocket.OPEN) {
                         socketRef.current.send(JSON.stringify({ type: 'trigger_emoji', userId: profile.id, roomId, emoji }));
                       } else {
                         triggerFloatingEmoji(emoji, profile.username);
                       }
                     }}
-                    className="text-xl hover:scale-125 active:scale-95 transition-transform cursor-pointer p-2 bg-white/5 hover:bg-white/10 rounded-full border border-white/5 flex items-center justify-center w-10 h-10 shadow-sm"
+                    className="h-8 text-base bg-white/5 hover:bg-white/10 active:bg-white/20 border border-white/5 rounded-lg flex items-center justify-center transition-all transform active:scale-90 cursor-pointer"
                   >
                     {emoji}
                   </button>
@@ -5766,9 +5926,15 @@ export const GameRoom: React.FC<Props> = ({ roomId, isOffline, profile, onLeaveR
 
       {/* 0. Odak Modu (Focus Mode) overlay modal */}
       {focusedCard && (
-        <div className="fixed inset-0 bg-black/85 backdrop-blur-md flex flex-col items-center justify-center p-4 z-[60] animate-fade-in select-none">
+        <div 
+          onClick={() => setFocusedCard(null)}
+          className="fixed inset-0 bg-black/85 backdrop-blur-md flex flex-col items-center justify-center p-4 z-[60] animate-fade-in select-none"
+        >
           {/* Main Container */}
-          <div className="w-full max-w-lg flex flex-col items-center space-y-4 relative">
+          <div 
+            onClick={(e) => e.stopPropagation()}
+            className="w-full max-w-lg flex flex-col items-center space-y-4 relative"
+          >
 
             {/* Dynamic Slider and Zoom Info Panel */}
             <div className="bg-slate-900/95 border border-slate-800 rounded-2xl p-4 w-full flex flex-col sm:flex-row items-center justify-between gap-4 shadow-2xl">
@@ -5819,7 +5985,7 @@ export const GameRoom: React.FC<Props> = ({ roomId, isOffline, profile, onLeaveR
                 }}
                 className="origin-center shadow-[0_20px_50px_rgba(0,0,0,0.8)] rounded-xl"
               >
-                <GameCard card={focusedCard} size="normal" activeEffect={cardEffects[focusedCard.id] || null} disable3D={disable3D} cardBack={profile.settings.cardBack} />
+                <GameCard card={focusedCard} size="normal" activeEffect={cardEffects[focusedCard.id] || null} disable3D={disable3D} cardBack={profile.settings.cardBack} cardSkin={profile.settings.cardSkin || 'skin_none'} />
               </div>
             </div>
 
@@ -5857,7 +6023,10 @@ export const GameRoom: React.FC<Props> = ({ roomId, isOffline, profile, onLeaveR
       {/* 1. Play Card Menu overlay modal */}
       {showCardMenu && selectedCard && (
         <div 
-          onClick={() => { setSelectedCard(null); setShowCardMenu(false); }}
+          onClick={() => {
+            setSelectedCard(null);
+            setShowCardMenu(false);
+          }}
           className="fixed inset-0 bg-black/80 backdrop-blur-md flex items-center justify-center p-4 z-50 animate-fade-in"
         >
           <div 
@@ -5867,7 +6036,7 @@ export const GameRoom: React.FC<Props> = ({ roomId, isOffline, profile, onLeaveR
             {/* Visual Card Preview */}
             <div className="flex flex-col items-center gap-3 flex-shrink-0">
               <div className="scale-105 sm:scale-115 origin-center my-2 transition-transform">
-                <GameCard card={selectedCard} size="normal" activeEffect={cardEffects[selectedCard.id] || null} disable3D={disable3D} cardBack={profile.settings.cardBack} />
+                <GameCard card={selectedCard} size="normal" activeEffect={cardEffects[selectedCard.id] || null} disable3D={disable3D} cardBack={profile.settings.cardBack} cardSkin={profile.settings.cardSkin || 'skin_none'} />
               </div>
               <button
                 onClick={() => {
@@ -6336,7 +6505,7 @@ export const GameRoom: React.FC<Props> = ({ roomId, isOffline, profile, onLeaveR
       {/* Step-by-Step Action Target Selection Modal */}
       {activeActionCard && (
         <div 
-          onClick={() => { setActiveActionCard(null); setSelectedOpponentId(null); setSelectedStolenCardId(null); }}
+          onClick={() => setActiveActionCard(null)}
           className="fixed inset-0 bg-black/85 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-fade-in"
         >
           <div 
@@ -6898,8 +7067,14 @@ export const GameRoom: React.FC<Props> = ({ roomId, isOffline, profile, onLeaveR
 
       {/* Custom Alert Modal */}
       {customAlert && (
-        <div className="fixed inset-0 bg-black/85 backdrop-blur-sm flex items-center justify-center p-4 z-[999] animate-fade-in">
-          <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 w-full max-w-sm space-y-4 shadow-2xl relative overflow-hidden">
+        <div 
+          onClick={() => setCustomAlert(null)}
+          className="fixed inset-0 bg-black/85 backdrop-blur-sm flex items-center justify-center p-4 z-[999] animate-fade-in"
+        >
+          <div 
+            onClick={(e) => e.stopPropagation()}
+            className="bg-slate-900 border border-slate-800 rounded-2xl p-6 w-full max-w-sm space-y-4 shadow-2xl relative overflow-hidden"
+          >
             {/* Top accent light */}
             <div className="absolute top-0 inset-x-0 h-[3px] bg-gradient-to-r from-red-500 via-amber-500 to-red-500"></div>
 
@@ -7457,55 +7632,56 @@ export const GameRoom: React.FC<Props> = ({ roomId, isOffline, profile, onLeaveR
             </div>
 
             <p className="text-[9.5px] text-slate-400 leading-normal">
-              {profile.settings.language === 'en'
-                ? 'Rearrange your wildcards using the action buttons.'
-                : 'Joker kartlarınızın rengini değiştirebilirsiniz.'}
+              {profile.settings.language === 'en' 
+                ? 'Rearrange your wildcards or change colors using the action buttons.' 
+                : 'Joker kartlarınızın rengini değiştirebilir ve setinizi düzenleyebilirsiniz.'}
             </p>
 
-            <div className="space-y-2 max-h-56 overflow-y-auto pr-1 scrollbar-thin">
+            <div className="space-y-2.5 max-h-64 overflow-y-auto pr-1 scrollbar-thin">
               {localPlayer.properties[managedSetColor]?.cards.map((c) => {
                 const isMultiColorWildcard = c.isWildcard && (!c.secondaryColor || c.secondaryColor === 'any');
                 return (
-                  <div key={c.id} className="p-2 rounded-xl bg-slate-950 border border-white/5 hover:border-white/10 flex items-center justify-between gap-3 transition-all">
-                    <div className="flex items-center gap-2.5">
+                  <div key={c.id} className="p-3 rounded-2xl bg-slate-950 border border-white/5 hover:border-white/10 flex items-center justify-between gap-3 transition-all">
+                    <div className="flex items-center gap-3 min-w-0">
                       {/* Color indicator strip */}
-                      <div
-                        className="w-2.5 h-9 rounded-md shrink-0 shadow-sm border border-white/10"
+                      <div 
+                        className="w-3 h-10 rounded-lg shrink-0 shadow-md border border-white/10"
                         style={{
                           background: c.isWildcard
                             ? (isMultiColorWildcard
-                              ? 'linear-gradient(180deg, #ef4444 0%, #f97316 20%, #eab308 40%, #22c55e 60%, #3b82f6 80%, #a855f7 100%)' // Rainbow
-                              : `linear-gradient(180deg, ${COLOR_HEX[c.color || 'brown']} 50%, ${COLOR_HEX[c.secondaryColor || 'brown']} 50%)` // Dual
-                            )
+                                ? 'linear-gradient(180deg, #ef4444 0%, #f97316 20%, #eab308 40%, #22c55e 60%, #3b82f6 80%, #a855f7 100%)' // Rainbow
+                                : `linear-gradient(180deg, ${COLOR_HEX[c.color || 'brown']} 50%, ${COLOR_HEX[c.secondaryColor || 'brown']} 50%)` // Dual
+                              )
                             : COLOR_HEX[c.color || 'brown'] // Single
                         }}
                       />
-                      <div className="flex flex-col min-w-0">
-                        <span className="font-extrabold text-[10px] text-slate-100 truncate block">{getTranslatedCardName(c, profile)}</span>
-                        <span className="text-[8px] text-slate-400 font-bold block mt-0.5">
-                          {c.isWildcard ? (
-                            <span className="text-amber-400">
-                              {profile.settings.language === 'en' ? 'JOKER • ' : 'JOKER • '}
+                      <div className="flex flex-col min-w-0 text-left">
+                        <span className="font-black text-xs text-slate-100 truncate block">{getTranslatedCardName(c, profile)}</span>
+                        <div className="flex items-center gap-1.5 mt-0.5">
+                          {c.isWildcard && (
+                            <span className="text-[8.5px] font-black tracking-wide uppercase px-1 py-0.2 rounded bg-amber-500/20 text-amber-400 border border-amber-500/30">
+                              {profile.settings.language === 'en' ? 'Joker' : 'Joker'}
                             </span>
-                          ) : null}
-                          {profile.settings.language === 'en' ? 'Value: ' : 'Değer: '}{c.value}M
-                        </span>
+                          )}
+                          <span className="text-[9px] text-slate-400 font-bold">
+                            {profile.settings.language === 'en' ? 'Value: ' : 'Değer: '}{c.value}M
+                          </span>
+                        </div>
                       </div>
                     </div>
 
-                    <div className="flex items-center gap-1.5 shrink-0">
-                      {c.isWildcard && (
-                        <button
-                          onClick={() => {
-                            setWildcardColorPick(c);
-                            setManagedSetColor(null);
-                          }}
-                          className="px-2.5 py-1 bg-amber-500 hover:bg-amber-600 text-slate-950 text-[9px] font-black rounded-lg uppercase transition-all transform active:scale-95 cursor-pointer shadow-md"
-                        >
-                          🔄 {profile.settings.language === 'en' ? 'Switch' : 'Değiştir'}
-                        </button>
-                      )}
-                    </div>
+                    {c.isWildcard && (
+                      <button
+                        onClick={() => {
+                          playPlaySound();
+                          setWildcardColorPick(c);
+                          setManagedSetColor(null);
+                        }}
+                        className="px-3 py-1.5 bg-amber-500 hover:bg-amber-600 text-slate-950 text-[10px] font-black rounded-xl uppercase transition-all transform active:scale-95 cursor-pointer shadow-md shrink-0 flex items-center gap-1"
+                      >
+                        🔄 {profile.settings.language === 'en' ? 'Switch' : 'Değiştir'}
+                      </button>
+                    )}
                   </div>
                 );
               })}
@@ -7613,7 +7789,7 @@ export const GameRoom: React.FC<Props> = ({ roomId, isOffline, profile, onLeaveR
                       className="flex flex-col items-center gap-1.5 flex-shrink-0 cursor-pointer hover:scale-105 transition-transform animate-play-card"
                       title={t('view_details', profile)}
                     >
-                      <GameCard card={card} size="medium" activeEffect={cardEffects[card.id] || null} disable3D={disable3D} cardBack={profile.settings.cardBack} />
+                      <GameCard card={card} size="medium" activeEffect={cardEffects[card.id] || null} disable3D={disable3D} cardBack={profile.settings.cardBack} cardSkin={profile.settings.cardSkin || 'skin_none'} />
                       <span className="text-[8px] font-black text-emerald-400 bg-emerald-950/80 border border-emerald-500/20 px-2 py-0.5 rounded-full leading-none flex items-center gap-0.5">
                         {card.value}M <span className="text-[6.5px] opacity-75">🔍</span>
                       </span>
@@ -7796,20 +7972,21 @@ export const GameRoom: React.FC<Props> = ({ roomId, isOffline, profile, onLeaveR
               ))}
             </div>
 
-            {/* Quick Emojis Row */}
-            <div className="flex gap-2 justify-center py-2 mt-2 border-t border-white/5 flex-shrink-0 flex-wrap">
-              {['😂', '😭', '😠', '👍', '🎉', '😮'].map((emoji) => (
+            {/* Quick Emojis Grid */}
+            <div className="grid grid-cols-6 gap-2 py-2 mt-2 border-t border-white/5 flex-shrink-0">
+              {['😂', '😭', '😠', '👍', '🎉', '😮', '💩', '❤️', '🔥', '💸', '🎲', '👑'].map((emoji) => (
                 <button
                   key={emoji}
                   type="button"
                   onClick={() => {
+                    playPlaySound();
                     if (!isOffline && socketRef.current?.readyState === WebSocket.OPEN) {
                       socketRef.current.send(JSON.stringify({ type: 'trigger_emoji', userId: profile.id, roomId, emoji }));
                     } else {
                       triggerFloatingEmoji(emoji, profile.username);
                     }
                   }}
-                  className="text-xl hover:scale-125 active:scale-95 transition-transform cursor-pointer p-2 bg-white/5 hover:bg-white/10 rounded-full border border-white/5 flex items-center justify-center w-10 h-10 shadow-sm"
+                  className="h-10 text-xl bg-white/5 active:bg-white/10 border border-white/5 rounded-xl flex items-center justify-center transition-all transform active:scale-90 cursor-pointer"
                 >
                   {emoji}
                 </button>
@@ -8015,7 +8192,7 @@ export const GameRoom: React.FC<Props> = ({ roomId, isOffline, profile, onLeaveR
             {/* Card preview in the middle */}
             <div className="flex justify-center py-1">
               <div className="shadow-[0_0_20px_rgba(234,179,8,0.25)] rounded-2xl overflow-hidden">
-                <GameCard card={propertyWildcardColorPick} size="normal" activeEffect={cardEffects[propertyWildcardColorPick.id] || null} disable3D={disable3D} cardBack={profile.settings.cardBack} />
+                <GameCard card={propertyWildcardColorPick} size="normal" activeEffect={cardEffects[propertyWildcardColorPick.id] || null} disable3D={disable3D} cardBack={profile.settings.cardBack} cardSkin={profile.settings.cardSkin || 'skin_none'} />
               </div>
             </div>
 
@@ -8197,7 +8374,7 @@ export const GameRoom: React.FC<Props> = ({ roomId, isOffline, profile, onLeaveR
 
       {/* 5. Floating Rent Analysis Panel (Kira Analiz Penceresi - Follows Mouse) */}
       <AnimatePresence>
-        {analyzedProperty && (() => {
+        {analyzedProperty && !expandedPropertyColor && (() => {
           const { color, ownerName, cardsCount, hasHouse, hasHotel, currentRent } = analyzedProperty;
           const rents = RENT_VALUES[color] || [];
           const maxInSet = MAX_IN_SET[color] || 0;

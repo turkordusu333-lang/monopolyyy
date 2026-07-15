@@ -82,7 +82,7 @@ export interface DailyQuest {
 export interface StoreItem {
   id: string;
   name: string;
-  category: 'avatar' | 'card_back' | 'board_theme' | 'sound_pack' | 'profile_frame' | 'celebration_sound';
+  category: 'avatar' | 'card_back' | 'board_theme' | 'sound_pack' | 'profile_frame' | 'celebration_sound' | 'card_skin' | 'action_vfx';
   price: number;
   previewUrl?: string;
   previewColor?: string;
@@ -101,6 +101,8 @@ export interface UserSettings {
   profileFrame?: string; // ID of unlocked profile frame
   celebrationSound?: string; // ID of unlocked celebration sound
   language?: string; // Active system language code
+  cardSkin?: string; // ID of unlocked card skin
+  actionVfx?: string; // ID of unlocked action VFX
 }
 
 export interface Friend {

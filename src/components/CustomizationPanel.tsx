@@ -321,6 +321,70 @@ const getAvatarDesc = (id: string, profile: UserProfile): string => {
   }
 };
 
+const CARD_SKINS = [
+  { id: 'skin_none', name: 'Varsayılan Temiz Kart', description: 'Standart kart tasarımı.' },
+  { id: 'skin_holographic', name: '💠 Holografik Mavi Sektör', description: 'Akan siber grid ızgarası ve parıltılar.' },
+  { id: 'skin_rune', name: '🔮 Mistik Rün Parşömeni', description: 'Kadim parlayan rünler ve mistik kenarlık.' }
+];
+
+const ACTION_VFX = [
+  { id: 'vfx_none', name: 'Efekt Yok', description: 'Sıradan kart oynama animasyonları.' },
+  { id: 'vfx_meteor', name: '☄️ Meteor Saldırısı', description: 'Deal Breaker oynandığında tam ekran meteor yağmuru.' },
+  { id: 'vfx_mirror_shield', name: '🛡️ Ayna Kalkan', description: 'Just Say No oynandığında altıgen enerji kalkanı.' }
+];
+
+const getCardSkinName = (id: string, profile: UserProfile): string => {
+  if (profile.settings.language !== 'en') {
+    const opt = CARD_SKINS.find(o => o.id === id);
+    return opt ? opt.name : id;
+  }
+  switch(id) {
+    case 'skin_none': return 'Default Clean Card';
+    case 'skin_holographic': return 'Holographic Blue Grid';
+    case 'skin_rune': return 'Mystic Rune Scroll';
+    default: return id;
+  }
+};
+
+const getCardSkinDesc = (id: string, profile: UserProfile): string => {
+  if (profile.settings.language !== 'en') {
+    const opt = CARD_SKINS.find(o => o.id === id);
+    return opt ? opt.description : '';
+  }
+  switch(id) {
+    case 'skin_none': return 'Standard card design.';
+    case 'skin_holographic': return 'Flowing cyber grid lines and glow.';
+    case 'skin_rune': return 'Ancient glowing runes and mystical border.';
+    default: return '';
+  }
+};
+
+const getActionVfxName = (id: string, profile: UserProfile): string => {
+  if (profile.settings.language !== 'en') {
+    const opt = ACTION_VFX.find(o => o.id === id);
+    return opt ? opt.name : id;
+  }
+  switch(id) {
+    case 'vfx_none': return 'No VFX';
+    case 'vfx_meteor': return 'Meteor Strike';
+    case 'vfx_mirror_shield': return 'Mirror Shield';
+    default: return id;
+  }
+};
+
+const getActionVfxDesc = (id: string, profile: UserProfile): string => {
+  if (profile.settings.language !== 'en') {
+    const opt = ACTION_VFX.find(o => o.id === id);
+    return opt ? opt.description : '';
+  }
+  switch(id) {
+    case 'vfx_none': return 'Standard card play animations.';
+    case 'vfx_meteor': return 'Full-screen meteor strike when Deal Breaker is played.';
+    case 'vfx_mirror_shield': return 'Hexagonal energy shield when Just Say No is played.';
+    default: return '';
+  }
+};
+
 export const CustomizationPanel: React.FC<Props> = ({ profile, onUpdateProfile }) => {
   const currentSettings = profile.settings;
 
@@ -659,6 +723,86 @@ export const CustomizationPanel: React.FC<Props> = ({ profile, onUpdateProfile }
                       <div>
                         <span className="font-semibold text-xs block text-white">{getProfileFrameName(frame.id, profile)}</span>
                         <span className="text-[10px] text-slate-400 leading-none">{getProfileFrameDesc(frame.id, profile)}</span>
+                      </div>
+                    </div>
+                    {!isUnlocked && (
+                      <span className="absolute top-1 right-1 text-[10px] bg-red-600/90 text-white font-bold px-1.5 py-0.5 rounded">
+                        {t('settings_locked', profile)}
+                      </span>
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Card Skins Selection */}
+          <div>
+            <span className="text-slate-300 text-sm block mb-3">
+              {profile.settings.language === 'en' ? 'Active Card Skin' : 'Aktif Kart Kaplaması'}
+            </span>
+            <div className="grid grid-cols-2 gap-3 max-h-[220px] overflow-y-auto pr-1 scrollbar-thin">
+              {CARD_SKINS.map((skin) => {
+                const isUnlocked = skin.id === 'skin_none' || profile.unlockedItems.includes(skin.id);
+                const isSelected = (currentSettings.cardSkin || 'skin_none') === skin.id;
+                return (
+                  <button
+                    key={skin.id}
+                    disabled={!isUnlocked}
+                    onClick={() => handleSaveSetting('cardSkin', skin.id)}
+                    className={`p-3 rounded-xl border text-left transition-all relative ${!isUnlocked ? 'opacity-40 cursor-not-allowed' : ''
+                      } ${isSelected
+                        ? 'border-red-500 bg-red-600/10'
+                        : 'border-white/5 bg-black/40 hover:border-white/10'
+                      }`}
+                  >
+                    <div className="flex items-center gap-3">
+                      <div className="w-8 h-12 rounded border border-white/10 bg-slate-800 flex items-center justify-center font-bold text-xs relative overflow-hidden shrink-0">
+                        {skin.id === 'skin_holographic' && <div className="skin-holographic-overlay absolute inset-0" />}
+                        {skin.id === 'skin_rune' && <div className="skin-rune-overlay absolute inset-0" />}
+                        <span className="text-[8px] text-white/50 z-10">KART</span>
+                      </div>
+                      <div>
+                        <span className="font-semibold text-xs block text-white">{getCardSkinName(skin.id, profile)}</span>
+                        <span className="text-[10px] text-slate-400 leading-none">{getCardSkinDesc(skin.id, profile)}</span>
+                      </div>
+                    </div>
+                    {!isUnlocked && (
+                      <span className="absolute top-1 right-1 text-[10px] bg-red-600/90 text-white font-bold px-1.5 py-0.5 rounded">
+                        {t('settings_locked', profile)}
+                      </span>
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Action VFX Selection */}
+          <div>
+            <span className="text-slate-300 text-sm block mb-3">
+              {profile.settings.language === 'en' ? 'Active Action VFX' : 'Aktif Aksiyon Efekti'}
+            </span>
+            <div className="grid grid-cols-2 gap-3 max-h-[220px] overflow-y-auto pr-1 scrollbar-thin">
+              {ACTION_VFX.map((vfx) => {
+                const isUnlocked = vfx.id === 'vfx_none' || profile.unlockedItems.includes(vfx.id);
+                const isSelected = (currentSettings.actionVfx || 'vfx_none') === vfx.id;
+                return (
+                  <button
+                    key={vfx.id}
+                    disabled={!isUnlocked}
+                    onClick={() => handleSaveSetting('actionVfx', vfx.id)}
+                    className={`p-3 rounded-xl border text-left transition-all relative ${!isUnlocked ? 'opacity-40 cursor-not-allowed' : ''
+                      } ${isSelected
+                        ? 'border-red-500 bg-red-600/10'
+                        : 'border-white/5 bg-black/40 hover:border-white/10'
+                      }`}
+                  >
+                    <div className="flex items-center gap-2">
+                      <span className="text-lg shrink-0">{vfx.id === 'vfx_meteor' ? '☄️' : vfx.id === 'vfx_mirror_shield' ? '🛡️' : '⚪'}</span>
+                      <div>
+                        <span className="font-semibold text-xs block text-white">{getActionVfxName(vfx.id, profile)}</span>
+                        <span className="text-[10px] text-slate-400 leading-none">{getActionVfxDesc(vfx.id, profile)}</span>
                       </div>
                     </div>
                     {!isUnlocked && (

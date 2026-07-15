@@ -68,6 +68,10 @@ interface GameCardProps {
   onClick?: () => void;
   className?: string;
   activeEffect?: CardEffectType;
+  isFaceDown?: boolean;
+  cardBack?: string;
+  disable3D?: boolean;
+  cardSkin?: string;
 }
 
 const CardEffectAnimation: React.FC<{ type: CardEffectType }> = ({ type }) => {
@@ -443,8 +447,24 @@ export const GameCard: React.FC<GameCardProps> = ({
   isFaceDown = false,
   cardBack = 'back_classic',
   disable3D = false,
+  cardSkin = 'skin_none',
 }) => {
   const skin = getSkinStyles(cardBack);
+  const getSkinOverlayClass = () => {
+    if (size === 'normal') return 'rounded-2xl';
+    if (size === 'medium') return 'rounded-md';
+    return 'rounded-lg';
+  };
+  const skinOverlayElement = !isFaceDown && (
+    <>
+      {cardSkin === 'skin_holographic' && (
+        <div className={`skin-holographic-overlay absolute inset-0 pointer-events-none z-35 skin-holographic-hover ${getSkinOverlayClass()}`} />
+      )}
+      {cardSkin === 'skin_rune' && (
+        <div className={`skin-rune-overlay absolute inset-0 pointer-events-none z-35 ${getSkinOverlayClass()}`} />
+      )}
+    </>
+  );
   const [showTooltip, setShowTooltip] = React.useState(false);
   const cardRef = React.useRef<HTMLDivElement>(null);
   const [hoverCoords, setHoverCoords] = React.useState({ x: 50, y: 50 });
@@ -988,6 +1008,7 @@ export const GameCard: React.FC<GameCardProps> = ({
       >
         {tooltipElement}
         {renderMiniBody()}
+        {skinOverlayElement}
         {holoOverlay}
         <CardEffectAnimation type={activeEffect} />
       </div>
@@ -1167,6 +1188,7 @@ export const GameCard: React.FC<GameCardProps> = ({
       >
         {tooltipElement}
         {renderMediumBody()}
+        {skinOverlayElement}
         <CardEffectAnimation type={activeEffect} />
       </Holo>
     );
@@ -1461,6 +1483,7 @@ export const GameCard: React.FC<GameCardProps> = ({
         </div>
       )}
 
+      {skinOverlayElement}
       <CardEffectAnimation type={activeEffect} />
       </div>
     </Holo>
