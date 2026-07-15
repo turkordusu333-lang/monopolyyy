@@ -1,17 +1,18 @@
-// Tarayıcı dışındaki gerçek yerel Android/Capacitor uygulamasında mıyız kontrol et
-const isCapacitor = 
+// Üretim (canlı) web sitesinde miyiz kontrol et (Render üzerinde yayındayken hostname 'localhost' veya local IP'ler olmaz)
+const isLiveWeb = 
   typeof window !== 'undefined' && 
-  ((window as any).Capacitor || 
-   window.location.protocol === 'file:' || 
-   (window.location.hostname === 'localhost' && !window.location.port));
+  window.location.hostname !== 'localhost' && 
+  window.location.hostname !== '127.0.0.1' && 
+  window.location.protocol !== 'file:' &&
+  !window.location.hostname.startsWith('192.168.'); // Yerel ağ testleri için
 
-// Web tarayıcısında istekleri '/' (göreceli) olarak gönder (CORS hatasını önler)
-// Sadece APK/Mobil içinde Render URL'sini zorunlu kıl
-export const API_BASE_URL = isCapacitor
-  ? "https://monopolyyy.onrender.com"
-  : "";
+// Canlı web sitesindeysek göreceli path kullan (CORS engeline takılmamak için)
+// Mobil uygulamada (APK) veya yerel testlerde ise Render URL'sini zorunlu tut
+export const API_BASE_URL = isLiveWeb
+  ? ""
+  : "https://monopolyyy.onrender.com";
 
-// WebSocket protocol helper:
-export const WS_BASE_URL = isCapacitor
-  ? "wss://monopolyyy.onrender.com"
-  : (window.location.protocol === 'https:' ? 'wss://' : 'ws://') + window.location.host;
+// Canlı web sitesindeysek o anki host üzerinden secure websocket (wss) veya ws aç, APK'daysa doğrudan Render wss adresine bağlan
+export const WS_BASE_URL = isLiveWeb
+  ? (window.location.protocol === 'https:' ? 'wss://' : 'ws://') + window.location.host
+  : "wss://monopolyyy.onrender.com";
