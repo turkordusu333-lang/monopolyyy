@@ -3,6 +3,7 @@ import { UserProfile, StoreItem } from '../types';
 import { sounds } from '../lib/SoundSystem';
 import { AvatarWithFrame } from './AvatarWithFrame';
 import { t } from '../lib/TranslationSystem';
+import { API_BASE_URL } from '../lib/apiConfig';
 
 interface Props {
   profile: UserProfile;
@@ -188,7 +189,7 @@ export const ShopDialog: React.FC<Props> = ({ profile, onUpdateProfile }) => {
     setError(null);
 
     try {
-      const response = await fetch('/api/shop/buy', {
+      const response = await fetch(`${API_BASE_URL}/api/shop/buy`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ userId: profile.id, itemId }),

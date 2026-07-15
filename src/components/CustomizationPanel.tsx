@@ -3,6 +3,7 @@ import { UserProfile, UserSettings } from '../types';
 import { sounds } from '../lib/SoundSystem';
 import { AvatarWithFrame } from './AvatarWithFrame';
 import { t } from '../lib/TranslationSystem';
+import { API_BASE_URL } from '../lib/apiConfig';
 
 interface Props {
   profile: UserProfile;
@@ -412,7 +413,7 @@ export const CustomizationPanel: React.FC<Props> = ({ profile, onUpdateProfile }
 
     // Persist on server
     try {
-      const response = await fetch('/api/settings/save', {
+      const response = await fetch(`${API_BASE_URL}/api/settings/save`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ userId: profile.id, settings: { [key]: value } }),

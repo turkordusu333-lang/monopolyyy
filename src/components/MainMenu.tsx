@@ -8,11 +8,12 @@ import { AvatarWithFrame } from './AvatarWithFrame';
 import { AdminDashboard } from './AdminDashboard';
 import { motion, AnimatePresence } from 'motion/react';
 import { t } from '../lib/TranslationSystem';
+import { API_BASE_URL } from '../lib/apiConfig';
 
 interface Props {
   profile: UserProfile;
   onUpdateProfile: (updated: UserProfile) => void;
-  onJoinRoom: (roomId: string, isOffline: boolean) => void;
+  onJoinRoom: (roomId: string, isOffline: boolean, password?: string) => void;
   adminSettings?: any;
   onUpdateAdminSettings?: (settings: any) => void;
 }
@@ -33,6 +34,7 @@ export const MainMenu: React.FC<Props> = ({ profile, onUpdateProfile, onJoinRoom
   const [botDifficulty, setBotDifficulty] = React.useState<'easy' | 'medium' | 'hard'>('medium');
   const [rooms, setRooms] = React.useState<any[]>([]);
   const [customRoomId, setCustomRoomId] = React.useState('');
+  const [roomPassword, setRoomPassword] = React.useState(''); // State to hold optional room password on creation
   const [tournamentJoined, setTournamentJoined] = React.useState(false);
 
   React.useEffect(() => {
@@ -49,7 +51,7 @@ export const MainMenu: React.FC<Props> = ({ profile, onUpdateProfile, onJoinRoom
   const fetchLeaderboard = async () => {
     setLeaderboardLoading(true);
     try {
-      const res = await fetch('/api/leaderboard');
+      const res = await fetch(`${API_BASE_URL}/api/leaderboard`);
       if (res.ok) {
         const data = await res.json();
         setLeaderboardData(data);
@@ -83,7 +85,7 @@ export const MainMenu: React.FC<Props> = ({ profile, onUpdateProfile, onJoinRoom
 
     // Persist this change on server
     try {
-      await fetch('/api/settings/save', {
+      await fetch(`${API_BASE_URL}/api/settings/save`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ userId: profile.id, settings: { avatarId: 'avatar_classic' } }),
@@ -103,7 +105,7 @@ export const MainMenu: React.FC<Props> = ({ profile, onUpdateProfile, onJoinRoom
   // Fetch active multiplayer lobbies
   const fetchLobbies = async () => {
     try {
-      const res = await fetch('/api/rooms');
+      const res = await fetch(`${API_BASE_URL}/api/rooms`);
       if (res.ok) {
         const data = await res.json();
         setRooms(data);
@@ -129,12 +131,23 @@ export const MainMenu: React.FC<Props> = ({ profile, onUpdateProfile, onJoinRoom
         : `oda-${Math.random().toString(36).substr(2, 5)}`;
 
     sounds.playPlay(profile.settings);
-    onJoinRoom(rid, offline);
+    onJoinRoom(rid, offline, roomPassword.trim() !== '' ? roomPassword.trim() : undefined);
+    // Clear room password input field
+    setRoomPassword('');
   };
 
-  const handleJoinExistingRoom = (roomId: string) => {
+  const handleJoinExistingRoom = (roomId: string, hasPassword?: boolean) => {
     sounds.playPlay(profile.settings);
-    onJoinRoom(roomId, false);
+    let enteredPassword = undefined;
+    if (hasPassword) {
+      const promptText = profile.settings.language === 'en' 
+        ? "Enter room password:" 
+        : "Oda şifresini giriniz:";
+      const ans = window.prompt(promptText);
+      if (ans === null) return; // User cancelled
+      enteredPassword = ans.trim();
+    }
+    onJoinRoom(roomId, false, enteredPassword);
   };
 
   const handleRegisterTournament = () => {
@@ -165,7 +178,7 @@ export const MainMenu: React.FC<Props> = ({ profile, onUpdateProfile, onJoinRoom
 
   const handleClaimQuest = async (questId: string) => {
     try {
-      const response = await fetch('/api/quests/claim', {
+      const response = await fetch(`${API_BASE_URL}/api/quests/claim`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ userId: profile.id, questId }),
@@ -225,7 +238,7 @@ export const MainMenu: React.FC<Props> = ({ profile, onUpdateProfile, onJoinRoom
                   onUpdateProfile(updated);
                   sounds.playPlay(profile.settings);
                   // Persist to server
-                  await fetch('/api/settings/save', {
+                  await fetch(`${API_BASE_URL}/api/settings/save`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ userId: profile.id, settings: { language: nextLang } }),
@@ -494,17 +507,24 @@ export const MainMenu: React.FC<Props> = ({ profile, onUpdateProfile, onJoinRoom
                     </div>
 
                     {/* Create Room Actions */}
-                    <div className="flex flex-col sm:flex-row w-full sm:w-auto gap-2">
+                    <div className="flex flex-col sm:flex-row w-full sm:w-auto gap-2 items-center">
                       <input
                         type="text"
                         placeholder={t('enter_code', profile)}
                         value={customRoomId}
                         onChange={(e) => setCustomRoomId(e.target.value)}
-                        className="bg-black/40 border border-white/10 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-red-500 transition-all focus:ring-1 focus:ring-red-500/20"
+                        className="w-full sm:w-36 bg-black/40 border border-white/10 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-red-500 transition-all focus:ring-1 focus:ring-red-500/20"
+                      />
+                      <input
+                        type="password"
+                        placeholder={profile.settings.language === 'en' ? "Password (optional)" : "Şifre (isteğe bağlı)"}
+                        value={roomPassword}
+                        onChange={(e) => setRoomPassword(e.target.value)}
+                        className="w-full sm:w-36 bg-black/40 border border-white/10 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-red-500 transition-all focus:ring-1 focus:ring-red-500/20"
                       />
                       <button
                         onClick={() => handleCreateRoom(false)}
-                        className="px-5 py-2.5 bg-red-600 hover:bg-red-500 text-white font-bold rounded-xl text-sm transition-all shadow-lg shadow-red-600/20 active:scale-95 transform"
+                        className="w-full sm:w-auto px-5 py-2.5 bg-red-600 hover:bg-red-500 text-white font-bold rounded-xl text-sm transition-all shadow-lg shadow-red-600/20 active:scale-95 transform whitespace-nowrap cursor-pointer"
                       >
                         {t('create_room_btn', profile)}
                       </button>
@@ -518,13 +538,20 @@ export const MainMenu: React.FC<Props> = ({ profile, onUpdateProfile, onJoinRoom
                       {rooms.map((room) => (
                         <div
                           key={room.roomId}
-                          className="bg-black/20 border border-white/5 rounded-xl p-4 flex flex-col justify-between hover:border-white/10 transition-all"
+                          className="bg-black/20 border border-white/5 rounded-xl p-4 flex flex-col justify-between hover:border-white/10 transition-all relative overflow-hidden"
                         >
                           <div>
                             <div className="flex justify-between items-center mb-2">
-                              <span className="font-bold text-xs text-red-400 bg-red-600/10 border border-red-500/10 px-2.5 py-0.5 rounded-full">
-                                ID: {room.roomId}
-                              </span>
+                              <div className="flex items-center gap-1.5">
+                                <span className="font-bold text-xs text-red-400 bg-red-600/10 border border-red-500/10 px-2.5 py-0.5 rounded-full">
+                                  ID: {room.roomId}
+                                </span>
+                                {room.hasPassword && (
+                                  <span className="text-xs" title={profile.settings.language === 'en' ? "Password Protected" : "Şifreli Oda"}>
+                                    🔒
+                                  </span>
+                                )}
+                              </div>
                               <span className="text-xs text-slate-400 font-medium">
                                 👥 {room.playerCount} Oyuncu
                               </span>
@@ -536,8 +563,8 @@ export const MainMenu: React.FC<Props> = ({ profile, onUpdateProfile, onJoinRoom
 
                           {room.status === 'lobby' || room.players.includes(profile.username) ? (
                             <button
-                              onClick={() => handleJoinExistingRoom(room.roomId)}
-                              className="w-full py-2 bg-red-600 hover:bg-red-500 text-white font-bold rounded-lg text-xs transition-all active:scale-95 transform font-black"
+                              onClick={() => handleJoinExistingRoom(room.roomId, room.hasPassword)}
+                              className="w-full py-2 bg-red-600 hover:bg-red-500 text-white font-bold rounded-lg text-xs transition-all active:scale-95 transform font-black cursor-pointer"
                             >
                               {room.status === 'lobby' ? 'Odaya Katıl' : 'Oyuna Geri Dön'}
                             </button>

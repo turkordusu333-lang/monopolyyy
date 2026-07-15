@@ -168,6 +168,7 @@ export interface UserProfile {
   achievements: Achievement[];
   dailyQuests: DailyQuest[];
   gamesHistory?: GameHistoryItem[];
+  password?: string; // Optional user account password
 }
 
 // Multiplayer Game Types
@@ -223,6 +224,7 @@ export interface MatchState {
     autoEndTurn: boolean;
     gameMode: 'classic' | 'chaos' | 'speed';
   };
+  password?: string; // Optional password to enter the room
 }
 
 export interface ActionRequest {

@@ -609,7 +609,7 @@ async function startServer() {
 
   // Auth / Get Profile
   app.post('/api/auth', async (req, res) => {
-    const { username } = req.body;
+    const { username, password } = req.body;
     if (!username || username.trim() === '') {
       return res.status(400).json({ error: 'Kullanıcı adı geçerli olmalıdır.' });
     }
@@ -617,12 +617,26 @@ async function startServer() {
     const users = await loadUsers();
     let user = Object.values(users).find((u) => u.username.toLowerCase() === username.toLowerCase());
 
-    if (!user) {
+    if (user) {
+      // If user has a password set, verify it
+      if (user.password && user.password.trim() !== '') {
+        if (!password || password.trim() !== user.password) {
+          return res.status(401).json({ error: 'Bu kullanıcı adı şifre korumalıdır. Lütfen doğru şifreyi giriniz.' });
+        }
+      }
+      // Ensure gamesHistory exists for legacy profiles
+      if (!user.gamesHistory) {
+        user.gamesHistory = [];
+        users[user.id] = user;
+        await saveUsers(users);
+      }
+    } else {
       // Create new profile
       const newId = `user-${Math.random().toString(36).substr(2, 9)}`;
       user = {
         id: newId,
         username: username.trim(),
+        password: password && password.trim() !== '' ? password.trim() : undefined,
         coins: 500, // starting coins
         level: 1,
         xp: 0,
@@ -668,13 +682,6 @@ async function startServer() {
       };
       users[newId] = user;
       await saveUsers(users);
-    } else {
-      // Ensure gamesHistory exists for legacy profiles
-      if (!user.gamesHistory) {
-        user.gamesHistory = [];
-        users[user.id] = user;
-        await saveUsers(users);
-      }
     }
 
     res.json(user);
@@ -840,7 +847,7 @@ async function startServer() {
 
   // Custom profile updater endpoint
   app.post('/api/profile/update', async (req, res) => {
-    const { userId, avatarUrl, gamesHistory, coins, xp, stats, dailyQuests, achievements } = req.body;
+    const { userId, avatarUrl, gamesHistory, coins, xp, stats, dailyQuests, achievements, password } = req.body;
     const users = await loadUsers();
     const user = users[userId];
 
@@ -858,6 +865,7 @@ async function startServer() {
     if (stats !== undefined) user.stats = { ...user.stats, ...stats };
     if (dailyQuests !== undefined) user.dailyQuests = dailyQuests;
     if (achievements !== undefined) user.achievements = achievements;
+    if (password !== undefined) user.password = password;
 
     users[userId] = user;
     await saveUsers(users);
@@ -930,13 +938,13 @@ async function startServer() {
     res.json({ success: true, friends: user.friends });
   });
 
-  // Fetch active rooms lists
   app.get('/api/rooms', (req, res) => {
     const list = Object.values(activeMatches).map((m) => ({
       roomId: m.roomId,
       playerCount: m.players.length,
       status: m.status,
       players: m.players.map((p) => p.username),
+      hasPassword: !!m.password,
     }));
     res.json(list);
   });
@@ -970,7 +978,7 @@ async function startServer() {
             const user = users[userId];
             if (!user) break;
 
-            clients[clientId].roomId = roomId;
+            const roomPassword = payload.password; // Optional password passed from client
 
             // Find or create room
             let match = activeMatches[roomId];
@@ -986,8 +994,25 @@ async function startServer() {
                 logs: [{ id: 'l-init', message: `${user.username} odayı kurdu.`, timestamp: Date.now() }],
                 isOffline: false,
               };
+              if (roomPassword && roomPassword.trim() !== '') {
+                match.password = roomPassword.trim();
+              }
               activeMatches[roomId] = match;
+            } else {
+              // Existing room, verify password if any
+              if (match.password && match.password !== roomPassword) {
+                const isAlreadyJoined = match.players.some((p) => p.id === userId);
+                if (!isAlreadyJoined) {
+                  ws.send(JSON.stringify({
+                    type: 'join_failed',
+                    error: 'Geçersiz oda şifresi!',
+                  }));
+                  break;
+                }
+              }
             }
+
+            clients[clientId].roomId = roomId;
 
             // Join if not already in
             const existingPlayer = match.players.find((p) => p.id === userId);

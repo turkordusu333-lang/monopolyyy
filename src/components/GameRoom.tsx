@@ -7,6 +7,7 @@ import { GameCard, TURKISH_NAMES } from './GameCard';
 import { motion, AnimatePresence } from 'motion/react';
 import { AvatarWithFrame } from './AvatarWithFrame';
 import { t } from '../lib/TranslationSystem';
+import { WS_BASE_URL } from '../lib/apiConfig';
 
 interface Props {
   roomId: string;
@@ -15,6 +16,7 @@ interface Props {
   onLeaveRoom: () => void;
   onUpdateProfile: (updated: UserProfile) => void;
   adminSettings?: any;
+  roomPassword?: string;
 }
 
 const translateCardNameInStr = (name: string, profile: UserProfile): string => {
@@ -746,7 +748,7 @@ const FireworksCelebration: React.FC = () => {
   return <canvas ref={canvasRef} className="absolute inset-0 z-0 pointer-events-none w-full h-full" />;
 };
 
-export const GameRoom: React.FC<Props> = ({ roomId, isOffline, profile, onLeaveRoom, onUpdateProfile, adminSettings }) => {
+export const GameRoom: React.FC<Props> = ({ roomId, isOffline, profile, onLeaveRoom, onUpdateProfile, adminSettings, roomPassword }) => {
   const [match, setMatch] = React.useState<MatchState | null>(null);
   const matchRef = React.useRef<MatchState | null>(null);
   React.useEffect(() => {
@@ -1724,8 +1726,7 @@ export const GameRoom: React.FC<Props> = ({ roomId, isOffline, profile, onLeaveR
       setMatch(initialMatch);
     } else {
       // Connect WebSocket
-      const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-      const wsUrl = `${protocol}//${window.location.host}`;
+      const wsUrl = WS_BASE_URL;
       const ws = new WebSocket(wsUrl);
       socketRef.current = ws;
 
@@ -1733,7 +1734,7 @@ export const GameRoom: React.FC<Props> = ({ roomId, isOffline, profile, onLeaveR
         // Register client
         ws.send(JSON.stringify({ type: 'register', userId: profile.id }));
         // Join room
-        ws.send(JSON.stringify({ type: 'join_room', userId: profile.id, roomId }));
+        ws.send(JSON.stringify({ type: 'join_room', userId: profile.id, roomId, password: roomPassword }));
       };
 
       ws.onmessage = (event) => {
@@ -1827,6 +1828,9 @@ export const GameRoom: React.FC<Props> = ({ roomId, isOffline, profile, onLeaveR
             setSpeakingList(speaking);
           } else if (data.type === 'kicked') {
             alert('Lobiden Atıldınız!');
+            onLeaveRoom();
+          } else if (data.type === 'join_failed') {
+            alert(data.error || 'Odaya katılım başarısız oldu!');
             onLeaveRoom();
           } else if (data.type === 'alert') {
             alert(data.message);
