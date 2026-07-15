@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { API_BASE_URL } from '../lib/apiConfig';
 
 interface Quest {
   id: string;
@@ -128,7 +129,7 @@ export const AdminDashboard: React.FC<Props> = ({ onSettingsUpdated }) => {
   }, []);
 
   const fetchTranslations = () => {
-    fetch('/api/translations')
+    fetch(`${API_BASE_URL}/api/translations`)
       .then(res => res.json())
       .then(data => {
         if (data) setTranslations(data);
@@ -137,7 +138,7 @@ export const AdminDashboard: React.FC<Props> = ({ onSettingsUpdated }) => {
   };
 
   const handleSaveTranslations = (updated = translations) => {
-    fetch('/api/translations/save', {
+    fetch(`${API_BASE_URL}/api/translations/save`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ translations: updated })
@@ -211,7 +212,7 @@ export const AdminDashboard: React.FC<Props> = ({ onSettingsUpdated }) => {
   };
 
   const fetchSettings = () => {
-    fetch('/api/admin/settings')
+    fetch(`${API_BASE_URL}/api/admin/settings`)
       .then(res => res.json())
       .then(data => {
         if (data) setSettings(data);
@@ -220,7 +221,7 @@ export const AdminDashboard: React.FC<Props> = ({ onSettingsUpdated }) => {
   };
 
   const fetchStats = () => {
-    fetch('/api/admin/stats')
+    fetch(`${API_BASE_URL}/api/admin/stats`)
       .then(res => res.json())
       .then(data => {
         if (data) setStats(data);
@@ -229,7 +230,7 @@ export const AdminDashboard: React.FC<Props> = ({ onSettingsUpdated }) => {
   };
 
   const fetchPlayers = () => {
-    fetch('/api/admin/players')
+    fetch(`${API_BASE_URL}/api/admin/players`)
       .then(res => res.json())
       .then(data => {
         if (data) setPlayers(data);
@@ -238,7 +239,7 @@ export const AdminDashboard: React.FC<Props> = ({ onSettingsUpdated }) => {
   };
 
   const fetchQuests = () => {
-    fetch('/api/admin/quests')
+    fetch(`${API_BASE_URL}/api/admin/quests`)
       .then(res => res.json())
       .then(data => {
         if (data) setQuests(data);
@@ -247,7 +248,7 @@ export const AdminDashboard: React.FC<Props> = ({ onSettingsUpdated }) => {
   };
 
   const handleSaveSettings = (updatedSettings = settings) => {
-    fetch('/api/admin/settings', {
+    fetch(`${API_BASE_URL}/api/admin/settings`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ settings: updatedSettings })
@@ -281,7 +282,7 @@ export const AdminDashboard: React.FC<Props> = ({ onSettingsUpdated }) => {
 
   const handleUpdatePlayer = () => {
     if (!selectedPlayer) return;
-    fetch('/api/admin/players/update', {
+    fetch(`${API_BASE_URL}/api/admin/players/update`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -311,7 +312,7 @@ export const AdminDashboard: React.FC<Props> = ({ onSettingsUpdated }) => {
     e.preventDefault();
     if (!newQuestDesc.trim()) return;
 
-    fetch('/api/admin/quests/add', {
+    fetch(`${API_BASE_URL}/api/admin/quests/add`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -333,7 +334,7 @@ export const AdminDashboard: React.FC<Props> = ({ onSettingsUpdated }) => {
   };
 
   const handleDeleteQuest = (questId: string) => {
-    fetch('/api/admin/quests/delete', {
+    fetch(`${API_BASE_URL}/api/admin/quests/delete`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ questId })
@@ -358,7 +359,7 @@ export const AdminDashboard: React.FC<Props> = ({ onSettingsUpdated }) => {
       return;
     }
 
-    fetch('/api/admin/tournaments/create', {
+    fetch(`${API_BASE_URL}/api/admin/tournaments/create`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ name: tournamentName.trim(), participants: list })

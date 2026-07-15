@@ -440,6 +440,21 @@ async function startServer() {
 
   app.use(express.json());
 
+  // CORS middleware for APK and cross-origin clients
+  app.use((req, res, next) => {
+    const origin = req.headers.origin;
+    // Allow any origin or check for localhost/Render origins specifically
+    res.setHeader('Access-Control-Allow-Origin', origin || '*');
+    res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS, PUT, PATCH, DELETE');
+    res.setHeader('Access-Control-Allow-Headers', 'X-Requested-With,Content-Type,Authorization');
+    res.setHeader('Access-Control-Allow-Credentials', 'true');
+    
+    if (req.method === 'OPTIONS') {
+      return res.sendStatus(200);
+    }
+    next();
+  });
+
   // Load administrative settings and custom quests from Supabase/Backup
   await loadAdminData();
 
