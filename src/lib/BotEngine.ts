@@ -104,7 +104,7 @@ export class BotEngine {
         Object.keys(op.properties).forEach((colorKey) => {
           const col = colorKey as CardColor;
           const propSet = op.properties[col];
-          if (propSet && propSet.cards.length === MAX_IN_SET[col]) {
+          if (propSet && propSet.cards.length >= MAX_IN_SET[col]) {
             const setVal = propSet.cards.reduce((sum, c) => sum + c.value, 0);
             if (setVal > highestVal) {
               highestVal = setVal;

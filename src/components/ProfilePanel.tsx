@@ -3,6 +3,7 @@ import { UserProfile, Friend, DailyQuest } from '../types';
 import { sounds } from '../lib/SoundSystem';
 import { AvatarWithFrame } from './AvatarWithFrame';
 import { PerformanceChart } from './PerformanceChart';
+import { t } from '../lib/TranslationSystem';
 
 interface Props {
   profile: UserProfile;
@@ -95,7 +96,7 @@ export const ProfilePanel: React.FC<Props> = ({ profile, onUpdateProfile }) => {
               <div>
                 <h3 className="font-bold text-xl text-white">{profile.username}</h3>
                 <span className="text-xs text-red-400 font-bold bg-red-500/10 px-2.5 py-1 rounded-full inline-block mt-1">
-                  Seviye {profile.level}
+                  {t('level', profile)} {profile.level}
                 </span>
               </div>
             </div>
@@ -103,7 +104,7 @@ export const ProfilePanel: React.FC<Props> = ({ profile, onUpdateProfile }) => {
             {/* XP progress bar */}
             <div className="space-y-2 mt-4">
               <div className="flex justify-between text-xs text-slate-400">
-                <span>XP Gelişimi</span>
+                <span>{t('xp_progress', profile)}</span>
                 <span className="text-red-400 font-semibold">{profile.xp % nextLevelXp} / {nextLevelXp} XP</span>
               </div>
               <div className="w-full bg-white/10 h-2.5 rounded-full overflow-hidden border border-white/5">
@@ -116,29 +117,29 @@ export const ProfilePanel: React.FC<Props> = ({ profile, onUpdateProfile }) => {
           </div>
 
           <div className="mt-6 border-t border-white/10 pt-4 flex justify-between items-center text-sm">
-            <span className="text-slate-400">Kazanılan Altın:</span>
+            <span className="text-slate-400">{t('gold_earned', profile)}</span>
             <span className="font-bold text-amber-300 flex items-center gap-1">
               <div className="w-3 h-3 bg-yellow-400 rounded-full shadow-md shadow-yellow-400/20"></div>
-              {profile.coins} Altın
+              {profile.coins} {t('coins', profile)}
             </span>
           </div>
         </div>
 
         {/* Player Stats Card */}
         <div className="md:col-span-2 bg-black/20 border border-white/10 rounded-2xl p-6 shadow-2xl">
-          <h3 className="text-lg font-semibold text-white mb-4 border-b border-white/10 pb-2">Maç İstatistikleri</h3>
+          <h3 className="text-lg font-semibold text-white mb-4 border-b border-white/10 pb-2">{t('match_stats', profile)}</h3>
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
             <div className="bg-black/40 p-4 rounded-xl border border-white/5 text-center">
               <span className="text-2xl font-black text-slate-200">{profile.stats.gamesPlayed}</span>
-              <p className="text-xs text-slate-400 mt-1">Toplam Maç</p>
+              <p className="text-xs text-slate-400 mt-1">{t('total_matches', profile)}</p>
             </div>
             <div className="bg-black/40 p-4 rounded-xl border border-white/5 text-center">
               <span className="text-2xl font-black text-red-500">{profile.stats.gamesWon}</span>
-              <p className="text-xs text-slate-400 mt-1">Kazanma</p>
+              <p className="text-xs text-slate-400 mt-1">{t('wins', profile)}</p>
             </div>
             <div className="bg-black/40 p-4 rounded-xl border border-white/5 text-center">
               <span className="text-2xl font-black text-slate-500">{profile.stats.gamesLost}</span>
-              <p className="text-xs text-slate-400 mt-1">Kaybetme</p>
+              <p className="text-xs text-slate-400 mt-1">{t('losses', profile)}</p>
             </div>
             <div className="bg-black/40 p-4 rounded-xl border border-white/5 text-center">
               <span className="text-2xl font-black text-red-400">
@@ -146,26 +147,26 @@ export const ProfilePanel: React.FC<Props> = ({ profile, onUpdateProfile }) => {
                   ? Math.round((profile.stats.gamesWon / profile.stats.gamesPlayed) * 100)
                   : 0}%
               </span>
-              <p className="text-xs text-slate-400 mt-1">Kazanma Oranı</p>
+              <p className="text-xs text-slate-400 mt-1">{t('win_rate', profile)}</p>
             </div>
           </div>
 
           {/* Additional details */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-6 text-sm text-slate-300">
             <div className="flex justify-between p-2.5 bg-black/40 border border-white/5 rounded-lg">
-              <span>Toplanan Kira Bedeli:</span>
+              <span>{t('rent_collected', profile)}</span>
               <span className="font-bold text-red-400">{profile.stats.totalRentCollected}M</span>
             </div>
             <div className="flex justify-between p-2.5 bg-black/40 border border-white/5 rounded-lg">
-              <span>Çalınan Kart Sayısı:</span>
-              <span className="font-bold text-red-400">{profile.stats.totalCardsStolen} Kart</span>
+              <span>{t('cards_stolen', profile)}</span>
+              <span className="font-bold text-red-400">{profile.stats.totalCardsStolen} {t('cards_count', profile).toLowerCase()}</span>
             </div>
             <div className="flex justify-between p-2.5 bg-black/40 border border-white/5 rounded-lg">
-              <span>Tamamlanan Arsa Seti:</span>
-              <span className="font-bold text-red-400">{profile.stats.totalSetsCompleted} Set</span>
+              <span>{t('sets_completed', profile)}</span>
+              <span className="font-bold text-red-400">{profile.stats.totalSetsCompleted} {t('completed_sets', profile).toLowerCase()}</span>
             </div>
             <div className="flex justify-between p-2.5 bg-black/40 border border-white/5 rounded-lg">
-              <span>Banka Kasası Toplamı:</span>
+              <span>{t('bank_total', profile)}</span>
               <span className="font-bold text-red-400">{profile.stats.totalMoneyBanked}M</span>
             </div>
           </div>
@@ -182,14 +183,14 @@ export const ProfilePanel: React.FC<Props> = ({ profile, onUpdateProfile }) => {
         
         {/* Friends Management Panel */}
         <div className="bg-black/20 border border-white/10 rounded-2xl p-6 md:col-span-1 shadow-2xl">
-          <h3 className="text-lg font-bold text-white mb-4">Arkadaşlar ({profile.friends.length})</h3>
+          <h3 className="text-lg font-bold text-white mb-4">{t('friends', profile)} ({profile.friends.length})</h3>
 
           {/* Add Friend Form */}
           <form onSubmit={handleAddFriend} className="mb-4">
             <div className="flex gap-2">
               <input
                 type="text"
-                placeholder="Kullanıcı adı yazın..."
+                placeholder={t('add_friend_placeholder', profile)}
                 value={friendUsername}
                 onChange={(e) => setFriendUsername(e.target.value)}
                 className="flex-1 bg-black/40 border border-white/10 rounded-xl px-3 py-2 text-sm text-white focus:outline-none focus:border-red-500 transition-all"
@@ -217,7 +218,7 @@ export const ProfilePanel: React.FC<Props> = ({ profile, onUpdateProfile }) => {
                     <span className="font-semibold text-xs block text-white">{friend.username}</span>
                     <span className="text-[10px] text-slate-400 flex items-center gap-1">
                       <span className={`w-2 h-2 rounded-full ${friend.status === 'online' ? 'bg-red-500' : 'bg-slate-600'}`} />
-                      {friend.status === 'online' ? 'Çevrimiçi' : 'Çevrimdışı'}
+                      {friend.status === 'online' ? t('friend_status_online', profile) : t('friend_status_offline', profile)}
                     </span>
                   </div>
                 </div>
@@ -226,13 +227,13 @@ export const ProfilePanel: React.FC<Props> = ({ profile, onUpdateProfile }) => {
                     onClick={() => sounds.playPlay(profile.settings)}
                     className="text-[10px] bg-red-500/15 border border-red-500/25 text-red-400 px-2 py-1 rounded hover:bg-red-600 hover:text-white font-bold transition-all cursor-pointer"
                   >
-                    Davet Et
+                    {t('invite', profile)}
                   </button>
                 )}
               </div>
             ))}
             {profile.friends.length === 0 && (
-              <p className="text-xs text-slate-500 text-center py-4">Henüz arkadaş eklenmemiş.</p>
+              <p className="text-xs text-slate-500 text-center py-4">{t('no_friends_yet', profile)}</p>
             )}
           </div>
         </div>
@@ -243,7 +244,7 @@ export const ProfilePanel: React.FC<Props> = ({ profile, onUpdateProfile }) => {
           {/* Daily Quests */}
           <div>
             <h3 className="text-lg font-bold text-red-500 mb-3 flex items-center gap-2">
-              <span>📅</span> Günlük Görevler ve Ödüller
+              <span>📅</span> {t('daily_special_quests', profile)}
             </h3>
             <div className="space-y-3">
               {profile.dailyQuests.map((quest) => (
@@ -252,7 +253,7 @@ export const ProfilePanel: React.FC<Props> = ({ profile, onUpdateProfile }) => {
                   className="bg-black/40 border border-white/5 rounded-xl p-3 flex items-center justify-between gap-4"
                 >
                   <div className="flex-1">
-                    <span className="text-xs text-slate-300 font-medium block">{quest.description}</span>
+                    <span className="text-xs text-slate-300 font-medium block">{t(quest.description, profile)}</span>
                     <div className="flex items-center gap-2 mt-1.5">
                       <div className="w-24 bg-white/10 h-1.5 rounded-full overflow-hidden border border-white/5">
                         <div
@@ -269,7 +270,7 @@ export const ProfilePanel: React.FC<Props> = ({ profile, onUpdateProfile }) => {
                   <div>
                     {quest.claimed ? (
                       <span className="text-xs text-slate-500 font-bold bg-white/5 px-2.5 py-1.5 rounded-lg border border-white/5">
-                        Alındı
+                        {t('quest_reward_claimed', profile)}
                       </span>
                     ) : quest.completed ? (
                       <button
@@ -292,7 +293,7 @@ export const ProfilePanel: React.FC<Props> = ({ profile, onUpdateProfile }) => {
           {/* Achievements */}
           <div>
             <h3 className="text-lg font-bold text-red-500 mb-4 flex items-center gap-2">
-              <span>🏆</span> Kalıcı Başarılar ve Rozetler
+              <span>🏆</span> {t('achievements_title', profile)}
             </h3>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               {profile.achievements.map((ach) => {
@@ -321,18 +322,18 @@ export const ProfilePanel: React.FC<Props> = ({ profile, onUpdateProfile }) => {
                       <div className="flex items-center justify-between gap-2">
                         <div>
                           <h4 className={`font-bold text-xs ${isCompleted ? 'text-white font-black' : 'text-slate-400'}`}>
-                            {ach.title}
+                            {t(ach.title, profile)}
                           </h4>
-                          <p className="text-[9px] text-slate-400 leading-tight mt-0.5">{ach.description}</p>
+                          <p className="text-[9px] text-slate-400 leading-tight mt-0.5">{t(ach.description, profile)}</p>
                         </div>
                         <div className="text-right">
                           {isCompleted ? (
                             <span className="text-[8px] bg-emerald-500/15 text-emerald-400 border border-emerald-500/20 px-2 py-0.5 rounded-full font-black uppercase tracking-wider">
-                              Açıldı
+                              {t('ach_status_unlocked', profile)}
                             </span>
                           ) : (
                             <span className="text-[8px] bg-slate-500/10 text-slate-400 border border-white/5 px-2 py-0.5 rounded-full font-bold uppercase tracking-wider">
-                              Kilitli
+                              {t('ach_status_locked', profile)}
                             </span>
                           )}
                         </div>
@@ -347,7 +348,7 @@ export const ProfilePanel: React.FC<Props> = ({ profile, onUpdateProfile }) => {
                           />
                         </div>
                         <div className="flex justify-between items-center text-[9px] font-bold text-slate-400 leading-none">
-                          <span className="text-amber-300 font-bold">💰 +{ach.rewardCoins} Altın</span>
+                          <span className="text-amber-300 font-bold">💰 +{ach.rewardCoins} {t('coins', profile)}</span>
                           <span className="font-mono">{ach.currentValue} / {ach.targetValue}</span>
                         </div>
                       </div>

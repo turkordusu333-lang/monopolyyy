@@ -2240,6 +2240,23 @@ async function startServer() {
           }
         } else {
           // Trigger defense phase
+          let targetCardObj: Card | null = null;
+          let myCardObj: Card | null = null;
+          for (const colKey in targetPlayer.properties) {
+            const cardFound = targetPlayer.properties[colKey as CardColor]?.cards.find((c) => c.id === cardIdToSteal);
+            if (cardFound) {
+              targetCardObj = cardFound;
+              break;
+            }
+          }
+          for (const colKey in player.properties) {
+            const cardFound = player.properties[colKey as CardColor]?.cards.find((c) => c.id === myCardIdToGive);
+            if (cardFound) {
+              myCardObj = cardFound;
+              break;
+            }
+          }
+
           match.activeActionRequest = {
             id: `req-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
             type: 'just-say-no',
@@ -2257,7 +2274,7 @@ async function startServer() {
           };
           match.logs.push({
             id: `forced-req-${Date.now()}`,
-            message: `📣 ${player.username}, ${targetPlayer.username} ile ${myCardIdToGive} mülkü karşılığında ${cardIdToSteal} mülkünü Zoraki Takas ile değiştirmek istiyor!`,
+            message: `📣 ${player.username}, ${targetPlayer.username} ile ${myCardObj ? myCardObj.name : myCardIdToGive} mülkü karşılığında ${targetCardObj ? targetCardObj.name : cardIdToSteal} mülkünü Zoraki Takas ile değiştirmek istiyor!`,
             timestamp: Date.now(),
           });
         }

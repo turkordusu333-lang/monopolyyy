@@ -101,6 +101,226 @@ const AVATAR_OPTIONS = [
   { id: 'avatar_zombie', name: 'Zombi Saldırganı', description: 'Karanlıktan fırlayan yaşayan ölü.' },
 ];
 
+const getThemeName = (id: string, profile: UserProfile): string => {
+  if (profile.settings.language !== 'en') {
+    const opt = THEME_OPTIONS.find(o => o.id === id);
+    return opt ? opt.name : id;
+  }
+  switch(id) {
+    case 'theme_slate': return 'Cosmic Slate';
+    case 'theme_green': return 'Mint Green';
+    case 'theme_purple': return 'Royal Purple';
+    case 'theme_cyberpunk': return 'Cyber Grid';
+    case 'theme_lava': return 'Magma Crater';
+    case 'theme_abyss': return 'Dark Pit';
+    case 'theme_gold': return 'Treasure Room';
+    case 'theme_sakura': return 'Sakura Valley';
+    case 'theme_ice': return 'Blizzard';
+    case 'theme_retro': return 'Arcade';
+    case 'theme_toxic': return 'Toxic Oasis';
+    case 'theme_matrix': return 'Virtual Matrix';
+    case 'theme_space': return 'Space Station';
+    case 'theme_desert': return 'Lost Temple';
+    default: return id;
+  }
+};
+
+const getThemeDesc = (id: string, profile: UserProfile): string => {
+  if (profile.settings.language !== 'en') {
+    const opt = THEME_OPTIONS.find(o => o.id === id);
+    return opt ? opt.description : '';
+  }
+  switch(id) {
+    case 'theme_slate': return 'Minimalist dark grey background.';
+    case 'theme_green': return 'Traditional green table.';
+    case 'theme_purple': return 'Rich purple table with gold details.';
+    case 'theme_cyberpunk': return 'Futuristic high-contrast neon lines.';
+    case 'theme_lava': return 'Hot table on top of active volcanic lava.';
+    case 'theme_abyss': return 'Under-water arena at the deepest point of the sea.';
+    case 'theme_gold': return 'Rich table decorated with gold bars.';
+    case 'theme_sakura': return 'Peaceful table with cherry blossoms floating.';
+    case 'theme_ice': return 'Crystal ice table left under blizzard.';
+    case 'theme_retro': return '80s arcade neon line patterned table.';
+    case 'theme_toxic': return 'Dangerous industrial table with green acid pool.';
+    case 'theme_matrix': return 'Virtual table under green matrix code rain.';
+    case 'theme_space': return 'Space base observation table with Earth view.';
+    case 'theme_desert': return 'Ancient desert table under Egyptian sand.';
+    default: return '';
+  }
+};
+
+const getCardBackName = (id: string, profile: UserProfile): string => {
+  if (profile.settings.language !== 'en') {
+    const opt = CARD_BACKS.find(o => o.id === id);
+    return opt ? opt.name : id;
+  }
+  switch(id) {
+    case 'back_classic': return 'Classic Red';
+    case 'back_cosmic': return 'Cosmic Black';
+    case 'back_gold': return 'V.I.P Gold';
+    case 'back_neon': return 'Retro Wave';
+    case 'back_fire': return 'Volcanic Magma';
+    case 'back_ice': return 'Polar Wind';
+    case 'back_void': return 'Dark Rift';
+    case 'back_matrix': return 'Cyber Code Rain';
+    case 'back_rainbow': return 'Rainbow Prism';
+    case 'back_bubble': return 'Sea Foam';
+    case 'back_steampunk': return 'Steam Cog';
+    case 'back_laser': return 'Retro Grid Laser';
+    case 'back_galaxy': return 'Nebula Cloud';
+    case 'back_darkness': return 'Shadow Realm';
+    default: return id;
+  }
+};
+
+const getProfileFrameName = (id: string, profile: UserProfile): string => {
+  if (profile.settings.language !== 'en') {
+    const opt = PROFILE_FRAMES.find(o => o.id === id);
+    return opt ? opt.name : id;
+  }
+  switch(id) {
+    case 'frame_none': return 'Classic Border';
+    case 'frame_neon': return 'Neon Aura';
+    case 'frame_gold': return 'V.I.P Gold';
+    case 'frame_fire': return 'Volcanic Fire';
+    case 'frame_royal': return 'Royal Diamond';
+    case 'frame_plasma': return 'Plasma Shield';
+    case 'frame_rainbow': return 'Rainbow Spectrum';
+    case 'frame_toxic': return 'Radioactive Slime';
+    case 'frame_ice': return 'Ice Crystal';
+    case 'frame_steampunk': return 'Steam Gears';
+    case 'frame_matrix': return 'Matrix Code Line';
+    case 'frame_thunder': return 'Lightning Bolt';
+    case 'frame_darkness': return 'Dark Smoke';
+    case 'frame_galaxy': return 'Galaxy Swirl';
+    case 'frame_dragon': return 'Dragon Scales';
+    default: return id;
+  }
+};
+
+const getProfileFrameDesc = (id: string, profile: UserProfile): string => {
+  if (profile.settings.language !== 'en') {
+    const opt = PROFILE_FRAMES.find(o => o.id === id);
+    return opt ? opt.description : '';
+  }
+  switch(id) {
+    case 'frame_none': return 'Standard simple frame.';
+    case 'frame_neon': return 'Cyberpunk glowing pink.';
+    case 'frame_gold': return 'Noble pure gold plating.';
+    case 'frame_fire': return 'Fiery lava and ember design.';
+    case 'frame_royal': return 'Stunning blue diamond ornament.';
+    case 'frame_plasma': return 'Glowing frame with blue electric arcs.';
+    case 'frame_rainbow': return 'Color shifting RGB spectrum frame.';
+    case 'frame_toxic': return 'Slimy green glowing poison flow frame.';
+    case 'frame_ice': return 'Cold frame with blue ice crystals.';
+    case 'frame_steampunk': return 'Rotating bronze gears frame.';
+    case 'frame_matrix': return 'Binary green code flowing frame.';
+    case 'frame_thunder': return 'Yellow lightning bolt shooting frame.';
+    case 'frame_darkness': return 'Dark purple shadow smoke frame.';
+    case 'frame_galaxy': return 'Swirling galaxy spiral frame.';
+    case 'frame_dragon': return 'Crimson dragon scales frame.';
+    default: return '';
+  }
+};
+
+const getCelebrationSoundName = (id: string, profile: UserProfile): string => {
+  if (profile.settings.language !== 'en') {
+    const opt = CELEBRATION_SOUNDS.find(o => o.id === id);
+    return opt ? opt.name : id;
+  }
+  switch(id) {
+    case 'sound_classic': return 'Classic Melody';
+    case 'sound_applause': return 'Enthusiastic Applause';
+    case 'sound_fireworks': return 'Fireworks';
+    case 'sound_laser': return 'Cyber Laser';
+    case 'sound_fanfare': return 'Champion Fanfare';
+    case 'sound_victory': return 'Victory March';
+    case 'sound_arcade': return '8-Bit Arcade';
+    case 'sound_coins': return 'Coin Shower';
+    case 'sound_laser_zap': return 'Laser Gun';
+    case 'sound_rock': return 'Rock Guitar Riff';
+    case 'sound_synthwave': return 'Synthwave Bass';
+    case 'sound_thunder': return 'Strong Thunder';
+    case 'sound_magical': return 'Magic Wand';
+    default: return id;
+  }
+};
+
+const getCelebrationSoundDesc = (id: string, profile: UserProfile): string => {
+  if (profile.settings.language !== 'en') {
+    const opt = CELEBRATION_SOUNDS.find(o => o.id === id);
+    return opt ? opt.description : '';
+  }
+  switch(id) {
+    case 'sound_classic': return 'Classic victory melody.';
+    case 'sound_applause': return 'Cheerful clapping effect.';
+    case 'sound_fireworks': return 'Exciting sky festival explosions.';
+    case 'sound_laser': return 'Cyber laser show.';
+    case 'sound_fanfare': return 'Noble victory fanfare melody.';
+    case 'sound_victory': return 'Epic victory march with trumpet sound.';
+    case 'sound_arcade': return 'Old arcade game sound effects.';
+    case 'sound_coins': return 'Jackpot chime when coins enter the vault.';
+    case 'sound_laser_zap': return 'Futuristic cyber laser firing sounds.';
+    case 'sound_rock': return 'Cool rock guitar riff.';
+    case 'sound_synthwave': return '80s style electronic bass rhythms.';
+    case 'sound_thunder': return 'Mighty thunder and lightning.';
+    case 'sound_magical': return 'Sparkling magic melody.';
+    default: return '';
+  }
+};
+
+const getAvatarName = (id: string, profile: UserProfile): string => {
+  if (profile.settings.language !== 'en') {
+    const opt = AVATAR_OPTIONS.find(o => o.id === id);
+    return opt ? opt.name : id;
+  }
+  switch(id) {
+    case 'avatar_classic': return 'Classic Ruler';
+    case 'avatar_skater': return 'Skater Boy';
+    case 'avatar_neon': return 'Cyberpunk Neon';
+    case 'avatar_golden': return 'Golden King';
+    case 'avatar_alien': return 'Space Alien';
+    case 'avatar_ninja': return 'Shadow Ninja';
+    case 'avatar_wizard': return 'Grand Wizard';
+    case 'avatar_dragon': return 'Ancient Dragon';
+    case 'avatar_astronaut': return 'Space Explorer';
+    case 'avatar_robot': return 'Cyber Mechanic';
+    case 'avatar_dj': return 'Rhythmic DJ';
+    case 'avatar_ghost': return 'Nightmare Ghost';
+    case 'avatar_knight': return 'Honorable Knight';
+    case 'avatar_unicorn': return 'Legendary Unicorn';
+    case 'avatar_pharaoh': return 'Egyptian Pharaoh';
+    case 'avatar_zombie': return 'Zombie Attacker';
+    default: return id;
+  }
+};
+
+const getAvatarDesc = (id: string, profile: UserProfile): string => {
+  if (profile.settings.language !== 'en') {
+    const opt = AVATAR_OPTIONS.find(o => o.id === id);
+    return opt ? opt.description : '';
+  }
+  switch(id) {
+    case 'avatar_classic': return 'Traditional hatted noble.';
+    case 'avatar_skater': return 'Cool cap street style.';
+    case 'avatar_neon': return 'Futuristic neon glow.';
+    case 'avatar_golden': return 'Wealth and glory symbol.';
+    case 'avatar_alien': return 'Intelligence from outer space.';
+    case 'avatar_ninja': return 'Stealth and silence master.';
+    case 'avatar_wizard': return 'Card magician directing destiny.';
+    case 'avatar_dragon': return 'Fire-breathing legendary dragon.';
+    case 'avatar_astronaut': return 'Deep space astronaut design.';
+    case 'avatar_robot': return 'Yapay zeka metalik robot.';
+    case 'avatar_dj': return 'DJ bringing music to the arena.';
+    case 'avatar_ghost': return 'Opponents worst nightmare.';
+    case 'avatar_knight': return 'Armored royal guard.';
+    case 'avatar_unicorn': return 'Rainbow magic unicorn.';
+    case 'avatar_pharaoh': return 'Ancient pyramid ruler.';
+    case 'avatar_zombie': return 'Living dead jumping from darkness.';
+    default: return '';
+  }
+};
+
 export const CustomizationPanel: React.FC<Props> = ({ profile, onUpdateProfile }) => {
   const currentSettings = profile.settings;
 
@@ -113,6 +333,10 @@ export const CustomizationPanel: React.FC<Props> = ({ profile, onUpdateProfile }
       ...currentSettings,
       [key]: value,
     };
+
+    if (key === 'language') {
+      localStorage.setItem('language', value);
+    }
 
     // Optmistic Update
     const updatedProfile = {
@@ -226,8 +450,8 @@ export const CustomizationPanel: React.FC<Props> = ({ profile, onUpdateProfile }
                       }`}
                   >
                     <div className="flex-1">
-                      <span className="font-semibold text-xs block text-white">{snd.name}</span>
-                      <span className="text-[10px] text-slate-400 leading-tight block">{snd.description}</span>
+                      <span className="font-semibold text-xs block text-white">{getCelebrationSoundName(snd.id, profile)}</span>
+                      <span className="text-[10px] text-slate-400 leading-tight block">{getCelebrationSoundDesc(snd.id, profile)}</span>
                     </div>
 
                     <div className="flex items-center gap-2">
@@ -320,8 +544,8 @@ export const CustomizationPanel: React.FC<Props> = ({ profile, onUpdateProfile }
                         sizeClassName="w-10 h-10 text-xl"
                       />
                       <div>
-                        <span className="font-semibold text-xs block text-white">{av.name}</span>
-                        <span className="text-[10px] text-slate-400 leading-none">{av.description}</span>
+                        <span className="font-semibold text-xs block text-white">{getAvatarName(av.id, profile)}</span>
+                        <span className="text-[10px] text-slate-400 leading-none">{getAvatarDesc(av.id, profile)}</span>
                       </div>
                     </div>
                     {!isUnlocked && (
@@ -354,9 +578,9 @@ export const CustomizationPanel: React.FC<Props> = ({ profile, onUpdateProfile }
                   >
                     <div className="flex items-center gap-2 mb-1">
                       <span className="w-4 h-4 rounded-full border border-white/20" style={{ backgroundColor: theme.color }} />
-                      <span className="font-semibold text-xs text-white">{theme.name}</span>
+                      <span className="font-semibold text-xs text-white">{getThemeName(theme.id, profile)}</span>
                     </div>
-                    <p className="text-[10px] text-slate-400 leading-tight">{theme.description}</p>
+                    <p className="text-[10px] text-slate-400 leading-tight">{getThemeDesc(theme.id, profile)}</p>
                     {!isUnlocked && (
                       <span className="absolute top-1 right-1 text-[10px] bg-red-600/90 text-white font-bold px-1.5 py-0.5 rounded">
                         {t('settings_locked', profile)}
@@ -393,7 +617,7 @@ export const CustomizationPanel: React.FC<Props> = ({ profile, onUpdateProfile }
                         {cb.pattern}
                       </div>
                       <div>
-                        <span className="font-semibold text-xs block text-white">{cb.name}</span>
+                        <span className="font-semibold text-xs block text-white">{getCardBackName(cb.id, profile)}</span>
                         <span className="text-[10px] text-slate-400">{t('card_back', profile)}</span>
                       </div>
                     </div>
@@ -433,8 +657,8 @@ export const CustomizationPanel: React.FC<Props> = ({ profile, onUpdateProfile }
                         sizeClassName="w-10 h-10 text-xl"
                       />
                       <div>
-                        <span className="font-semibold text-xs block text-white">{frame.name}</span>
-                        <span className="text-[10px] text-slate-400 leading-none">{frame.description}</span>
+                        <span className="font-semibold text-xs block text-white">{getProfileFrameName(frame.id, profile)}</span>
+                        <span className="text-[10px] text-slate-400 leading-none">{getProfileFrameDesc(frame.id, profile)}</span>
                       </div>
                     </div>
                     {!isUnlocked && (

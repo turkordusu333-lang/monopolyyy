@@ -5,6 +5,60 @@ import { motion } from 'motion/react';
 import { Holo } from './Holo';
 import { t } from '../lib/TranslationSystem';
 
+const COLOR_KEYWORDS: Record<string, { tr: string[]; en: string[]; hex: string }> = {
+  brown: { tr: ['kahverengi', 'kahve', 'kahve seti', 'kahverengi seti'], en: ['brown'], hex: '#A16207' },
+  sky_blue: { tr: ['açık mavi', 'gökyüzü mavisi', 'açik mavi', 'acik mavi'], en: ['lightblue', 'light blue', 'sky blue'], hex: '#0EA5E9' },
+  pink: { tr: ['pembe'], en: ['pink'], hex: '#EC4899' },
+  orange: { tr: ['turuncu'], en: ['orange'], hex: '#F97316' },
+  red: { tr: ['kırmızı', 'kirmizi'], en: ['red'], hex: '#EF4444' },
+  yellow: { tr: ['sarı', 'sari'], en: ['yellow'], hex: '#EAB308' },
+  green: { tr: ['yeşil', 'yesil'], en: ['green'], hex: '#22C55E' },
+  blue: { tr: ['koyu mavi', 'mavi'], en: ['darkblue', 'dark blue', 'blue'], hex: '#2563EB' },
+  station: { tr: ['demiryolu', 'istasyon'], en: ['railroad', 'station'], hex: '#6B7280' },
+  utility: { tr: ['kamu kuruluşu', 'kamu hizmeti', 'kamu kuruluşu seti', 'kamu kurulusu'], en: ['utility', 'utilities'], hex: '#0D9488' },
+};
+
+const renderColorizedText = (text: string, language: string = 'tr'): React.ReactNode => {
+  if (!text) return '';
+  
+  const termMap = new Map<string, string>();
+  for (const key in COLOR_KEYWORDS) {
+    const item = COLOR_KEYWORDS[key];
+    const terms = language === 'en' ? item.en : item.tr;
+    terms.forEach(t => {
+      const lower = t.toLowerCase();
+      termMap.set(lower, item.hex);
+      termMap.set(t.toUpperCase(), item.hex);
+      termMap.set(lower.replace(/i/g, 'İ').toUpperCase(), item.hex);
+      termMap.set(lower.replace(/ı/g, 'I').toUpperCase(), item.hex);
+      termMap.set(t.replace(/i/g, 'ı').toLowerCase(), item.hex);
+    });
+  }
+
+  const searchTerms = Array.from(termMap.keys()).sort((a, b) => b.length - a.length);
+
+  const escapedTerms = searchTerms.map(s => s.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&'));
+  const regex = new RegExp(`(${escapedTerms.join('|')})`, 'gi');
+
+  const parts = text.split(regex);
+  return (
+    <>
+      {parts.map((part, idx) => {
+        const lowerPart = part.toLowerCase();
+        const hex = termMap.get(part) || termMap.get(lowerPart) || termMap.get(part.toUpperCase());
+        if (hex) {
+          return (
+            <span key={idx} className="font-extrabold uppercase tracking-wide px-1.5 py-0.5 rounded bg-white/5 border border-white/10 text-[7px]" style={{ color: hex }}>
+              {part}
+            </span>
+          );
+        }
+        return part;
+      })}
+    </>
+  );
+};
+
 export type CardEffectType = 'steal' | 'rent' | 'bday' | 'gold' | 'house' | 'sly-shadow' | 'debt-seal' | 'birthday-confetti' | null;
 
 interface GameCardProps {
@@ -525,7 +579,11 @@ export const GameCard: React.FC<GameCardProps> = ({
 
     // Helper to get translated color names
     const getColorLabel = (c: CardColor): string => {
-      return t(`color_${c}`).toUpperCase();
+      let key = c as string;
+      if (key === 'lightblue') key = 'sky_blue';
+      if (key === 'railroad') key = 'station';
+      if (key === 'darkblue') key = 'blue';
+      return t(`color_${key}`).toUpperCase();
     };
 
     // Helper to get translated property names
@@ -772,19 +830,32 @@ export const GameCard: React.FC<GameCardProps> = ({
           rarity === 'ENDER' ? 'bg-cyan-500/20 border border-cyan-500/40 text-cyan-300' :
           'bg-slate-500/20 border border-slate-500/40 text-slate-300'
         }`}>
-          ✨ {rarity}
+          ✨ {(() => {
+            const isEn = localStorage.getItem('language') === 'en';
+            if (!isEn) return rarity;
+            if (rarity === 'EFSANEVİ') return 'LEGENDARY';
+            if (rarity === 'EPİK') return 'EPIC';
+            if (rarity === 'ENDER') return 'RARE';
+            return 'COMMON';
+          })()}
         </span>
         <span className="text-[7px] font-black px-1.5 py-0.5 rounded bg-amber-500/15 border border-amber-500/25 text-amber-400">
-          DEĞER: {card.value}M
+          {localStorage.getItem('language') === 'en' ? 'VALUE' : 'DEĞER'}: {card.value}M
         </span>
         {card.color && (
           <span className="text-[7px] font-black px-1.5 py-0.5 rounded text-white" style={{ backgroundColor: primaryColorHex, border: `1px solid rgba(255,255,255,0.15)` }}>
-            {TURKISH_COLOR_LABELS[card.color]}
+            {(() => {
+              let key = card.color as string;
+              if (key === 'lightblue') key = 'sky_blue';
+              if (key === 'railroad') key = 'station';
+              if (key === 'darkblue') key = 'blue';
+              return t(`color_${key}`).toUpperCase();
+            })()}
           </span>
         )}
       </div>
       <p className="text-[8px] leading-relaxed text-slate-300 font-semibold pt-1">
-        {details.description || details.shortDesc}
+        {renderColorizedText(details.description || details.shortDesc, localStorage.getItem('language') || 'tr')}
       </p>
       <div className="absolute top-full left-1/2 -translate-x-1/2 w-0 h-0 border-l-[6px] border-l-transparent border-r-[6px] border-r-transparent border-t-[6px] border-t-amber-500/50" />
     </div>
@@ -1331,7 +1402,7 @@ export const GameCard: React.FC<GameCardProps> = ({
           {/* Bottom rules box - simplified for high contrast / easy reading on mobile */}
           <div className="bg-white border border-black rounded-lg p-1 text-center shadow min-h-[32px] flex items-center justify-center z-10">
             <p className="text-[7.5px] font-black leading-tight text-slate-950 uppercase">
-              {details.shortDesc}
+              {renderColorizedText(details.shortDesc, localStorage.getItem('language') || 'tr')}
             </p>
           </div>
 
@@ -1378,7 +1449,7 @@ export const GameCard: React.FC<GameCardProps> = ({
           {/* Description - Simplified and ultra bold */}
           <div className="bg-slate-50 border border-black/15 rounded-lg p-1 text-center shadow min-h-[32px] flex items-center justify-center z-10">
             <p className="text-[7.5px] font-black leading-tight text-slate-950 uppercase">
-              {details.shortDesc}
+              {renderColorizedText(details.shortDesc, localStorage.getItem('language') || 'tr')}
             </p>
           </div>
 
