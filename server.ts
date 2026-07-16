@@ -308,7 +308,8 @@ let globalAdminSettings = {
   targetSets: 3,
   turnActionLimit: 3,
   goldMultiplier: 1.0,
-  maintenanceMode: false
+  maintenanceMode: false,
+  enableSystemVoiceovers: true
 };
 
 let globalQuests: any[] = [
@@ -438,7 +439,8 @@ async function startServer() {
   const server = http.createServer(app);
   const PORT = process.env.PORT ? parseInt(process.env.PORT) : 3000;
 
-  app.use(express.json());
+  app.use(express.json({ limit: '15mb' }));
+  app.use(express.urlencoded({ limit: '15mb', extended: true }));
 
   // CORS middleware for APK and cross-origin clients
   app.use((req, res, next) => {
@@ -494,6 +496,87 @@ async function startServer() {
     }
 
     res.json({ success: true, settings: globalAdminSettings });
+  });
+
+  // Get voiceovers list and check existence on disk
+  app.get('/api/admin/voice-list', (req, res) => {
+    const list = [
+      { id: 'place_bank', name: 'Bankaya Para Koyma', filename: 'place_bank.mp3' },
+      { id: 'place_property', name: 'Mülk/Arazi Yerleştirme', filename: 'place_property.mp3' },
+      { id: 'play_passgo', name: 'Çizgiden Geç (Pass & Go)', filename: 'play_passgo.mp3' },
+      { id: 'play_birthday', name: 'Doğum Günü Kartı', filename: 'play_birthday.mp3' },
+      { id: 'play_debt', name: 'Haciz / Borç Tahsildarı', filename: 'play_debt.mp3' },
+      { id: 'play_sly', name: 'Sinsi Anlaşma', filename: 'play_sly.mp3' },
+      { id: 'play_dealbreaker', name: 'Anlaşma Bozan', filename: 'play_dealbreaker.mp3' },
+      { id: 'play_forced', name: 'Zoraki Takas', filename: 'play_forced.mp3' },
+      { id: 'play_double', name: 'Çift Kira', filename: 'play_double.mp3' },
+      { id: 'play_rent', name: 'Kira Kartı', filename: 'play_rent.mp3' },
+      { id: 'play_jsn', name: 'Hayır Teşekkürler (JSN)', filename: 'play_jsn.mp3' },
+      { id: 'play_action', name: 'Diğer Aksiyon Kartları', filename: 'play_action.mp3' },
+      { id: 'game_start', name: 'Oyun Başlangıcı (Start)', filename: 'game_start.mp3' },
+      { id: 'your_turn', name: 'Sıra Sende Splash', filename: 'your_turn.mp3' },
+      { id: 'end_turn', name: 'Turu Sonlandırma', filename: 'end_turn.mp3' },
+      { id: 'set_completed', name: 'Mülk Seti Tamamlama', filename: 'set_completed.mp3' },
+      { id: 'build_house', name: 'Ev İnşa Etme', filename: 'build_house.mp3' },
+      { id: 'build_hotel', name: 'Otel İnşa Etme', filename: 'build_hotel.mp3' },
+      { id: 'bankruptcy', name: 'İflas Olayı (Bankruptcy)', filename: 'bankruptcy.mp3' },
+      { id: 'victory', name: 'Kazanma / Zafer', filename: 'victory.mp3' },
+      { id: 'defeat', name: 'Kaybetme / Yenilgi', filename: 'defeat.mp3' },
+    ];
+
+    try {
+      const result = list.map((item) => {
+        const publicTrPath = path.join(process.cwd(), 'public', 'assets', 'sounds', 'voices', 'tr', item.filename);
+        const publicEnPath = path.join(process.cwd(), 'public', 'assets', 'sounds', 'voices', 'en', item.filename);
+        
+        const distTrPath = path.join(process.cwd(), 'dist', 'assets', 'sounds', 'voices', 'tr', item.filename);
+        const distEnPath = path.join(process.cwd(), 'dist', 'assets', 'sounds', 'voices', 'en', item.filename);
+
+        return {
+          ...item,
+          trExists: fs.existsSync(publicTrPath) || fs.existsSync(distTrPath),
+          enExists: fs.existsSync(publicEnPath) || fs.existsSync(distEnPath),
+        };
+      });
+      res.json(result);
+    } catch (e) {
+      console.error('[Admin] Failed to load voiceover files status:', e);
+      res.status(500).json({ error: 'Ses dosyaları durum listesi alınamadı.' });
+    }
+  });
+
+  // Upload voiceover file (base64)
+  app.post('/api/admin/upload-voice', async (req, res) => {
+    const { lang, filename, base64Data } = req.body;
+    if (!lang || !filename || !base64Data) {
+      return res.status(400).json({ error: 'Geçersiz veri gönderildi.' });
+    }
+
+    try {
+      const base64Content = base64Data.split(';base64,').pop();
+      if (!base64Content) {
+        return res.status(400).json({ error: 'Base64 çözümlenemedi.' });
+      }
+      const buffer = Buffer.from(base64Content, 'base64');
+
+      // 1. Write to public directory (development / source copy)
+      const publicDirPath = path.join(process.cwd(), 'public', 'assets', 'sounds', 'voices', lang);
+      fs.mkdirSync(publicDirPath, { recursive: true });
+      fs.writeFileSync(path.join(publicDirPath, filename), buffer);
+
+      // 2. Write to dist directory (production / hosting copy)
+      const distDirPath = path.join(process.cwd(), 'dist', 'assets', 'sounds', 'voices', lang);
+      if (fs.existsSync(path.join(process.cwd(), 'dist'))) {
+        fs.mkdirSync(distDirPath, { recursive: true });
+        fs.writeFileSync(path.join(distDirPath, filename), buffer);
+      }
+
+      console.log(`[Admin] Voice file uploaded successfully: ${lang}/${filename}`);
+      res.json({ success: true, path: `/assets/sounds/voices/${lang}/${filename}` });
+    } catch (e) {
+      console.error('[Admin] Upload failed:', e);
+      res.status(500).json({ error: 'Ses dosyası kaydedilemedi.' });
+    }
   });
 
   // Get all registered players

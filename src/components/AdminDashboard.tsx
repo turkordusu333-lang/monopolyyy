@@ -37,6 +37,7 @@ interface AdminSettings {
   turnActionLimit: number;
   goldMultiplier: number;
   maintenanceMode: boolean;
+  enableSystemVoiceovers: boolean;
 }
 
 interface Stats {
@@ -53,7 +54,7 @@ interface Props {
 }
 
 export const AdminDashboard: React.FC<Props> = ({ onSettingsUpdated }) => {
-  const [activeTab, setActiveTab] = useState<'analytics' | 'rules' | 'players' | 'quests' | 'tournaments' | 'translations'>('analytics');
+  const [activeTab, setActiveTab] = useState<'analytics' | 'rules' | 'players' | 'quests' | 'tournaments' | 'translations' | 'voices'>('analytics');
   const [settings, setSettings] = useState<AdminSettings>({
     enable3DCardFlip: true,
     enablePropertySetGlow: true,
@@ -70,7 +71,8 @@ export const AdminDashboard: React.FC<Props> = ({ onSettingsUpdated }) => {
     targetSets: 3,
     turnActionLimit: 3,
     goldMultiplier: 1.0,
-    maintenanceMode: false
+    maintenanceMode: false,
+    enableSystemVoiceovers: true
   });
 
   const [stats, setStats] = useState<Stats>({
@@ -107,6 +109,117 @@ export const AdminDashboard: React.FC<Props> = ({ onSettingsUpdated }) => {
   const [newKeyName, setNewKeyName] = useState<string>('');
   const [newKeyDefaultVal, setNewKeyDefaultVal] = useState<string>('');
   const [transSearch, setTransSearch] = useState<string>('');
+
+  interface VoiceItem {
+    id: string;
+    name: string;
+    filename: string;
+    trExists: boolean;
+    enExists: boolean;
+  }
+
+  const defaultVoiceList: VoiceItem[] = [
+    { id: 'place_bank', name: 'Bankaya Para Koyma', filename: 'place_bank.mp3', trExists: false, enExists: false },
+    { id: 'place_property', name: 'Mülk/Arazi Yerleştirme', filename: 'place_property.mp3', trExists: false, enExists: false },
+    { id: 'play_passgo', name: 'Çizgiden Geç (Pass & Go)', filename: 'play_passgo.mp3', trExists: false, enExists: false },
+    { id: 'play_birthday', name: 'Doğum Günü Kartı', filename: 'play_birthday.mp3', trExists: false, enExists: false },
+    { id: 'play_debt', name: 'Haciz / Borç Tahsildarı', filename: 'play_debt.mp3', trExists: false, enExists: false },
+    { id: 'play_sly', name: 'Sinsi Anlaşma', filename: 'play_sly.mp3', trExists: false, enExists: false },
+    { id: 'play_dealbreaker', name: 'Anlaşma Bozan', filename: 'play_dealbreaker.mp3', trExists: false, enExists: false },
+    { id: 'play_forced', name: 'Zoraki Takas', filename: 'play_forced.mp3', trExists: false, enExists: false },
+    { id: 'play_double', name: 'Çift Kira', filename: 'play_double.mp3', trExists: false, enExists: false },
+    { id: 'play_rent', name: 'Kira Kartı', filename: 'play_rent.mp3', trExists: false, enExists: false },
+    { id: 'play_jsn', name: 'Hayır Teşekkürler (JSN)', filename: 'play_jsn.mp3', trExists: false, enExists: false },
+    { id: 'play_action', name: 'Diğer Aksiyon Kartları', filename: 'play_action.mp3', trExists: false, enExists: false },
+    { id: 'game_start', name: 'Oyun Başlangıcı (Start)', filename: 'game_start.mp3', trExists: false, enExists: false },
+    { id: 'your_turn', name: 'Sıra Sende Splash', filename: 'your_turn.mp3', trExists: false, enExists: false },
+    { id: 'end_turn', name: 'Turu Sonlandırma', filename: 'end_turn.mp3', trExists: false, enExists: false },
+    { id: 'set_completed', name: 'Mülk Seti Tamamlama', filename: 'set_completed.mp3', trExists: false, enExists: false },
+    { id: 'build_house', name: 'Ev İnşa Etme', filename: 'build_house.mp3', trExists: false, enExists: false },
+    { id: 'build_hotel', name: 'Otel İnşa Etme', filename: 'build_hotel.mp3', trExists: false, enExists: false },
+    { id: 'bankruptcy', name: 'İflas Olayı (Bankruptcy)', filename: 'bankruptcy.mp3', trExists: false, enExists: false },
+    { id: 'victory', name: 'Kazanma / Zafer', filename: 'victory.mp3', trExists: false, enExists: false },
+    { id: 'defeat', name: 'Kaybetme / Yenilgi', filename: 'defeat.mp3', trExists: false, enExists: false },
+  ];
+
+  const [voices, setVoices] = useState<VoiceItem[]>(defaultVoiceList);
+  const [uploadLoading, setUploadLoading] = useState<string | null>(null);
+
+  const fetchVoiceList = () => {
+    fetch(`${API_BASE_URL}/api/admin/voice-list`)
+      .then((res) => {
+        if (!res.ok) throw new Error('API not available yet');
+        return res.json();
+      })
+      .then((data) => {
+        if (Array.isArray(data) && data.length > 0) {
+          setVoices(data);
+        } else {
+          setVoices(defaultVoiceList);
+        }
+      })
+      .catch((err) => {
+        console.warn('Voice list API not running, using fallback:', err);
+        setVoices(defaultVoiceList);
+      });
+  };
+
+  const handleUploadVoice = (e: React.ChangeEvent<HTMLInputElement>, item: VoiceItem, lang: 'tr' | 'en') => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (!file.name.endsWith('.mp3')) {
+      alert('Lütfen yalnızca .mp3 formatında ses dosyası yükleyin.');
+      return;
+    }
+
+    setUploadLoading(`${item.id}_${lang}`);
+
+    const reader = new FileReader();
+    reader.readAsDataURL(file);
+    reader.onload = () => {
+      const base64Data = reader.result as string;
+
+      fetch(`${API_BASE_URL}/api/admin/upload-voice`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          lang,
+          filename: item.filename,
+          base64Data
+        })
+      })
+        .then((res) => res.json())
+        .then((data) => {
+          if (data.success) {
+            fetchVoiceList();
+            setNotification({ message: `${item.name} ses dosyası başarıyla yüklendi!`, type: 'success' });
+          } else {
+            alert('Yükleme başarısız: ' + (data.error || 'Bilinmeyen hata'));
+          }
+        })
+        .catch((err) => {
+          console.error('Upload voice error:', err);
+          alert('Dosya yüklenirken ağ hatası oluştu.');
+        })
+        .finally(() => {
+          setUploadLoading(null);
+        });
+    };
+  };
+
+  const playPreview = (filename: string, lang: 'tr' | 'en') => {
+    const audioUrl = `${API_BASE_URL}/assets/sounds/voices/${lang}/${filename}?t=${Date.now()}`;
+    const audio = new Audio(audioUrl);
+    audio.volume = 0.8;
+    audio.play().catch((err) => console.error('Preview playback failed:', err));
+  };
+
+  useEffect(() => {
+    if (activeTab === 'voices') {
+      fetchVoiceList();
+    }
+  }, [activeTab]);
 
   // Auto-clear notification after 3 seconds
   useEffect(() => {
@@ -464,6 +577,14 @@ export const AdminDashboard: React.FC<Props> = ({ onSettingsUpdated }) => {
           >
             <span>🌐</span> Dil & Kelime Yönetimi
           </button>
+          <button
+            onClick={() => setActiveTab('voices')}
+            className={`w-full px-4 py-3 rounded-xl text-left text-sm font-semibold flex items-center gap-3 transition-all ${
+              activeTab === 'voices' ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-600/20' : 'text-slate-400 hover:bg-slate-900/60 hover:text-slate-200'
+            }`}
+          >
+            <span>🗣️</span> Seslendirme Yönetimi
+          </button>
 
           <div className="mt-auto p-4 rounded-xl bg-slate-900/40 border border-slate-900 flex flex-col gap-2">
             <span className="text-[10px] text-slate-500 uppercase font-bold tracking-wider">Durum Kontrolü</span>
@@ -610,6 +731,15 @@ export const AdminDashboard: React.FC<Props> = ({ onSettingsUpdated }) => {
                       type="checkbox"
                       checked={settings.enableUndoInTraining}
                       onChange={() => handleToggle('enableUndoInTraining')}
+                      className="w-4 h-4 accent-indigo-600 cursor-pointer"
+                    />
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs text-slate-300">Karakter Seslendirmelerini Etkinleştir (TR/EN)</span>
+                    <input
+                      type="checkbox"
+                      checked={settings.enableSystemVoiceovers}
+                      onChange={() => handleToggle('enableSystemVoiceovers')}
                       className="w-4 h-4 accent-indigo-600 cursor-pointer"
                     />
                   </div>
@@ -1045,6 +1175,101 @@ export const AdminDashboard: React.FC<Props> = ({ onSettingsUpdated }) => {
                             </td>
                           </tr>
                         ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {activeTab === 'voices' && (
+            <div className="space-y-6">
+              <div className="border-b border-slate-900 pb-4">
+                <h3 className="text-base font-bold uppercase tracking-wider text-slate-200">Karakter Seslendirmeleri Yönetimi</h3>
+                <p className="text-xs text-slate-500 mt-1">Oynanan kart hamlelerinin seslendirme dosyalarını (.mp3) yükleyin ve test edin.</p>
+              </div>
+
+              <div className="bg-slate-900/20 border border-slate-800 rounded-2xl p-5 space-y-4">
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left border-collapse">
+                    <thead>
+                      <tr className="bg-slate-950/80 text-[10px] text-slate-400 uppercase tracking-wider font-bold">
+                        <th className="p-3 border-b border-slate-800">Hamle / Kart</th>
+                        <th className="p-3 border-b border-slate-800">Dosya Adı</th>
+                        <th className="p-3 border-b border-slate-800 text-center">Türkçe Ses (TR)</th>
+                        <th className="p-3 border-b border-slate-800 text-center">İngilizce Ses (EN)</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-800/40 text-xs">
+                      {voices.map((item) => (
+                        <tr key={item.id} className="hover:bg-slate-900/25 transition-colors">
+                          <td className="p-3 font-semibold text-slate-200">{item.name}</td>
+                          <td className="p-3 font-mono text-slate-400 text-[11px]">{item.filename}</td>
+                          
+                          {/* TR Column */}
+                          <td className="p-3">
+                            <div className="flex items-center justify-center gap-2">
+                              {item.trExists ? (
+                                <button
+                                  onClick={() => playPreview(item.filename, 'tr')}
+                                  className="px-2.5 py-1 bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-400 font-bold border border-emerald-500/30 rounded-lg text-[10px] transition-all cursor-pointer flex items-center gap-1"
+                                >
+                                  🔊 Dinle
+                                </button>
+                              ) : (
+                                <span className="text-[10px] text-slate-500 font-semibold italic">Yüklenmedi</span>
+                              )}
+                              
+                              <label className="px-2.5 py-1 bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold rounded-lg text-[10px] transition-all cursor-pointer border border-slate-750 flex items-center justify-center min-w-[70px]">
+                                {uploadLoading === `${item.id}_tr` ? (
+                                  <span className="animate-spin inline-block w-2.5 h-2.5 border-2 border-slate-300 border-t-transparent rounded-full" />
+                                ) : (
+                                  'Dosya Seç'
+                                )}
+                                <input
+                                  type="file"
+                                  accept=".mp3"
+                                  onChange={(e) => handleUploadVoice(e, item, 'tr')}
+                                  className="hidden"
+                                  disabled={uploadLoading !== null}
+                                />
+                              </label>
+                            </div>
+                          </td>
+
+                          {/* EN Column */}
+                          <td className="p-3">
+                            <div className="flex items-center justify-center gap-2">
+                              {item.enExists ? (
+                                <button
+                                  onClick={() => playPreview(item.filename, 'en')}
+                                  className="px-2.5 py-1 bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-400 font-bold border border-emerald-500/30 rounded-lg text-[10px] transition-all cursor-pointer flex items-center gap-1"
+                                >
+                                  🔊 Dinle
+                                </button>
+                              ) : (
+                                <span className="text-[10px] text-slate-500 font-semibold italic">Yüklenmedi</span>
+                              )}
+                              
+                              <label className="px-2.5 py-1 bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold rounded-lg text-[10px] transition-all cursor-pointer border border-slate-750 flex items-center justify-center min-w-[70px]">
+                                {uploadLoading === `${item.id}_en` ? (
+                                  <span className="animate-spin inline-block w-2.5 h-2.5 border-2 border-slate-300 border-t-transparent rounded-full" />
+                                ) : (
+                                  'Dosya Seç'
+                                )}
+                                <input
+                                  type="file"
+                                  accept=".mp3"
+                                  onChange={(e) => handleUploadVoice(e, item, 'en')}
+                                  className="hidden"
+                                  disabled={uploadLoading !== null}
+                                />
+                              </label>
+                            </div>
+                          </td>
+
+                        </tr>
+                      ))}
                     </tbody>
                   </table>
                 </div>

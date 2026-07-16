@@ -26,6 +26,8 @@ const THEME_OPTIONS = [
   { id: 'theme_matrix', name: 'Sanal Matris', color: '#022C22', description: 'Yeşil akan kod yağmuru altında sanal masa.' },
   { id: 'theme_space', name: 'Uzay İstasyonu', color: '#0F172A', description: 'Dünya manzaralı uzay üssü gözlem masası.' },
   { id: 'theme_desert', name: 'Kayıp Tapınak', color: '#7C2D12', description: 'Mısır kumları altındaki kadim çöl masası.' },
+  { id: 'theme_atlantis', name: '🌊 Sualtı Krallığı (Atlantis)', color: '#0B5394', description: 'Derin okyanus mavisi ve deniz tozu partikülleri ile sualtı masa deneyimi.' },
+  { id: 'theme_volcano', name: '🌋 Volkanik Öfke (Lav Masası)', color: '#7F1D1D', description: 'Lav çatlakları ve kor parçacıkları efektiyle volkanik arena.' },
 ];
 
 const CARD_BACKS = [
@@ -122,6 +124,8 @@ const getThemeName = (id: string, profile: UserProfile): string => {
     case 'theme_matrix': return 'Virtual Matrix';
     case 'theme_space': return 'Space Station';
     case 'theme_desert': return 'Lost Temple';
+    case 'theme_atlantis': return 'Underwater Kingdom (Atlantis)';
+    case 'theme_volcano': return 'Volcanic Fury (Volcanic Table)';
     default: return id;
   }
 };
@@ -146,6 +150,8 @@ const getThemeDesc = (id: string, profile: UserProfile): string => {
     case 'theme_matrix': return 'Virtual table under green matrix code rain.';
     case 'theme_space': return 'Space base observation table with Earth view.';
     case 'theme_desert': return 'Ancient desert table under Egyptian sand.';
+    case 'theme_atlantis': return 'Underwater table experience with deep ocean blue and rising sea bubbles.';
+    case 'theme_volcano': return 'Volcanic arena with pulsing lava cracks and hot ember particles.';
     default: return '';
   }
 };

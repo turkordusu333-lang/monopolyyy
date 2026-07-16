@@ -762,9 +762,9 @@ export const GameRoom: React.FC<Props> = ({ roomId, isOffline, profile, onLeaveR
     return 'medium';
   }, [roomId]);
 
-  const botDelay = botDifficulty === 'easy' ? 2500 : botDifficulty === 'hard' ? 900 : 1800;
-  const botPaymentDelay = botDifficulty === 'easy' ? 2800 : botDifficulty === 'hard' ? 1000 : 2000;
-  const botFinishDelay = botDifficulty === 'easy' ? 2000 : botDifficulty === 'hard' ? 700 : 1500;
+  const botDelay = botDifficulty === 'easy' ? 4000 : botDifficulty === 'hard' ? 2600 : 3200;
+  const botPaymentDelay = botDifficulty === 'easy' ? 4200 : botDifficulty === 'hard' ? 2800 : 3500;
+  const botFinishDelay = botDifficulty === 'easy' ? 3000 : botDifficulty === 'hard' ? 2000 : 2500;
 
   const [botIsThinking, setBotIsThinking] = React.useState(false);
   const [localSettings, setLocalSettings] = React.useState({
@@ -857,6 +857,10 @@ export const GameRoom: React.FC<Props> = ({ roomId, isOffline, profile, onLeaveR
   const [voiceMuted, setVoiceMuted] = React.useState(false);
   const [isMusicPlaying, setIsMusicPlaying] = React.useState(() => {
     const saved = localStorage.getItem('bgm_enabled');
+    return saved === 'true';
+  });
+  const [voiceoversMuted, setVoiceoversMuted] = React.useState(() => {
+    const saved = localStorage.getItem('voiceovers_muted');
     return saved === 'true';
   });
   const [speakingList, setSpeakingList] = React.useState<string[]>([]);
@@ -1278,6 +1282,78 @@ export const GameRoom: React.FC<Props> = ({ roomId, isOffline, profile, onLeaveR
   }
   const [notifications, setNotifications] = React.useState<GameNotification[]>([]);
 
+  // Flying card animation types and states
+  interface FlyingCard {
+    id: string;
+    card: Card;
+    startX: number;
+    startY: number;
+    endX: number;
+    endY: number;
+  }
+  const [flyingCards, setFlyingCards] = React.useState<FlyingCard[]>([]);
+  const [showcaseCard, setShowcaseCard] = React.useState<{ card: Card; playerName: string; zone: 'bank' | 'property' | 'action'; color?: CardColor } | null>(null);
+  const [animationQueue, setAnimationQueue] = React.useState<{
+    card: Card;
+    playerName: string;
+    zone: 'bank' | 'property' | 'action';
+    color?: CardColor;
+    startId: string;
+    endId: string;
+  }[]>([]);
+  const [isProcessingAnimation, setIsProcessingAnimation] = React.useState(false);
+
+  const triggerCardFlight = (
+    card: Card,
+    startElementId: string,
+    endElementId: string,
+    onComplete?: () => void
+  ) => {
+    const startEl = document.getElementById(startElementId);
+    const endEl = document.getElementById(endElementId);
+
+    // Fallbacks if elements are not found
+    let startX = window.innerWidth / 2;
+    let startY = window.innerHeight;
+    let endX = window.innerWidth / 2;
+    let endY = window.innerHeight / 2;
+
+    if (startEl) {
+      const rect = startEl.getBoundingClientRect();
+      startX = rect.left + rect.width / 2;
+      startY = rect.top + rect.height / 2;
+    } else if (startElementId.startsWith('hand-card-')) {
+      startX = window.innerWidth / 2;
+      startY = window.innerHeight - 50;
+    }
+    if (endEl) {
+      const rect = endEl.getBoundingClientRect();
+      endX = rect.left + rect.width / 2;
+      endY = rect.top + rect.height / 2;
+    }
+
+    const flightId = `flight-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`;
+    const newFlight: FlyingCard = {
+      id: flightId,
+      card,
+      startX,
+      startY,
+      endX,
+      endY,
+    };
+
+    setFlyingCards((prev) => [...prev, newFlight]);
+
+    setTimeout(() => {
+      setFlyingCards((prev) => prev.filter((fc) => fc.id !== flightId));
+      if (onComplete) onComplete();
+    }, 600); // 600ms match duration
+  };
+
+  const isCardAnimating = (cardId: string) => {
+    return flyingCards.some((fc) => fc.card.id === cardId) || showcaseCard?.card.id === cardId;
+  };
+
   // Action / Rent Toast State
   const [actionToast, setActionToast] = React.useState<{
     id: string;
@@ -1464,12 +1540,155 @@ export const GameRoom: React.FC<Props> = ({ roomId, isOffline, profile, onLeaveR
       } else {
         playPlaySound();
       }
+      // Play your turn voiceover
+      playCustomVoiceoverFile('your_turn.mp3');
+      
       setShowYourTurnSplash(true);
       const timer = setTimeout(() => setShowYourTurnSplash(false), 2000);
       return () => clearTimeout(timer);
     }
     prevTurnIndexForSplash.current = match.turnIndex;
   }, [match?.turnIndex, match?.status, profile.id]);
+
+  // Game Start, Victory & Defeat triggers
+  const lastMatchStatusRef = React.useRef<string | undefined>(undefined);
+  React.useEffect(() => {
+    if (!match) return;
+
+    if (lastMatchStatusRef.current !== match.status) {
+      if (match.status === 'playing') {
+        playCustomVoiceoverFile('game_start.mp3');
+      } else if (match.status === 'finished') {
+        const isWinner = match.winnerId === profile.id;
+        if (isWinner) {
+          playCustomVoiceoverFile('victory.mp3');
+        } else {
+          playCustomVoiceoverFile('defeat.mp3');
+        }
+      }
+      lastMatchStatusRef.current = match.status;
+    }
+  }, [match?.status, match?.winnerId, profile.id]);
+
+  // State diffing animation effect to automatically capture every play in multiplayer and offline modes
+  const prevMatchRef = React.useRef<MatchState | null>(null);
+  React.useEffect(() => {
+    const oldMatch = prevMatchRef.current;
+    const newMatch = match;
+    prevMatchRef.current = newMatch;
+
+    if (!oldMatch || !newMatch) return;
+    if (oldMatch.status !== 'playing' || newMatch.status !== 'playing') return;
+
+    const newItems: typeof animationQueue = [];
+
+    // 1. Detect Discard Pile additions (Action / Rent cards)
+    if (newMatch.discardPile.length > oldMatch.discardPile.length) {
+      const addedCards = newMatch.discardPile.filter((nc) => !oldMatch.discardPile.some((oc) => oc.id === nc.id));
+      addedCards.forEach((card) => {
+        const turnPlayer = oldMatch.players[oldMatch.turnIndex];
+        if (turnPlayer) {
+          const startId = turnPlayer.id === profile.id ? `hand-card-${card.id}` : `player-card-${turnPlayer.id}`;
+          newItems.push({
+            card,
+            playerName: turnPlayer.username,
+            zone: 'action',
+            startId,
+            endId: 'discard-pile-zone'
+          });
+        }
+      });
+    }
+
+    // 2. Detect Bank and Property additions
+    newMatch.players.forEach((newPlayer) => {
+      const oldPlayer = oldMatch.players.find((p) => p.id === newPlayer.id);
+      if (!oldPlayer) return;
+
+      // Bank additions
+      if (newPlayer.bank.length > oldPlayer.bank.length) {
+        const addedCards = newPlayer.bank.filter((nc) => !oldPlayer.bank.some((oc) => oc.id === nc.id));
+        addedCards.forEach((card) => {
+          const startId = newPlayer.id === profile.id ? `hand-card-${card.id}` : `player-card-${newPlayer.id}`;
+          const endId = newPlayer.id === profile.id ? 'bank-drop-zone' : `player-card-${newPlayer.id}`;
+          newItems.push({
+            card,
+            playerName: newPlayer.username,
+            zone: 'bank',
+            startId,
+            endId
+          });
+        });
+      }
+
+      // Property additions
+      Object.keys(newPlayer.properties).forEach((colorKey) => {
+        const col = colorKey as CardColor;
+        const newSet = newPlayer.properties[col];
+        const oldSet = oldPlayer.properties[col];
+        const oldCards = oldSet ? oldSet.cards : [];
+        const newCards = newSet ? newSet.cards : [];
+
+        if (newCards.length > oldCards.length) {
+          // Detect set completion
+          const isNowCompleted = newCards.length >= (MAX_IN_SET[col] || 0);
+          const wasCompletedBefore = oldCards.length >= (MAX_IN_SET[col] || 0);
+          if (isNowCompleted && !wasCompletedBefore) {
+            playCustomVoiceoverFile('set_completed.mp3');
+          }
+
+          const addedCards = newCards.filter((nc) => !oldCards.some((oc) => oc.id === nc.id));
+          addedCards.forEach((card) => {
+            const startId = newPlayer.id === profile.id ? `hand-card-${card.id}` : `player-card-${newPlayer.id}`;
+            const endId = newPlayer.id === profile.id ? `property-set-${col}-${newPlayer.id}` : `player-card-${newPlayer.id}`;
+            newItems.push({
+              card,
+              playerName: newPlayer.username,
+              zone: 'property',
+              color: col,
+              startId,
+              endId
+            });
+          });
+        }
+      });
+    });
+
+    if (newItems.length > 0) {
+      setAnimationQueue((prev) => [...prev, ...newItems]);
+    }
+  }, [match]);
+
+  // Process the animation queue sequentially to prevent cards overlapping or playing simultaneously
+  React.useEffect(() => {
+    if (animationQueue.length === 0 || isProcessingAnimation) return;
+
+    setIsProcessingAnimation(true);
+    const nextAnim = animationQueue[0];
+
+    // 1. Showcase
+    setShowcaseCard({
+      card: nextAnim.card,
+      playerName: nextAnim.playerName,
+      zone: nextAnim.zone,
+      color: nextAnim.color
+    });
+
+    // Play corresponding voiceover for this card play
+    playVoiceover(nextAnim.zone, nextAnim.card);
+
+    setTimeout(() => {
+      // 2. Hide showcase
+      setShowcaseCard(null);
+
+      // 3. Trigger flight
+      triggerCardFlight(nextAnim.card, nextAnim.startId, nextAnim.endId, () => {
+        // 4. On flight complete, remove item from queue and release lock
+        setAnimationQueue((prev) => prev.slice(1));
+        setIsProcessingAnimation(false);
+      });
+    }, 1100);
+  }, [animationQueue, isProcessingAnimation]);
 
   // Log-monitoring Effect to show Toasts/Banners and trigger 3D custom particle animations
   React.useEffect(() => {
@@ -1624,6 +1843,10 @@ export const GameRoom: React.FC<Props> = ({ roomId, isOffline, profile, onLeaveR
           setTimeout(() => setShowShieldDefenseFor(null), 2500);
         }
       }
+      // Detect player bankruptcy
+      else if (text.includes('iflas etti') || text.includes('went bankrupt')) {
+        playCustomVoiceoverFile('bankruptcy.mp3');
+      }
     });
   }, [match?.logs?.length, match?.players]);
 
@@ -1644,6 +1867,73 @@ export const GameRoom: React.FC<Props> = ({ roomId, isOffline, profile, onLeaveR
     }
   };
   const playCoinSound = () => sounds.playCoin(profile.settings);
+  
+  const playVoiceover = (zone: 'bank' | 'property' | 'action', card: Card) => {
+    const voiceoversGloballyEnabled = adminSettings ? adminSettings.enableSystemVoiceovers !== false : true;
+    if (!voiceoversGloballyEnabled || voiceoversMuted) return;
+
+    const lang = profile.settings.language === 'en' ? 'en' : 'tr';
+    let filename = '';
+
+    if (zone === 'bank') {
+      filename = 'place_bank.mp3';
+    } else if (zone === 'property') {
+      if (card.actionType === 'house') {
+        filename = 'build_house.mp3';
+      } else if (card.actionType === 'hotel') {
+        filename = 'build_hotel.mp3';
+      } else {
+        filename = 'place_property.mp3';
+      }
+    } else if (zone === 'action') {
+      const act = card.actionType;
+      if (act === 'pass-go') {
+        filename = 'play_passgo.mp3';
+      } else if (act === 'birthday') {
+        filename = 'play_birthday.mp3';
+      } else if (act === 'debt-collector') {
+        filename = 'play_debt.mp3';
+      } else if (act === 'sly-deal') {
+        filename = 'play_sly.mp3';
+      } else if (act === 'deal-breaker') {
+        filename = 'play_dealbreaker.mp3';
+      } else if (act === 'forced-deal') {
+        filename = 'play_forced.mp3';
+      } else if (act === 'double-rent') {
+        filename = 'play_double.mp3';
+      } else if (card.type === 'rent') {
+        filename = 'play_rent.mp3';
+      } else if (act === 'just-say-no') {
+        filename = 'play_jsn.mp3';
+      } else {
+        filename = 'play_action.mp3';
+      }
+    }
+
+    if (!filename) return;
+
+    try {
+      const audio = new Audio(`/assets/sounds/voices/${lang}/${filename}`);
+      audio.volume = (profile.settings.soundVolume || 50) / 100;
+      audio.play().catch((err) => console.log('Voiceover play deferred or blocked:', err));
+    } catch (e) {
+      console.error('Error playing voiceover:', e);
+    }
+  };
+
+  const playCustomVoiceoverFile = (filename: string) => {
+    const voiceoversGloballyEnabled = adminSettings ? adminSettings.enableSystemVoiceovers !== false : true;
+    if (!voiceoversGloballyEnabled || voiceoversMuted) return;
+
+    const lang = profile.settings.language === 'en' ? 'en' : 'tr';
+    try {
+      const audio = new Audio(`/assets/sounds/voices/${lang}/${filename}`);
+      audio.volume = (profile.settings.soundVolume || 50) / 100;
+      audio.play().catch((err) => console.log('Custom voiceover play deferred or blocked:', err));
+    } catch (e) {
+      console.error('Error playing custom voiceover:', e);
+    }
+  };
   const playActionSound = (card?: Card) => {
     if (!card) {
       sounds.playActionCardPlay(profile.settings);
@@ -2755,6 +3045,10 @@ export const GameRoom: React.FC<Props> = ({ roomId, isOffline, profile, onLeaveR
       return;
     }
 
+    if (player.id === profile.id) {
+      playCustomVoiceoverFile('end_turn.mp3');
+    }
+
     // Move turn to Bot
     const nextTurnIdx = (match.turnIndex + 1) % match.players.length;
     match.turnIndex = nextTurnIdx;
@@ -3262,7 +3556,6 @@ export const GameRoom: React.FC<Props> = ({ roomId, isOffline, profile, onLeaveR
         }
       }
     };
-
     const endBotTurn = () => {
       setBotIsThinking(false);
       const activeMatch = matchRef.current;
@@ -3515,6 +3808,7 @@ export const GameRoom: React.FC<Props> = ({ roomId, isOffline, profile, onLeaveR
       alert("Aktif bir ödeme veya hamle talebi varken turunuzu sonlandıramazsınız!");
       return;
     }
+    playCustomVoiceoverFile('end_turn.mp3');
     socketRef.current?.send(JSON.stringify({ type: 'end_turn', userId: profile.id, roomId }));
   };
 
@@ -4122,6 +4416,15 @@ export const GameRoom: React.FC<Props> = ({ roomId, isOffline, profile, onLeaveR
     back_darkness: '👁️',
   };
   const cardBackPattern = cardBackPatternMap[profile.settings.cardBack] || '◆';
+  // Dynamic top offsets for overlapping alert/toast banners
+  const activeToastY = recoveryAlert ? 96 : 16;
+  
+  let actionToastY = 0;
+  if (activeToast && recoveryAlert) {
+    actionToastY = 176;
+  } else if (activeToast || recoveryAlert) {
+    actionToastY = 88;
+  }
 
   return (
     <div
@@ -4362,6 +4665,26 @@ export const GameRoom: React.FC<Props> = ({ roomId, isOffline, profile, onLeaveR
               <span>{profile.settings.language === 'en' ? 'Voice Active' : 'Ses Aktif'}</span>
             </div>
 
+            {/* Voiceover Toggle Button */}
+            <button
+              onClick={() => {
+                playPlaySound();
+                const newVal = !voiceoversMuted;
+                setVoiceoversMuted(newVal);
+                localStorage.setItem('voiceovers_muted', String(newVal));
+              }}
+              className={`p-1 sm:p-1.5 rounded-lg border text-xs transition-all flex items-center gap-1 cursor-pointer select-none ${!voiceoversMuted
+                ? 'bg-indigo-500/15 border-indigo-500/40 text-indigo-400 shadow-[0_0_12px_rgba(99,102,241,0.25)]'
+                : 'bg-slate-800/60 border-slate-700 text-slate-400 hover:text-white hover:bg-slate-800'
+                }`}
+              title={!voiceoversMuted ? (profile.settings.language === 'en' ? 'Voiceovers Off' : 'Seslendirmeleri Kapat') : (profile.settings.language === 'en' ? 'Voiceovers On' : 'Seslendirmeleri Aç')}
+            >
+              <span>{!voiceoversMuted ? '🗣️' : '🔇'}</span>
+              <span className="hidden md:inline font-black text-[9px]">
+                {!voiceoversMuted ? (profile.settings.language === 'en' ? 'Voices On' : 'Seslendirme Açık') : (profile.settings.language === 'en' ? 'Voices Off' : 'Seslendirme Kapalı')}
+              </span>
+            </button>
+
             {/* Background Music Player Toggle Button */}
             <button
               onClick={() => {
@@ -4415,11 +4738,11 @@ export const GameRoom: React.FC<Props> = ({ roomId, isOffline, profile, onLeaveR
       <AnimatePresence>
         {recoveryAlert && (
           <motion.div
-            initial={{ opacity: 0, y: -50, scale: 0.9 }}
-            animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={{ opacity: 0, y: -20, scale: 0.95 }}
+            initial={{ opacity: 0, y: -50, scale: 0.9, x: '-50%' }}
+            animate={{ opacity: 1, y: 0, scale: 1, x: '-50%' }}
+            exit={{ opacity: 0, y: -20, scale: 0.95, x: '-50%' }}
             transition={{ type: 'spring', stiffness: 350, damping: 25 }}
-            className="fixed top-16 left-1/2 -translate-x-1/2 z-50 w-full max-w-sm px-4"
+            className="fixed top-16 left-1/2 z-50 w-full max-w-sm px-4"
           >
             <div className={`p-4 rounded-2xl border flex items-start gap-3 shadow-2xl backdrop-blur-md ${recoveryAlert.type === 'warning'
               ? 'bg-amber-950/90 border-amber-500/40 text-amber-200 shadow-amber-950/50'
@@ -4761,6 +5084,7 @@ export const GameRoom: React.FC<Props> = ({ roomId, isOffline, profile, onLeaveR
                 return (
                   <div
                     key={p.id}
+                    id={`player-card-${p.id}`}
                     onClick={() => {
                       playPlaySound();
                       if (isMe) {
@@ -5034,9 +5358,11 @@ export const GameRoom: React.FC<Props> = ({ roomId, isOffline, profile, onLeaveR
                 {match.discardPile.length > 0 ? (
                   (() => {
                     const topDiscard = match.discardPile[match.discardPile.length - 1];
+                    const isHidden = isCardAnimating(topDiscard.id);
                     return (
                       <div
-                        className="flex justify-center cursor-pointer hover:scale-105 transition-transform"
+                        id="discard-pile-zone"
+                        className={`flex justify-center cursor-pointer hover:scale-105 transition-transform ${isHidden ? 'opacity-0 pointer-events-none' : ''}`}
                         onClick={() => {
                           playPlaySound();
                           setFocusedCard(topDiscard);
@@ -5259,6 +5585,7 @@ export const GameRoom: React.FC<Props> = ({ roomId, isOffline, profile, onLeaveR
                     return (
                       <div
                         key={col}
+                        id={`property-set-${col}-${localPlayer.id}`}
                         onClick={() => {
                           playPlaySound();
                           setExpandedPropertyColor(isExpanded ? null : col);
@@ -5322,7 +5649,7 @@ export const GameRoom: React.FC<Props> = ({ roomId, isOffline, profile, onLeaveR
                                 }}
                                 onMouseEnter={() => setHoveredCard(card)}
                                 onMouseLeave={() => setHoveredCard(null)}
-                                className={`${cardSpacingClass} w-full transition-all duration-300 hover:z-30 relative cursor-pointer hover:scale-105 animate-play-card`}
+                                className={`${cardSpacingClass} w-full transition-all duration-300 hover:z-30 relative cursor-pointer hover:scale-105 animate-play-card ${isCardAnimating(card.id) ? 'opacity-0 pointer-events-none' : ''}`}
                                 style={fanStyle}
                                 title="Kartı Odakla / Genişlet"
                               >
@@ -5677,6 +6004,7 @@ export const GameRoom: React.FC<Props> = ({ roomId, isOffline, profile, onLeaveR
                       return (
                         <motion.div
                           key={card.id}
+                          id={`hand-card-${card.id}`}
                           initial={{ scale: 0.85, y: 30, opacity: 0 }}
                           animate={{ scale: 1, y: 0, opacity: 1 }}
                           exit={{ scale: 0.85, y: 30, opacity: 0 }}
@@ -5705,7 +6033,7 @@ export const GameRoom: React.FC<Props> = ({ roomId, isOffline, profile, onLeaveR
                           onMouseEnter={() => setHoveredCard(card)}
                           onMouseLeave={() => setHoveredCard(null)}
                           className={`cursor-grab active:cursor-grabbing transition-transform hover:-translate-y-2 select-none flex-shrink-0 ${draggingCard?.id === card.id ? 'opacity-40 scale-95' : ''
-                            }`}
+                            } ${isCardAnimating(card.id) ? 'opacity-0 pointer-events-none' : ''}`}
                         >
                           <GameCard
                             card={card}
@@ -8056,10 +8384,11 @@ export const GameRoom: React.FC<Props> = ({ roomId, isOffline, profile, onLeaveR
       <AnimatePresence>
         {actionToast && (
           <motion.div
-            initial={{ opacity: 0, y: -50, scale: 0.9 }}
-            animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={{ opacity: 0, y: -20, scale: 0.95 }}
-            className={`fixed top-16 left-1/2 -translate-x-1/2 w-[90vw] max-w-sm bg-slate-950/80 border backdrop-blur-lg rounded-2xl p-4 shadow-[0_20px_50px_rgba(0,0,0,0.8)] z-50 pointer-events-auto flex flex-col gap-3 transition-colors duration-300 ${actionToast.type === 'rent'
+            initial={{ opacity: 0, y: -50, scale: 0.9, x: '-50%' }}
+            animate={{ opacity: 1, y: actionToastY, scale: 1, x: '-50%' }}
+            exit={{ opacity: 0, y: -20, scale: 0.95, x: '-50%' }}
+            transition={{ type: 'spring', stiffness: 300, damping: 24 }}
+            className={`fixed top-16 left-1/2 w-[90vw] max-w-sm bg-slate-950/80 border backdrop-blur-lg rounded-2xl p-4 shadow-[0_20px_50px_rgba(0,0,0,0.8)] z-50 pointer-events-auto flex flex-col gap-3 transition-colors duration-300 ${actionToast.type === 'rent'
               ? 'border-emerald-500/30 shadow-[0_0_20px_rgba(16,185,129,0.1)]'
               : actionToast.type === 'info'
                 ? 'border-indigo-500/30 shadow-[0_0_20px_rgba(99,102,241,0.1)]'
@@ -8067,7 +8396,7 @@ export const GameRoom: React.FC<Props> = ({ roomId, isOffline, profile, onLeaveR
               }`}
           >
             <div className="flex items-start justify-between">
-              <div className="flex items-center gap-2.5">
+              <div className="flex items-start gap-2.5">
                 <div className={`w-8 h-8 rounded-full flex items-center justify-center text-base shrink-0 select-none ${actionToast.type === 'rent'
                   ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
                   : actionToast.type === 'info'
@@ -8090,18 +8419,23 @@ export const GameRoom: React.FC<Props> = ({ roomId, isOffline, profile, onLeaveR
             </div>
 
             {actionToast.victimName && (
-              <div className="bg-black/40 border border-white/5 rounded-xl p-2.5 flex items-center justify-between text-[10px] select-none">
-                <div className="flex items-center gap-1.5">
-                  <span className="text-xs">👤</span>
-                  <span className="font-extrabold text-slate-300">
-                    {actionToast.victimName} {profile.settings.language === 'en' ? 'Remaining Status:' : 'Kalan Durum:'}
+              <div className="bg-black/50 border border-white/5 rounded-xl p-2.5 flex flex-col gap-1.5 text-[10px] select-none">
+                <div className="flex items-center justify-between border-b border-white/5 pb-1">
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-xs">👤</span>
+                    <span className="font-extrabold text-slate-300 truncate max-w-[150px]">
+                      {actionToast.victimName}
+                    </span>
+                  </div>
+                  <span className="text-[9px] text-slate-400 font-medium">
+                    {profile.settings.language === 'en' ? 'Remaining Status' : 'Kalan Durum'}
                   </span>
                 </div>
-                <div className="flex gap-3 text-[9px] font-mono font-bold">
-                  <span className="text-amber-400">
+                <div className="flex justify-around gap-2 text-[9px] font-mono font-bold pt-0.5">
+                  <span className="text-amber-400 bg-amber-400/5 px-2.5 py-0.5 rounded border border-amber-400/10">
                     💵 {profile.settings.language === 'en' ? 'Cash:' : 'Para:'} {actionToast.remainingCash}M
                   </span>
-                  <span className="text-emerald-400">
+                  <span className="text-emerald-400 bg-emerald-400/5 px-2.5 py-0.5 rounded border border-emerald-400/10">
                     🏢 {profile.settings.language === 'en' ? 'Props:' : 'Mülk:'} {actionToast.remainingPropsCount}
                   </span>
                 </div>
@@ -8522,10 +8856,10 @@ export const GameRoom: React.FC<Props> = ({ roomId, isOffline, profile, onLeaveR
         {activeToast && (
           <motion.div
             initial={{ opacity: 0, y: -80, scale: 0.9, x: '-50%' }}
-            animate={{ opacity: 1, y: 16, scale: 1, x: '-50%' }}
+            animate={{ opacity: 1, y: activeToastY, scale: 1, x: '-50%' }}
             exit={{ opacity: 0, y: -30, scale: 0.9, x: '-50%' }}
             transition={{ type: 'spring', stiffness: 300, damping: 22 }}
-            className="fixed top-16 left-1/2 -translate-x-1/2 max-w-sm w-[92%] z-[9999] px-4"
+            className="fixed top-16 left-1/2 max-w-sm w-[92%] z-[9999] px-4"
           >
             <div className="bg-slate-950/95 border border-amber-500/35 backdrop-blur-md p-3.5 rounded-2xl shadow-[0_20px_50px_rgba(0,0,0,0.7)] text-slate-200 flex items-start gap-3 relative overflow-hidden">
               {/* Premium Glow effect */}
@@ -8552,6 +8886,112 @@ export const GameRoom: React.FC<Props> = ({ roomId, isOffline, profile, onLeaveR
           </motion.div>
         )}
       </AnimatePresence>
+
+      {/* 11. Central Action Card Showcase Overlay */}
+      <AnimatePresence>
+        {showcaseCard && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 bg-black/75 backdrop-blur-sm z-[99999] flex flex-col items-center justify-center pointer-events-none"
+          >
+            <motion.div
+              initial={{ scale: 0.3, rotateY: -180, y: 100, opacity: 0 }}
+              animate={{ scale: 1, rotateY: 0, y: 0, opacity: 1 }}
+              exit={{ scale: 1.5, y: -200, opacity: 0 }}
+              transition={{ type: 'spring', stiffness: 220, damping: 18 }}
+              className="flex flex-col items-center gap-6 relative"
+            >
+              {/* Premium Glow effect behind card */}
+              <div className={`absolute w-72 h-72 rounded-full blur-[60px] -z-10 animate-pulse ${
+                showcaseCard.zone === 'bank' ? 'bg-emerald-500/10' :
+                showcaseCard.zone === 'property' ? 'bg-blue-500/10' : 'bg-amber-500/10'
+              }`} />
+              
+              <div className="shadow-[0_25px_60px_rgba(0,0,0,0.8)] border border-white/10 rounded-2xl p-1 bg-slate-900/50">
+                <GameCard card={showcaseCard.card} size="normal" activeEffect="neon-border-glow" disable3D={true} cardBack={profile.settings.cardBack} cardSkin={profile.settings.cardSkin || 'skin_none'} />
+              </div>
+
+              <div className={`bg-slate-950/90 border px-6 py-3 rounded-2xl shadow-xl flex flex-col items-center gap-1 max-w-[85vw] text-center ${
+                showcaseCard.zone === 'bank' ? 'border-emerald-500/40' :
+                showcaseCard.zone === 'property' ? 'border-blue-500/40' : 'border-amber-500/40'
+              }`}>
+                {showcaseCard.zone === 'bank' ? (
+                  <>
+                    <span className="text-[9px] text-emerald-400 font-extrabold uppercase tracking-widest leading-none">
+                      {profile.settings.language === 'en' ? 'DEPOSITED TO BANK' : 'BANKAYA PARA KOYULDU'}
+                    </span>
+                    <h3 className="text-sm font-black text-slate-100 mt-1">
+                      {showcaseCard.playerName} {profile.settings.language === 'en' ? 'deposited money:' : 'banka kasasına para ekledi:'}
+                    </h3>
+                    <p className="text-[11px] font-bold text-emerald-300 font-mono mt-0.5 leading-snug">
+                      🏦 {showcaseCard.card.value}M ({translateLogMessage(showcaseCard.card.name, profile)})
+                    </p>
+                  </>
+                ) : showcaseCard.zone === 'property' ? (
+                  <>
+                    <span className="text-[9px] text-blue-400 font-extrabold uppercase tracking-widest leading-none">
+                      {profile.settings.language === 'en' ? 'PROPERTY PLACED' : 'MÜLK YERLEŞTİRİLDİ'}
+                    </span>
+                    <h3 className="text-sm font-black text-slate-100 mt-1">
+                      {showcaseCard.playerName} {profile.settings.language === 'en' ? 'placed a property:' : 'mülk yerleştirdi:'}
+                    </h3>
+                    <p className="text-[11px] font-bold text-blue-300 font-mono mt-0.5 leading-snug">
+                      🏡 {showcaseCard.color ? COLOR_LABELS[showcaseCard.color] : ''} ({translateLogMessage(showcaseCard.card.name, profile)})
+                    </p>
+                  </>
+                ) : (
+                  <>
+                    <span className="text-[9px] text-amber-400 font-extrabold uppercase tracking-widest leading-none">
+                      {profile.settings.language === 'en' ? 'ACTION PLAYED' : 'AKSİYON OYNANDI'}
+                    </span>
+                    <h3 className="text-sm font-black text-slate-100 mt-1">
+                      {showcaseCard.playerName} {profile.settings.language === 'en' ? 'played a card:' : 'bir aksiyon kartı oynadı:'}
+                    </h3>
+                    <p className="text-[11px] font-bold text-amber-300 font-mono mt-0.5 leading-snug">
+                      ⚡ {translateLogMessage(showcaseCard.card.name, profile)}
+                    </p>
+                  </>
+                )}
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* 10. Flying Cards Animation Portal overlay */}
+      {flyingCards.map((fc) => (
+        <motion.div
+          key={fc.id}
+          initial={{
+            position: 'fixed',
+            left: 0,
+            top: 0,
+            x: fc.startX,
+            y: fc.startY,
+            scale: 0.5,
+            opacity: 0.6,
+            zIndex: 99999,
+            pointerEvents: 'none',
+          }}
+          animate={{
+            x: fc.endX,
+            y: fc.endY,
+            scale: [0.5, 0.9, 0.7],
+            opacity: 1,
+          }}
+          transition={{
+            duration: 0.6,
+            ease: 'easeInOut',
+          }}
+          className="-translate-x-1/2 -translate-y-1/2"
+        >
+          <div className="shadow-[0_10px_25px_rgba(0,0,0,0.5)] scale-[0.6] origin-center">
+            <GameCard card={fc.card} size="medium" disable3D={true} cardBack={profile.settings.cardBack} cardSkin={profile.settings.cardSkin || 'skin_none'} />
+          </div>
+        </motion.div>
+      ))}
 
     </div>
   );
