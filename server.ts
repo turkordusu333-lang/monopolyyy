@@ -1713,14 +1713,14 @@ async function startServer() {
                 triggerDrawForActivePlayer(match);
 
                 if (nextPlayer.isBot || nextPlayer.isDisconnected) {
-                  setTimeout(() => handleBotTurn(match), 1000);
+                  scheduleBotTurn(match, 1000);
                 }
               }
             }
 
             // If it's a bot's turn and they have more actions left, resume their turn simulation!
             if (!hasActiveAction && match.actionsPlayedThisTurn < 3 && activePlayer && (activePlayer.isBot || activePlayer.isDisconnected)) {
-              setTimeout(() => handleBotTurn(match), 1000);
+              scheduleBotTurn(match, 1000);
             }
 
             broadcastToRoom(roomId, {
@@ -1771,7 +1771,7 @@ async function startServer() {
 
             // If next player is a bot or disconnected, handle its turn asynchronously
             if (nextPlayer.isBot || nextPlayer.isDisconnected) {
-              setTimeout(() => handleBotTurn(match), 1000);
+              scheduleBotTurn(match, 1000);
             }
             break;
           }
@@ -2488,14 +2488,38 @@ async function startServer() {
 
 
 
+  const botTurnTimeouts = new Map<string, NodeJS.Timeout>();
+
+  function scheduleBotTurn(match: MatchState, delay = 1000) {
+    const roomId = match.roomId;
+    if (botTurnTimeouts.has(roomId)) {
+      clearTimeout(botTurnTimeouts.get(roomId)!);
+    }
+    const timer = setTimeout(async () => {
+      botTurnTimeouts.delete(roomId);
+      await handleBotTurn(match);
+    }, delay);
+    botTurnTimeouts.set(roomId, timer);
+  }
+
   // Direct bot turn automation
   async function handleBotTurn(match: MatchState) {
     if (match.status !== 'playing') return;
+
+    const hasActiveAction = match.activeActionRequest || (match.activeActionRequests && match.activeActionRequests.length > 0);
+    if (hasActiveAction) return;
 
     const bot = match.players[match.turnIndex];
     if (!bot || (!bot.isBot && !bot.isDisconnected)) return;
 
     while (match.actionsPlayedThisTurn < 3) {
+      // Re-verify match status and active player after delay
+      if (match.status !== 'playing') break;
+      const currentBot = match.players[match.turnIndex];
+      if (!currentBot || currentBot.id !== bot.id) break;
+      const hasActiveAction = match.activeActionRequest || (match.activeActionRequests && match.activeActionRequests.length > 0);
+      if (hasActiveAction) break;
+
       const decision = BotEngine.selectPlayAction(bot, match);
       if (!decision) break;
 
@@ -2549,11 +2573,19 @@ async function startServer() {
       }
 
       // Check if this action created an active action request targeting a human
-      const hasActiveAction = match.activeActionRequest || (match.activeActionRequests && match.activeActionRequests.length > 0);
-      if (hasActiveAction) {
+      const hasActiveActionNow = match.activeActionRequest || (match.activeActionRequests && match.activeActionRequests.length > 0);
+      if (hasActiveActionNow) {
         // Pause bot turn immediately to let humans respond.
         broadcastToRoom(match.roomId, { type: 'room_update', matchState: match });
         return;
+      }
+
+      // Broadcast current state change immediately
+      broadcastToRoom(match.roomId, { type: 'room_update', matchState: match });
+
+      // Wait 1.5 seconds before the next action to let players follow the game
+      if (match.actionsPlayedThisTurn < 3) {
+        await new Promise((resolve) => setTimeout(resolve, 1500));
       }
     }
 
@@ -2586,7 +2618,7 @@ async function startServer() {
 
       // If next is bot or disconnected too, chain
       if (nextPlayer.isBot || nextPlayer.isDisconnected) {
-        setTimeout(() => handleBotTurn(match), 1000);
+        scheduleBotTurn(match, 1000);
       }
     }, 1000);
   }
@@ -2717,7 +2749,7 @@ async function startServer() {
         broadcastToRoom(roomId, { type: 'room_update', matchState: match });
 
         if (nextPlayer.isBot || nextPlayer.isDisconnected) {
-          setTimeout(() => handleBotTurn(match), 1000);
+          scheduleBotTurn(match, 1000);
         }
         continue;
       }
@@ -2762,14 +2794,14 @@ async function startServer() {
 
               triggerDrawForActivePlayer(match);
               if (nextPlayer.isBot || nextPlayer.isDisconnected) {
-                setTimeout(() => handleBotTurn(match), 1000);
+                scheduleBotTurn(match, 1000);
               }
             }
           }
 
           // If it's a bot's turn and they have more actions left, resume their turn simulation!
           if (!hasActiveAction && match.actionsPlayedThisTurn < 3 && activePlayer && (activePlayer.isBot || activePlayer.isDisconnected)) {
-            setTimeout(() => handleBotTurn(match), 1000);
+            scheduleBotTurn(match, 1000);
           }
 
           broadcastToRoom(roomId, { type: 'room_update', matchState: match });
@@ -2813,14 +2845,14 @@ async function startServer() {
 
             triggerDrawForActivePlayer(match);
             if (nextPlayer.isBot || nextPlayer.isDisconnected) {
-              setTimeout(() => handleBotTurn(match), 1000);
+              scheduleBotTurn(match, 1000);
             }
           }
         }
 
         // If it's a bot's turn and they have more actions left, resume their turn simulation!
         if (!hasActiveAction && match.actionsPlayedThisTurn < 3 && activePlayer && (activePlayer.isBot || activePlayer.isDisconnected)) {
-          setTimeout(() => handleBotTurn(match), 1000);
+          scheduleBotTurn(match, 1000);
         }
 
         broadcastToRoom(roomId, { type: 'room_update', matchState: match });

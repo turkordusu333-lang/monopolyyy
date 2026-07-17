@@ -751,6 +751,7 @@ const FireworksCelebration: React.FC = () => {
 export const GameRoom: React.FC<Props> = ({ roomId, isOffline, profile, onLeaveRoom, onUpdateProfile, adminSettings, roomPassword }) => {
   const [match, setMatch] = React.useState<MatchState | null>(null);
   const matchRef = React.useRef<MatchState | null>(null);
+  const botTimeoutRef = React.useRef<any>(null);
   React.useEffect(() => {
     matchRef.current = match;
   }, [match]);
@@ -1633,7 +1634,7 @@ export const GameRoom: React.FC<Props> = ({ roomId, isOffline, profile, onLeaveR
           // Detect set completion
           const isNowCompleted = newCards.length >= (MAX_IN_SET[col] || 0);
           const wasCompletedBefore = oldCards.length >= (MAX_IN_SET[col] || 0);
-          if (isNowCompleted && !wasCompletedBefore) {
+          if (isNowCompleted && !wasCompletedBefore && newPlayer.id === profile.id) {
             playCustomVoiceoverFile('set_completed.mp3');
           }
 
@@ -1675,7 +1676,7 @@ export const GameRoom: React.FC<Props> = ({ roomId, isOffline, profile, onLeaveR
     });
 
     // Play corresponding voiceover for this card play
-    playVoiceover(nextAnim.zone, nextAnim.card);
+    playVoiceover(nextAnim.zone, nextAnim.card, nextAnim.playerName);
 
     setTimeout(() => {
       // 2. Hide showcase
@@ -1868,9 +1869,63 @@ export const GameRoom: React.FC<Props> = ({ roomId, isOffline, profile, onLeaveR
   };
   const playCoinSound = () => sounds.playCoin(profile.settings);
   
-  const playVoiceover = (zone: 'bank' | 'property' | 'action', card: Card) => {
+  const playVoiceover = (zone: 'bank' | 'property' | 'action', card: Card, actorName?: string) => {
     const voiceoversGloballyEnabled = adminSettings ? adminSettings.enableSystemVoiceovers !== false : true;
     if (!voiceoversGloballyEnabled || voiceoversMuted) return;
+    if (!match) return;
+
+    const actor = actorName ? match.players.find(p => p.username === actorName) : null;
+    const actorId = actor?.id;
+    const isActor = actorId === profile.id;
+
+    // Check if the local player is a targeted player in the action request
+    let isTarget = false;
+    if (match.activeActionRequest) {
+      if (match.activeActionRequest.targetPlayerId === profile.id) {
+        isTarget = true;
+      }
+      if (card.actionType === 'just-say-no' && match.activeActionRequest.sourcePlayerId === profile.id) {
+        isTarget = true;
+      }
+    }
+    if (match.activeActionRequests) {
+      const hasTarget = match.activeActionRequests.some(r => r.targetPlayerId === profile.id);
+      if (hasTarget) {
+        isTarget = true;
+      }
+    }
+
+    // Determine if the local player should hear this sound
+    let shouldHear = false;
+
+    if (zone === 'bank') {
+      shouldHear = isActor;
+    } else if (zone === 'property') {
+      shouldHear = isActor;
+    } else if (zone === 'action') {
+      const act = card.actionType;
+      if (act === 'birthday' || act === 'deal-breaker') {
+        shouldHear = true; // Everyone hears birthday celebrations and deal breakers!
+      } else if (act === 'pass-go') {
+        shouldHear = isActor;
+      } else if (card.type === 'rent') {
+        // Standard dual-color rent is global; wild rent (single target) is actor + target only
+        const isWildRent = card.name === 'Her Renk Kira Kartı' || !card.color;
+        if (isWildRent) {
+          shouldHear = isActor || isTarget;
+        } else {
+          shouldHear = true;
+        }
+      } else if (act === 'double-rent') {
+        shouldHear = isActor || isTarget;
+      } else if (act === 'debt-collector' || act === 'sly-deal' || act === 'forced-deal' || act === 'just-say-no') {
+        shouldHear = isActor || isTarget;
+      } else {
+        shouldHear = isActor;
+      }
+    }
+
+    if (!shouldHear) return;
 
     const lang = profile.settings.language === 'en' ? 'en' : 'tr';
     let filename = '';
@@ -3065,8 +3120,18 @@ export const GameRoom: React.FC<Props> = ({ roomId, isOffline, profile, onLeaveR
 
     // Auto Bot Turn
     if (nextPlayer.isBot) {
-      setTimeout(() => executeBotTurnOffline(), 1500);
+      scheduleBotTurnOffline(() => executeBotTurnOffline(), 1500);
     }
+  };
+
+  const scheduleBotTurnOffline = (callback: () => void, delay: number) => {
+    if (botTimeoutRef.current) {
+      clearTimeout(botTimeoutRef.current);
+    }
+    botTimeoutRef.current = setTimeout(() => {
+      botTimeoutRef.current = null;
+      callback();
+    }, delay);
   };
 
   const resumeBotTurnOffline = () => {
@@ -3079,6 +3144,10 @@ export const GameRoom: React.FC<Props> = ({ roomId, isOffline, profile, onLeaveR
   };
 
   const executeBotTurnOffline = (initialActionsCount = 0) => {
+    if (botTimeoutRef.current) {
+      clearTimeout(botTimeoutRef.current);
+      botTimeoutRef.current = null;
+    }
     const currentMatch = matchRef.current;
     if (!currentMatch) return;
 
@@ -3133,7 +3202,7 @@ export const GameRoom: React.FC<Props> = ({ roomId, isOffline, profile, onLeaveR
 
         updateMatchState({ ...activeMatch });
         botActionsPlayedRef.current++;
-        setTimeout(playNextBotAction, botDelay);
+        scheduleBotTurnOffline(playNextBotAction, botDelay);
 
       } else if (decision.targetZone === 'property') {
         currentBot.hand.splice(cardIdx, 1);
@@ -3167,7 +3236,7 @@ export const GameRoom: React.FC<Props> = ({ roomId, isOffline, profile, onLeaveR
 
         updateMatchState({ ...activeMatch });
         botActionsPlayedRef.current++;
-        setTimeout(playNextBotAction, botDelay);
+        scheduleBotTurnOffline(playNextBotAction, botDelay);
 
       } else if (decision.targetZone === 'action') {
         currentBot.hand.splice(cardIdx, 1);
@@ -3191,7 +3260,7 @@ export const GameRoom: React.FC<Props> = ({ roomId, isOffline, profile, onLeaveR
           });
           updateMatchState({ ...activeMatch });
           botActionsPlayedRef.current++;
-          setTimeout(playNextBotAction, botDelay);
+          scheduleBotTurnOffline(playNextBotAction, botDelay);
 
         } else if (card.actionType === 'birthday' && activeHuman) {
           // Pause and request payment from the human player interactively!
@@ -3383,7 +3452,7 @@ export const GameRoom: React.FC<Props> = ({ roomId, isOffline, profile, onLeaveR
                   activeHuman
                 );
               }
-              setTimeout(playNextBotAction, botPaymentDelay);
+              scheduleBotTurnOffline(playNextBotAction, botPaymentDelay);
             }
           }
           updateMatchState({ ...activeMatch });
@@ -3437,7 +3506,7 @@ export const GameRoom: React.FC<Props> = ({ roomId, isOffline, profile, onLeaveR
                   activeHuman
                 );
               }
-              setTimeout(playNextBotAction, botPaymentDelay);
+              scheduleBotTurnOffline(playNextBotAction, botPaymentDelay);
             }
           }
           updateMatchState({ ...activeMatch });
@@ -3544,7 +3613,7 @@ export const GameRoom: React.FC<Props> = ({ roomId, isOffline, profile, onLeaveR
                   activeHuman
                 );
               }
-              setTimeout(playNextBotAction, botPaymentDelay);
+              scheduleBotTurnOffline(playNextBotAction, botPaymentDelay);
             }
           }
           updateMatchState({ ...activeMatch });
@@ -3552,7 +3621,7 @@ export const GameRoom: React.FC<Props> = ({ roomId, isOffline, profile, onLeaveR
         } else {
           updateMatchState({ ...activeMatch });
           botActionsPlayedRef.current++;
-          setTimeout(playNextBotAction, botFinishDelay);
+          scheduleBotTurnOffline(playNextBotAction, botFinishDelay);
         }
       }
     };
@@ -3595,7 +3664,7 @@ export const GameRoom: React.FC<Props> = ({ roomId, isOffline, profile, onLeaveR
         });
         triggerOfflineDraw(activeMatch);
         updateMatchState({ ...activeMatch });
-        setTimeout(() => executeBotTurnOffline(), 1500);
+        scheduleBotTurnOffline(() => executeBotTurnOffline(), 1500);
       } else {
         activeMatch.logs.push({
           id: `turn-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,

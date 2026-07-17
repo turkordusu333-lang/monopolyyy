@@ -1,144 +1,4 @@
 {
-  "user-quq5nohxl": {
-    "id": "user-quq5nohxl",
-    "xp": 0,
-    "coins": 500,
-    "level": 1,
-    "stats": {
-      "winRate": 0,
-      "gamesWon": 0,
-      "gamesLost": 0,
-      "gamesPlayed": 0,
-      "totalCardsStolen": 0,
-      "totalMoneyBanked": 0,
-      "totalRentCollected": 0,
-      "totalSetsCompleted": 0
-    },
-    "friends": [
-      {
-        "id": "bot-memo",
-        "status": "online",
-        "avatarId": "avatar_skater",
-        "username": "Bot Memo"
-      },
-      {
-        "id": "bot-can",
-        "status": "offline",
-        "avatarId": "avatar_classic",
-        "username": "Bot Can"
-      }
-    ],
-    "avatarId": "avatar_classic",
-    "settings": {
-      "avatarId": "avatar_classic",
-      "cardBack": "back_classic",
-      "clothesId": "clothes_none",
-      "synthType": "sine",
-      "boardTheme": "theme_slate",
-      "soundPitch": 1,
-      "soundVolume": 70,
-      "profileFrame": "frame_none",
-      "celebrationSound": "sound_classic"
-    },
-    "username": "Fasss",
-    "avatarUrl": "",
-    "dailyQuests": [
-      {
-        "id": "q-1",
-        "claimed": false,
-        "rewardXp": 30,
-        "completed": false,
-        "description": "Pratik Modunda botu yen.",
-        "rewardCoins": 50,
-        "targetValue": 1,
-        "currentValue": 0
-      },
-      {
-        "id": "q-2",
-        "claimed": false,
-        "rewardXp": 20,
-        "completed": false,
-        "description": "Bankaya 5M para yerleştir.",
-        "rewardCoins": 40,
-        "targetValue": 5,
-        "currentValue": 0
-      },
-      {
-        "id": "q-3",
-        "claimed": false,
-        "rewardXp": 40,
-        "completed": false,
-        "description": "Toplam 3 kira kartı oyna.",
-        "rewardCoins": 60,
-        "targetValue": 3,
-        "currentValue": 0
-      }
-    ],
-    "achievements": [
-      {
-        "id": "ach-1",
-        "title": "İlk Adım",
-        "completed": false,
-        "description": "Bir maç oyna.",
-        "rewardCoins": 100,
-        "targetValue": 1,
-        "currentValue": 0
-      },
-      {
-        "id": "ach-2",
-        "title": "Milyoner",
-        "completed": false,
-        "description": "Bankaya toplam 20M para ekle.",
-        "rewardCoins": 150,
-        "targetValue": 20,
-        "currentValue": 0
-      },
-      {
-        "id": "ach-3",
-        "title": "Sinsi Hırsız",
-        "completed": false,
-        "description": "Rakiplerinden 5 kez arsa çal.",
-        "rewardCoins": 200,
-        "targetValue": 5,
-        "currentValue": 0
-      },
-      {
-        "id": "ach-streak",
-        "title": "Galibiyet Serisi",
-        "completed": false,
-        "description": "Arka arkaya 10 maç kazan.",
-        "rewardCoins": 500,
-        "targetValue": 10,
-        "currentValue": 0
-      },
-      {
-        "id": "ach-collector",
-        "title": "Koleksiyoncu",
-        "completed": false,
-        "description": "Mağazadan 5 farklı kozmetik eşya aç.",
-        "rewardCoins": 300,
-        "targetValue": 5,
-        "currentValue": 0
-      },
-      {
-        "id": "ach-fast",
-        "title": "Hızlı Oyuncu",
-        "completed": false,
-        "description": "Bir turu 15 saniyeden kısa sürede bitir.",
-        "rewardCoins": 150,
-        "targetValue": 1,
-        "currentValue": 0
-      }
-    ],
-    "gamesHistory": [],
-    "unlockedItems": [
-      "avatar_classic",
-      "back_classic",
-      "theme_slate",
-      "frame_none",
-      "sound_classic"
-    ]
-  },
   "user-niaett1jm": {
     "id": "user-niaett1jm",
     "xp": 500,
@@ -345,16 +205,16 @@
       "sound_classic"
     ]
   },
-  "user-b1e5n1d5a": {
-    "id": "user-b1e5n1d5a",
-    "xp": 100,
-    "coins": 700,
+  "user-quq5nohxl": {
+    "id": "user-quq5nohxl",
+    "xp": 0,
+    "coins": 500,
     "level": 1,
     "stats": {
       "winRate": 0,
       "gamesWon": 0,
-      "gamesLost": 2,
-      "gamesPlayed": 2,
+      "gamesLost": 0,
+      "gamesPlayed": 0,
       "totalCardsStolen": 0,
       "totalMoneyBanked": 0,
       "totalRentCollected": 0,
@@ -386,7 +246,7 @@
       "profileFrame": "frame_none",
       "celebrationSound": "sound_classic"
     },
-    "username": "a",
+    "username": "Fasss",
     "avatarUrl": "",
     "dailyQuests": [
       {
@@ -424,11 +284,11 @@
       {
         "id": "ach-1",
         "title": "İlk Adım",
-        "completed": true,
+        "completed": false,
         "description": "Bir maç oyna.",
         "rewardCoins": 100,
         "targetValue": 1,
-        "currentValue": 2
+        "currentValue": 0
       },
       {
         "id": "ach-2",
@@ -476,24 +336,7 @@
         "currentValue": 0
       }
     ],
-    "gamesHistory": [
-      {
-        "id": "match-1783986685228",
-        "date": "14.07.2026 02:51",
-        "result": "lost",
-        "opponent": "Bot Memo",
-        "xpEarned": 50,
-        "coinsEarned": 50
-      },
-      {
-        "id": "match-1783986684913",
-        "date": "14.07.2026 02:51",
-        "result": "lost",
-        "opponent": "Bot Memo",
-        "xpEarned": 50,
-        "coinsEarned": 50
-      }
-    ],
+    "gamesHistory": [],
     "unlockedItems": [
       "avatar_classic",
       "back_classic",
@@ -651,6 +494,493 @@
       "sound_classic"
     ]
   },
+  "user-b1e5n1d5a": {
+    "id": "user-b1e5n1d5a",
+    "xp": 100,
+    "coins": 700,
+    "level": 1,
+    "stats": {
+      "winRate": 0,
+      "gamesWon": 0,
+      "gamesLost": 2,
+      "gamesPlayed": 2,
+      "totalCardsStolen": 0,
+      "totalMoneyBanked": 0,
+      "totalRentCollected": 0,
+      "totalSetsCompleted": 0
+    },
+    "friends": [
+      {
+        "id": "bot-memo",
+        "status": "online",
+        "avatarId": "avatar_skater",
+        "username": "Bot Memo"
+      },
+      {
+        "id": "bot-can",
+        "status": "offline",
+        "avatarId": "avatar_classic",
+        "username": "Bot Can"
+      }
+    ],
+    "avatarId": "avatar_classic",
+    "settings": {
+      "avatarId": "avatar_classic",
+      "cardBack": "back_classic",
+      "clothesId": "clothes_none",
+      "synthType": "sine",
+      "boardTheme": "theme_slate",
+      "soundPitch": 1,
+      "soundVolume": 70,
+      "profileFrame": "frame_none",
+      "celebrationSound": "sound_classic"
+    },
+    "username": "a",
+    "avatarUrl": "",
+    "dailyQuests": [
+      {
+        "id": "q-1",
+        "claimed": false,
+        "rewardXp": 30,
+        "completed": false,
+        "description": "Pratik Modunda botu yen.",
+        "rewardCoins": 50,
+        "targetValue": 1,
+        "currentValue": 0
+      },
+      {
+        "id": "q-2",
+        "claimed": false,
+        "rewardXp": 20,
+        "completed": false,
+        "description": "Bankaya 5M para yerleştir.",
+        "rewardCoins": 40,
+        "targetValue": 5,
+        "currentValue": 0
+      },
+      {
+        "id": "q-3",
+        "claimed": false,
+        "rewardXp": 40,
+        "completed": false,
+        "description": "Toplam 3 kira kartı oyna.",
+        "rewardCoins": 60,
+        "targetValue": 3,
+        "currentValue": 0
+      }
+    ],
+    "achievements": [
+      {
+        "id": "ach-1",
+        "title": "İlk Adım",
+        "completed": true,
+        "description": "Bir maç oyna.",
+        "rewardCoins": 100,
+        "targetValue": 1,
+        "currentValue": 2
+      },
+      {
+        "id": "ach-2",
+        "title": "Milyoner",
+        "completed": false,
+        "description": "Bankaya toplam 20M para ekle.",
+        "rewardCoins": 150,
+        "targetValue": 20,
+        "currentValue": 0
+      },
+      {
+        "id": "ach-3",
+        "title": "Sinsi Hırsız",
+        "completed": false,
+        "description": "Rakiplerinden 5 kez arsa çal.",
+        "rewardCoins": 200,
+        "targetValue": 5,
+        "currentValue": 0
+      },
+      {
+        "id": "ach-streak",
+        "title": "Galibiyet Serisi",
+        "completed": false,
+        "description": "Arka arkaya 10 maç kazan.",
+        "rewardCoins": 500,
+        "targetValue": 10,
+        "currentValue": 0
+      },
+      {
+        "id": "ach-collector",
+        "title": "Koleksiyoncu",
+        "completed": false,
+        "description": "Mağazadan 5 farklı kozmetik eşya aç.",
+        "rewardCoins": 300,
+        "targetValue": 5,
+        "currentValue": 0
+      },
+      {
+        "id": "ach-fast",
+        "title": "Hızlı Oyuncu",
+        "completed": false,
+        "description": "Bir turu 15 saniyeden kısa sürede bitir.",
+        "rewardCoins": 150,
+        "targetValue": 1,
+        "currentValue": 0
+      }
+    ],
+    "gamesHistory": [
+      {
+        "id": "match-1783986685228",
+        "date": "14.07.2026 02:51",
+        "result": "lost",
+        "opponent": "Bot Memo",
+        "xpEarned": 50,
+        "coinsEarned": 50
+      },
+      {
+        "id": "match-1783986684913",
+        "date": "14.07.2026 02:51",
+        "result": "lost",
+        "opponent": "Bot Memo",
+        "xpEarned": 50,
+        "coinsEarned": 50
+      }
+    ],
+    "unlockedItems": [
+      "avatar_classic",
+      "back_classic",
+      "theme_slate",
+      "frame_none",
+      "sound_classic"
+    ]
+  },
+  "user-ie9yt06xe": {
+    "id": "user-ie9yt06xe",
+    "xp": 130,
+    "coins": 8000,
+    "level": 1,
+    "stats": {
+      "winRate": 0,
+      "gamesWon": 1,
+      "gamesLost": 0,
+      "gamesPlayed": 1,
+      "totalCardsStolen": 0,
+      "totalMoneyBanked": 0,
+      "totalRentCollected": 0,
+      "totalSetsCompleted": 3
+    },
+    "friends": [
+      {
+        "id": "bot-memo",
+        "status": "online",
+        "avatarId": "avatar_skater",
+        "username": "Bot Memo"
+      },
+      {
+        "id": "bot-can",
+        "status": "offline",
+        "avatarId": "avatar_classic",
+        "username": "Bot Can"
+      }
+    ],
+    "avatarId": "avatar_classic",
+    "settings": {
+      "avatarId": "avatar_classic",
+      "cardBack": "back_classic",
+      "clothesId": "clothes_none",
+      "synthType": "sine",
+      "boardTheme": "theme_slate",
+      "soundPitch": 1,
+      "soundVolume": 70,
+      "profileFrame": "frame_none",
+      "celebrationSound": "sound_classic"
+    },
+    "username": "aa",
+    "avatarUrl": "",
+    "dailyQuests": [
+      {
+        "id": "q-1",
+        "claimed": true,
+        "rewardXp": 30,
+        "completed": true,
+        "description": "Pratik Modunda botu yen.",
+        "rewardCoins": 50,
+        "targetValue": 1,
+        "currentValue": 1
+      },
+      {
+        "id": "q-2",
+        "claimed": false,
+        "rewardXp": 20,
+        "completed": false,
+        "description": "Bankaya 5M para yerleştir.",
+        "rewardCoins": 40,
+        "targetValue": 5,
+        "currentValue": 0
+      },
+      {
+        "id": "q-3",
+        "claimed": false,
+        "rewardXp": 40,
+        "completed": false,
+        "description": "Toplam 3 kira kartı oyna.",
+        "rewardCoins": 60,
+        "targetValue": 3,
+        "currentValue": 0
+      }
+    ],
+    "achievements": [
+      {
+        "id": "ach-1",
+        "title": "İlk Adım",
+        "completed": true,
+        "description": "Bir maç oyna.",
+        "rewardCoins": 100,
+        "targetValue": 1,
+        "currentValue": 1
+      },
+      {
+        "id": "ach-2",
+        "title": "Milyoner",
+        "completed": false,
+        "description": "Bankaya toplam 20M para ekle.",
+        "rewardCoins": 150,
+        "targetValue": 20,
+        "currentValue": 0
+      },
+      {
+        "id": "ach-3",
+        "title": "Sinsi Hırsız",
+        "completed": false,
+        "description": "Rakiplerinden 5 kez arsa çal.",
+        "rewardCoins": 200,
+        "targetValue": 5,
+        "currentValue": 0
+      },
+      {
+        "id": "ach-streak",
+        "title": "Galibiyet Serisi",
+        "completed": false,
+        "description": "Arka arkaya 10 maç kazan.",
+        "rewardCoins": 500,
+        "targetValue": 10,
+        "currentValue": 1
+      },
+      {
+        "id": "ach-collector",
+        "title": "Koleksiyoncu",
+        "completed": false,
+        "description": "Mağazadan 5 farklı kozmetik eşya aç.",
+        "rewardCoins": 300,
+        "targetValue": 5,
+        "currentValue": 0
+      },
+      {
+        "id": "ach-fast",
+        "title": "Hızlı Oyuncu",
+        "completed": false,
+        "description": "Bir turu 15 saniyeden kısa sürede bitir.",
+        "rewardCoins": 150,
+        "targetValue": 1,
+        "currentValue": 0
+      }
+    ],
+    "gamesHistory": [
+      {
+        "id": "match-offline-1783987901352",
+        "date": "14.07.2026 03:11",
+        "result": "won",
+        "opponent": "Bot Memo, Bot Can",
+        "xpEarned": 100,
+        "coinsEarned": 150
+      }
+    ],
+    "unlockedItems": [
+      "avatar_classic",
+      "back_classic",
+      "theme_slate",
+      "frame_none",
+      "sound_classic"
+    ]
+  },
+  "user-dusipbf27": {
+    "id": "user-dusipbf27",
+    "xp": 530,
+    "coins": 1300,
+    "level": 2,
+    "stats": {
+      "winRate": 0,
+      "gamesWon": 3,
+      "gamesLost": 2,
+      "gamesPlayed": 5,
+      "totalCardsStolen": 0,
+      "totalMoneyBanked": 0,
+      "totalRentCollected": 0,
+      "totalSetsCompleted": 9
+    },
+    "friends": [
+      {
+        "id": "bot-memo",
+        "status": "online",
+        "avatarId": "avatar_skater",
+        "username": "Bot Memo"
+      },
+      {
+        "id": "bot-can",
+        "status": "offline",
+        "avatarId": "avatar_classic",
+        "username": "Bot Can"
+      }
+    ],
+    "avatarId": "avatar_classic",
+    "settings": {
+      "avatarId": "avatar_classic",
+      "cardBack": "back_classic",
+      "clothesId": "clothes_none",
+      "synthType": "sine",
+      "boardTheme": "theme_slate",
+      "soundPitch": 1,
+      "soundVolume": 70,
+      "profileFrame": "frame_none",
+      "celebrationSound": "sound_classic"
+    },
+    "username": "Admin",
+    "avatarUrl": "",
+    "dailyQuests": [
+      {
+        "id": "q-1",
+        "claimed": true,
+        "rewardXp": 30,
+        "completed": true,
+        "description": "Pratik Modunda botu yen.",
+        "rewardCoins": 50,
+        "targetValue": 1,
+        "currentValue": 1
+      },
+      {
+        "id": "q-2",
+        "claimed": false,
+        "rewardXp": 20,
+        "completed": false,
+        "description": "Bankaya 5M para yerleştir.",
+        "rewardCoins": 40,
+        "targetValue": 5,
+        "currentValue": 0
+      },
+      {
+        "id": "q-3",
+        "claimed": false,
+        "rewardXp": 40,
+        "completed": false,
+        "description": "Toplam 3 kira kartı oyna.",
+        "rewardCoins": 60,
+        "targetValue": 3,
+        "currentValue": 0
+      }
+    ],
+    "achievements": [
+      {
+        "id": "ach-1",
+        "title": "İlk Adım",
+        "completed": true,
+        "description": "Bir maç oyna.",
+        "rewardCoins": 100,
+        "targetValue": 1,
+        "currentValue": 5
+      },
+      {
+        "id": "ach-2",
+        "title": "Milyoner",
+        "completed": false,
+        "description": "Bankaya toplam 20M para ekle.",
+        "rewardCoins": 150,
+        "targetValue": 20,
+        "currentValue": 0
+      },
+      {
+        "id": "ach-3",
+        "title": "Sinsi Hırsız",
+        "completed": false,
+        "description": "Rakiplerinden 5 kez arsa çal.",
+        "rewardCoins": 200,
+        "targetValue": 5,
+        "currentValue": 0
+      },
+      {
+        "id": "ach-streak",
+        "title": "Galibiyet Serisi",
+        "completed": false,
+        "description": "Arka arkaya 10 maç kazan.",
+        "rewardCoins": 500,
+        "targetValue": 10,
+        "currentValue": 0
+      },
+      {
+        "id": "ach-collector",
+        "title": "Koleksiyoncu",
+        "completed": false,
+        "description": "Mağazadan 5 farklı kozmetik eşya aç.",
+        "rewardCoins": 300,
+        "targetValue": 5,
+        "currentValue": 0
+      },
+      {
+        "id": "ach-fast",
+        "title": "Hızlı Oyuncu",
+        "completed": false,
+        "description": "Bir turu 15 saniyeden kısa sürede bitir.",
+        "rewardCoins": 150,
+        "targetValue": 1,
+        "currentValue": 0
+      }
+    ],
+    "gamesHistory": [
+      {
+        "id": "match-1784090067614",
+        "date": "15.07.2026 07:34",
+        "result": "lost",
+        "opponent": "Bot Memo, Bot Can, Bot Defne",
+        "xpEarned": 50,
+        "coinsEarned": 50
+      },
+      {
+        "id": "match-1784089669268",
+        "date": "15.07.2026 07:27",
+        "result": "won",
+        "opponent": "Bot Memo, Bot Can, Bot Defne",
+        "xpEarned": 150,
+        "coinsEarned": 200
+      },
+      {
+        "id": "match-1784089389928",
+        "date": "15.07.2026 07:23",
+        "result": "lost",
+        "opponent": "1",
+        "xpEarned": 50,
+        "coinsEarned": 50
+      },
+      {
+        "id": "match-1784089152079",
+        "date": "15.07.2026 07:19",
+        "result": "won",
+        "opponent": "Bot Memo",
+        "xpEarned": 150,
+        "coinsEarned": 200
+      },
+      {
+        "id": "match-offline-1784088988455",
+        "date": "15.07.2026 07:16",
+        "result": "won",
+        "opponent": "Bot Memo, Bot Can",
+        "xpEarned": 100,
+        "coinsEarned": 150
+      }
+    ],
+    "unlockedItems": [
+      "avatar_classic",
+      "back_classic",
+      "theme_slate",
+      "frame_none",
+      "sound_classic"
+    ]
+  },
   "user-hzlab5ppk": {
     "id": "user-hzlab5ppk",
     "xp": 0,
@@ -694,287 +1024,6 @@
     },
     "username": "Selam",
     "avatarUrl": "https://images.unsplash.com/photo-1570295999919-56ceb5ecca61?auto=format&fit=crop&w=150&q=80",
-    "dailyQuests": [
-      {
-        "id": "q-1",
-        "claimed": false,
-        "rewardXp": 30,
-        "completed": false,
-        "description": "Pratik Modunda botu yen.",
-        "rewardCoins": 50,
-        "targetValue": 1,
-        "currentValue": 0
-      },
-      {
-        "id": "q-2",
-        "claimed": false,
-        "rewardXp": 20,
-        "completed": false,
-        "description": "Bankaya 5M para yerleştir.",
-        "rewardCoins": 40,
-        "targetValue": 5,
-        "currentValue": 0
-      },
-      {
-        "id": "q-3",
-        "claimed": false,
-        "rewardXp": 40,
-        "completed": false,
-        "description": "Toplam 3 kira kartı oyna.",
-        "rewardCoins": 60,
-        "targetValue": 3,
-        "currentValue": 0
-      }
-    ],
-    "achievements": [
-      {
-        "id": "ach-1",
-        "title": "İlk Adım",
-        "completed": false,
-        "description": "Bir maç oyna.",
-        "rewardCoins": 100,
-        "targetValue": 1,
-        "currentValue": 0
-      },
-      {
-        "id": "ach-2",
-        "title": "Milyoner",
-        "completed": false,
-        "description": "Bankaya toplam 20M para ekle.",
-        "rewardCoins": 150,
-        "targetValue": 20,
-        "currentValue": 0
-      },
-      {
-        "id": "ach-3",
-        "title": "Sinsi Hırsız",
-        "completed": false,
-        "description": "Rakiplerinden 5 kez arsa çal.",
-        "rewardCoins": 200,
-        "targetValue": 5,
-        "currentValue": 0
-      },
-      {
-        "id": "ach-streak",
-        "title": "Galibiyet Serisi",
-        "completed": false,
-        "description": "Arka arkaya 10 maç kazan.",
-        "rewardCoins": 500,
-        "targetValue": 10,
-        "currentValue": 0
-      },
-      {
-        "id": "ach-collector",
-        "title": "Koleksiyoncu",
-        "completed": false,
-        "description": "Mağazadan 5 farklı kozmetik eşya aç.",
-        "rewardCoins": 300,
-        "targetValue": 5,
-        "currentValue": 0
-      },
-      {
-        "id": "ach-fast",
-        "title": "Hızlı Oyuncu",
-        "completed": false,
-        "description": "Bir turu 15 saniyeden kısa sürede bitir.",
-        "rewardCoins": 150,
-        "targetValue": 1,
-        "currentValue": 0
-      }
-    ],
-    "gamesHistory": [],
-    "unlockedItems": [
-      "avatar_classic",
-      "back_classic",
-      "theme_slate",
-      "frame_none",
-      "sound_classic"
-    ]
-  },
-  "user-yzp5dneuk": {
-    "id": "user-yzp5dneuk",
-    "xp": 0,
-    "coins": 500,
-    "level": 1,
-    "stats": {
-      "winRate": 0,
-      "gamesWon": 0,
-      "gamesLost": 0,
-      "gamesPlayed": 0,
-      "totalCardsStolen": 0,
-      "totalMoneyBanked": 0,
-      "totalRentCollected": 0,
-      "totalSetsCompleted": 0
-    },
-    "friends": [
-      {
-        "id": "bot-memo",
-        "status": "online",
-        "avatarId": "avatar_skater",
-        "username": "Bot Memo"
-      },
-      {
-        "id": "bot-can",
-        "status": "offline",
-        "avatarId": "avatar_classic",
-        "username": "Bot Can"
-      }
-    ],
-    "avatarId": "avatar_classic",
-    "password": "q",
-    "settings": {
-      "avatarId": "avatar_classic",
-      "cardBack": "back_classic",
-      "clothesId": "clothes_none",
-      "synthType": "sine",
-      "boardTheme": "theme_slate",
-      "soundPitch": 1,
-      "soundVolume": 70,
-      "profileFrame": "frame_none",
-      "celebrationSound": "sound_classic"
-    },
-    "username": "qqqq",
-    "avatarUrl": "",
-    "dailyQuests": [
-      {
-        "id": "q-1",
-        "claimed": false,
-        "rewardXp": 30,
-        "completed": false,
-        "description": "Pratik Modunda botu yen.",
-        "rewardCoins": 50,
-        "targetValue": 1,
-        "currentValue": 0
-      },
-      {
-        "id": "q-2",
-        "claimed": false,
-        "rewardXp": 20,
-        "completed": false,
-        "description": "Bankaya 5M para yerleştir.",
-        "rewardCoins": 40,
-        "targetValue": 5,
-        "currentValue": 0
-      },
-      {
-        "id": "q-3",
-        "claimed": false,
-        "rewardXp": 40,
-        "completed": false,
-        "description": "Toplam 3 kira kartı oyna.",
-        "rewardCoins": 60,
-        "targetValue": 3,
-        "currentValue": 0
-      }
-    ],
-    "achievements": [
-      {
-        "id": "ach-1",
-        "title": "İlk Adım",
-        "completed": false,
-        "description": "Bir maç oyna.",
-        "rewardCoins": 100,
-        "targetValue": 1,
-        "currentValue": 0
-      },
-      {
-        "id": "ach-2",
-        "title": "Milyoner",
-        "completed": false,
-        "description": "Bankaya toplam 20M para ekle.",
-        "rewardCoins": 150,
-        "targetValue": 20,
-        "currentValue": 0
-      },
-      {
-        "id": "ach-3",
-        "title": "Sinsi Hırsız",
-        "completed": false,
-        "description": "Rakiplerinden 5 kez arsa çal.",
-        "rewardCoins": 200,
-        "targetValue": 5,
-        "currentValue": 0
-      },
-      {
-        "id": "ach-streak",
-        "title": "Galibiyet Serisi",
-        "completed": false,
-        "description": "Arka arkaya 10 maç kazan.",
-        "rewardCoins": 500,
-        "targetValue": 10,
-        "currentValue": 0
-      },
-      {
-        "id": "ach-collector",
-        "title": "Koleksiyoncu",
-        "completed": false,
-        "description": "Mağazadan 5 farklı kozmetik eşya aç.",
-        "rewardCoins": 300,
-        "targetValue": 5,
-        "currentValue": 0
-      },
-      {
-        "id": "ach-fast",
-        "title": "Hızlı Oyuncu",
-        "completed": false,
-        "description": "Bir turu 15 saniyeden kısa sürede bitir.",
-        "rewardCoins": 150,
-        "targetValue": 1,
-        "currentValue": 0
-      }
-    ],
-    "gamesHistory": [],
-    "unlockedItems": [
-      "avatar_classic",
-      "back_classic",
-      "theme_slate",
-      "frame_none",
-      "sound_classic"
-    ]
-  },
-  "user-4seuar7bt": {
-    "id": "user-4seuar7bt",
-    "xp": 0,
-    "coins": 500,
-    "level": 1,
-    "stats": {
-      "winRate": 0,
-      "gamesWon": 0,
-      "gamesLost": 0,
-      "gamesPlayed": 0,
-      "totalCardsStolen": 0,
-      "totalMoneyBanked": 0,
-      "totalRentCollected": 0,
-      "totalSetsCompleted": 0
-    },
-    "friends": [
-      {
-        "id": "bot-memo",
-        "status": "online",
-        "avatarId": "avatar_skater",
-        "username": "Bot Memo"
-      },
-      {
-        "id": "bot-can",
-        "status": "offline",
-        "avatarId": "avatar_classic",
-        "username": "Bot Can"
-      }
-    ],
-    "avatarId": "avatar_classic",
-    "settings": {
-      "avatarId": "avatar_classic",
-      "cardBack": "back_classic",
-      "clothesId": "clothes_none",
-      "synthType": "sine",
-      "boardTheme": "theme_slate",
-      "soundPitch": 1,
-      "soundVolume": 70,
-      "profileFrame": "frame_none",
-      "celebrationSound": "sound_classic"
-    },
-    "username": "aasa",
-    "avatarUrl": "",
     "dailyQuests": [
       {
         "id": "q-1",
@@ -1353,20 +1402,20 @@
       "sound_classic"
     ]
   },
-  "user-dusipbf27": {
-    "id": "user-dusipbf27",
-    "xp": 530,
-    "coins": 1300,
-    "level": 2,
+  "user-4seuar7bt": {
+    "id": "user-4seuar7bt",
+    "xp": 0,
+    "coins": 500,
+    "level": 1,
     "stats": {
       "winRate": 0,
-      "gamesWon": 3,
-      "gamesLost": 2,
-      "gamesPlayed": 5,
+      "gamesWon": 0,
+      "gamesLost": 0,
+      "gamesPlayed": 0,
       "totalCardsStolen": 0,
       "totalMoneyBanked": 0,
       "totalRentCollected": 0,
-      "totalSetsCompleted": 9
+      "totalSetsCompleted": 0
     },
     "friends": [
       {
@@ -1394,18 +1443,18 @@
       "profileFrame": "frame_none",
       "celebrationSound": "sound_classic"
     },
-    "username": "Admin",
+    "username": "aasa",
     "avatarUrl": "",
     "dailyQuests": [
       {
         "id": "q-1",
-        "claimed": true,
+        "claimed": false,
         "rewardXp": 30,
-        "completed": true,
+        "completed": false,
         "description": "Pratik Modunda botu yen.",
         "rewardCoins": 50,
         "targetValue": 1,
-        "currentValue": 1
+        "currentValue": 0
       },
       {
         "id": "q-2",
@@ -1432,11 +1481,11 @@
       {
         "id": "ach-1",
         "title": "İlk Adım",
-        "completed": true,
+        "completed": false,
         "description": "Bir maç oyna.",
         "rewardCoins": 100,
         "targetValue": 1,
-        "currentValue": 5
+        "currentValue": 0
       },
       {
         "id": "ach-2",
@@ -1484,48 +1533,7 @@
         "currentValue": 0
       }
     ],
-    "gamesHistory": [
-      {
-        "id": "match-1784090067614",
-        "date": "15.07.2026 07:34",
-        "result": "lost",
-        "opponent": "Bot Memo, Bot Can, Bot Defne",
-        "xpEarned": 50,
-        "coinsEarned": 50
-      },
-      {
-        "id": "match-1784089669268",
-        "date": "15.07.2026 07:27",
-        "result": "won",
-        "opponent": "Bot Memo, Bot Can, Bot Defne",
-        "xpEarned": 150,
-        "coinsEarned": 200
-      },
-      {
-        "id": "match-1784089389928",
-        "date": "15.07.2026 07:23",
-        "result": "lost",
-        "opponent": "1",
-        "xpEarned": 50,
-        "coinsEarned": 50
-      },
-      {
-        "id": "match-1784089152079",
-        "date": "15.07.2026 07:19",
-        "result": "won",
-        "opponent": "Bot Memo",
-        "xpEarned": 150,
-        "coinsEarned": 200
-      },
-      {
-        "id": "match-offline-1784088988455",
-        "date": "15.07.2026 07:16",
-        "result": "won",
-        "opponent": "Bot Memo, Bot Can",
-        "xpEarned": 100,
-        "coinsEarned": 150
-      }
-    ],
+    "gamesHistory": [],
     "unlockedItems": [
       "avatar_classic",
       "back_classic",
@@ -1666,155 +1674,6 @@
       }
     ],
     "gamesHistory": [],
-    "unlockedItems": [
-      "avatar_classic",
-      "back_classic",
-      "theme_slate",
-      "frame_none",
-      "sound_classic"
-    ]
-  },
-  "user-ie9yt06xe": {
-    "id": "user-ie9yt06xe",
-    "xp": 130,
-    "coins": 8000,
-    "level": 1,
-    "stats": {
-      "winRate": 0,
-      "gamesWon": 1,
-      "gamesLost": 0,
-      "gamesPlayed": 1,
-      "totalCardsStolen": 0,
-      "totalMoneyBanked": 0,
-      "totalRentCollected": 0,
-      "totalSetsCompleted": 3
-    },
-    "friends": [
-      {
-        "id": "bot-memo",
-        "status": "online",
-        "avatarId": "avatar_skater",
-        "username": "Bot Memo"
-      },
-      {
-        "id": "bot-can",
-        "status": "offline",
-        "avatarId": "avatar_classic",
-        "username": "Bot Can"
-      }
-    ],
-    "avatarId": "avatar_classic",
-    "settings": {
-      "avatarId": "avatar_classic",
-      "cardBack": "back_classic",
-      "clothesId": "clothes_none",
-      "synthType": "sine",
-      "boardTheme": "theme_slate",
-      "soundPitch": 1,
-      "soundVolume": 70,
-      "profileFrame": "frame_none",
-      "celebrationSound": "sound_classic"
-    },
-    "username": "aa",
-    "avatarUrl": "",
-    "dailyQuests": [
-      {
-        "id": "q-1",
-        "claimed": true,
-        "rewardXp": 30,
-        "completed": true,
-        "description": "Pratik Modunda botu yen.",
-        "rewardCoins": 50,
-        "targetValue": 1,
-        "currentValue": 1
-      },
-      {
-        "id": "q-2",
-        "claimed": false,
-        "rewardXp": 20,
-        "completed": false,
-        "description": "Bankaya 5M para yerleştir.",
-        "rewardCoins": 40,
-        "targetValue": 5,
-        "currentValue": 0
-      },
-      {
-        "id": "q-3",
-        "claimed": false,
-        "rewardXp": 40,
-        "completed": false,
-        "description": "Toplam 3 kira kartı oyna.",
-        "rewardCoins": 60,
-        "targetValue": 3,
-        "currentValue": 0
-      }
-    ],
-    "achievements": [
-      {
-        "id": "ach-1",
-        "title": "İlk Adım",
-        "completed": true,
-        "description": "Bir maç oyna.",
-        "rewardCoins": 100,
-        "targetValue": 1,
-        "currentValue": 1
-      },
-      {
-        "id": "ach-2",
-        "title": "Milyoner",
-        "completed": false,
-        "description": "Bankaya toplam 20M para ekle.",
-        "rewardCoins": 150,
-        "targetValue": 20,
-        "currentValue": 0
-      },
-      {
-        "id": "ach-3",
-        "title": "Sinsi Hırsız",
-        "completed": false,
-        "description": "Rakiplerinden 5 kez arsa çal.",
-        "rewardCoins": 200,
-        "targetValue": 5,
-        "currentValue": 0
-      },
-      {
-        "id": "ach-streak",
-        "title": "Galibiyet Serisi",
-        "completed": false,
-        "description": "Arka arkaya 10 maç kazan.",
-        "rewardCoins": 500,
-        "targetValue": 10,
-        "currentValue": 1
-      },
-      {
-        "id": "ach-collector",
-        "title": "Koleksiyoncu",
-        "completed": false,
-        "description": "Mağazadan 5 farklı kozmetik eşya aç.",
-        "rewardCoins": 300,
-        "targetValue": 5,
-        "currentValue": 0
-      },
-      {
-        "id": "ach-fast",
-        "title": "Hızlı Oyuncu",
-        "completed": false,
-        "description": "Bir turu 15 saniyeden kısa sürede bitir.",
-        "rewardCoins": 150,
-        "targetValue": 1,
-        "currentValue": 0
-      }
-    ],
-    "gamesHistory": [
-      {
-        "id": "match-offline-1783987901352",
-        "date": "14.07.2026 03:11",
-        "result": "won",
-        "opponent": "Bot Memo, Bot Can",
-        "xpEarned": 100,
-        "coinsEarned": 150
-      }
-    ],
     "unlockedItems": [
       "avatar_classic",
       "back_classic",
@@ -1982,18 +1841,18 @@
   },
   "user-c6cpb9tvp": {
     "id": "user-c6cpb9tvp",
-    "xp": 2980,
-    "coins": 17420,
-    "level": 6,
+    "xp": 3230,
+    "coins": 17770,
+    "level": 7,
     "stats": {
       "winRate": 0,
-      "gamesWon": 17,
-      "gamesLost": 10,
-      "gamesPlayed": 27,
+      "gamesWon": 19,
+      "gamesLost": 11,
+      "gamesPlayed": 30,
       "totalCardsStolen": 0,
       "totalMoneyBanked": 0,
       "totalRentCollected": 0,
-      "totalSetsCompleted": 51
+      "totalSetsCompleted": 57
     },
     "friends": [
       {
@@ -2066,7 +1925,7 @@
         "description": "Bir maç oyna.",
         "rewardCoins": 100,
         "targetValue": 1,
-        "currentValue": 26
+        "currentValue": 29
       },
       {
         "id": "ach-2",
@@ -2093,7 +1952,7 @@
         "description": "Arka arkaya 10 maç kazan.",
         "rewardCoins": 500,
         "targetValue": 10,
-        "currentValue": 2
+        "currentValue": 5
       },
       {
         "id": "ach-collector",
@@ -2116,12 +1975,36 @@
     ],
     "gamesHistory": [
       {
+        "id": "match-1784260710005",
+        "date": "17.07.2026 06:58",
+        "opponent": "Bot Memo, Bot Can, Bot Defne",
+        "result": "lost",
+        "coinsEarned": 50,
+        "xpEarned": 50
+      },
+      {
+        "id": "match-offline-1784256089268",
+        "date": "17.07.2026 05:41",
+        "result": "won",
+        "opponent": "Bot Memo, Bot Can",
+        "xpEarned": 100,
+        "coinsEarned": 150
+      },
+      {
+        "id": "match-offline-1784255844434",
+        "date": "17.07.2026 05:37",
+        "result": "won",
+        "opponent": "Bot Memo, Bot Can",
+        "xpEarned": 100,
+        "coinsEarned": 150
+      },
+      {
         "id": "match-1784166458731",
         "date": "16.07.2026 04:47",
-        "opponent": "Bot Memo",
         "result": "won",
-        "coinsEarned": 200,
-        "xpEarned": 150
+        "opponent": "Bot Memo",
+        "xpEarned": 150,
+        "coinsEarned": 200
       },
       {
         "id": "match-1784097802135",
@@ -2353,6 +2236,147 @@
       "skin_holographic",
       "theme_atlantis",
       "theme_volcano"
+    ]
+  },
+  "user-yzp5dneuk": {
+    "id": "user-yzp5dneuk",
+    "xp": 0,
+    "coins": 500,
+    "level": 1,
+    "stats": {
+      "winRate": 0,
+      "gamesWon": 0,
+      "gamesLost": 0,
+      "gamesPlayed": 0,
+      "totalCardsStolen": 0,
+      "totalMoneyBanked": 0,
+      "totalRentCollected": 0,
+      "totalSetsCompleted": 0
+    },
+    "friends": [
+      {
+        "id": "bot-memo",
+        "status": "online",
+        "avatarId": "avatar_skater",
+        "username": "Bot Memo"
+      },
+      {
+        "id": "bot-can",
+        "status": "offline",
+        "avatarId": "avatar_classic",
+        "username": "Bot Can"
+      }
+    ],
+    "avatarId": "avatar_classic",
+    "password": "q",
+    "settings": {
+      "avatarId": "avatar_classic",
+      "cardBack": "back_classic",
+      "clothesId": "clothes_none",
+      "synthType": "sine",
+      "boardTheme": "theme_slate",
+      "soundPitch": 1,
+      "soundVolume": 70,
+      "profileFrame": "frame_none",
+      "celebrationSound": "sound_classic"
+    },
+    "username": "qqqq",
+    "avatarUrl": "",
+    "dailyQuests": [
+      {
+        "id": "q-1",
+        "claimed": false,
+        "rewardXp": 30,
+        "completed": false,
+        "description": "Pratik Modunda botu yen.",
+        "rewardCoins": 50,
+        "targetValue": 1,
+        "currentValue": 0
+      },
+      {
+        "id": "q-2",
+        "claimed": false,
+        "rewardXp": 20,
+        "completed": false,
+        "description": "Bankaya 5M para yerleştir.",
+        "rewardCoins": 40,
+        "targetValue": 5,
+        "currentValue": 0
+      },
+      {
+        "id": "q-3",
+        "claimed": false,
+        "rewardXp": 40,
+        "completed": false,
+        "description": "Toplam 3 kira kartı oyna.",
+        "rewardCoins": 60,
+        "targetValue": 3,
+        "currentValue": 0
+      }
+    ],
+    "achievements": [
+      {
+        "id": "ach-1",
+        "title": "İlk Adım",
+        "completed": false,
+        "description": "Bir maç oyna.",
+        "rewardCoins": 100,
+        "targetValue": 1,
+        "currentValue": 0
+      },
+      {
+        "id": "ach-2",
+        "title": "Milyoner",
+        "completed": false,
+        "description": "Bankaya toplam 20M para ekle.",
+        "rewardCoins": 150,
+        "targetValue": 20,
+        "currentValue": 0
+      },
+      {
+        "id": "ach-3",
+        "title": "Sinsi Hırsız",
+        "completed": false,
+        "description": "Rakiplerinden 5 kez arsa çal.",
+        "rewardCoins": 200,
+        "targetValue": 5,
+        "currentValue": 0
+      },
+      {
+        "id": "ach-streak",
+        "title": "Galibiyet Serisi",
+        "completed": false,
+        "description": "Arka arkaya 10 maç kazan.",
+        "rewardCoins": 500,
+        "targetValue": 10,
+        "currentValue": 0
+      },
+      {
+        "id": "ach-collector",
+        "title": "Koleksiyoncu",
+        "completed": false,
+        "description": "Mağazadan 5 farklı kozmetik eşya aç.",
+        "rewardCoins": 300,
+        "targetValue": 5,
+        "currentValue": 0
+      },
+      {
+        "id": "ach-fast",
+        "title": "Hızlı Oyuncu",
+        "completed": false,
+        "description": "Bir turu 15 saniyeden kısa sürede bitir.",
+        "rewardCoins": 150,
+        "targetValue": 1,
+        "currentValue": 0
+      }
+    ],
+    "gamesHistory": [],
+    "unlockedItems": [
+      "avatar_classic",
+      "back_classic",
+      "theme_slate",
+      "frame_none",
+      "sound_classic"
     ]
   }
 }
