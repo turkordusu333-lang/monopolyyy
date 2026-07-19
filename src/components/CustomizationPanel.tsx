@@ -28,6 +28,7 @@ const THEME_OPTIONS = [
   { id: 'theme_desert', name: 'Kayıp Tapınak', color: '#7C2D12', description: 'Mısır kumları altındaki kadim çöl masası.' },
   { id: 'theme_atlantis', name: '🌊 Sualtı Krallığı (Atlantis)', color: '#0B5394', description: 'Derin okyanus mavisi ve deniz tozu partikülleri ile sualtı masa deneyimi.' },
   { id: 'theme_volcano', name: '🌋 Volkanik Öfke (Lav Masası)', color: '#7F1D1D', description: 'Lav çatlakları ve kor parçacıkları efektiyle volkanik arena.' },
+  { id: 'theme_snowstorm', name: '❄️ Dinamik Kar Fırtınası', color: '#1F2937', description: 'Kar fırtınası, süzülen kar taneleri ve kutup rüzgarı partikül efektli masa.' },
 ];
 
 const CARD_BACKS = [
@@ -46,6 +47,7 @@ const CARD_BACKS = [
   { id: 'back_laser', name: 'Retro Grid Lazer', color: '#1E1B4B', pattern: '⚡' },
   { id: 'back_galaxy', name: 'Nebula Bulutu', color: '#1E1B4B', pattern: '🌌' },
   { id: 'back_darkness', name: 'Gölgeler Diyarı', color: '#090514', pattern: '👁️' },
+  { id: 'back_snowstorm', name: '❄️ Kar Fırtınası', color: '#E2E8F0', pattern: '❄️' },
 ];
 
 const PROFILE_FRAMES = [
@@ -65,6 +67,7 @@ const PROFILE_FRAMES = [
   { id: 'frame_darkness', name: 'Karanlık Duman', description: 'Koyu mor gölge dumanları tüten çerçeve.' },
   { id: 'frame_galaxy', name: 'Galaksi Sarmalı', description: 'Dönen galaksi sarmallı çerçeve.' },
   { id: 'frame_dragon', name: 'Ejderha Pulları', description: 'Kızıl ejderha pullu çerçeve.' },
+  { id: 'frame_snowstorm', name: '❄️ Kar Fırtınası Çerçevesi', description: 'Buz parçacıkları saçan hareketli kar fırtınası aurası.' },
 ];
 
 const CELEBRATION_SOUNDS = [
@@ -82,6 +85,7 @@ const CELEBRATION_SOUNDS = [
   { id: 'sound_synthwave', name: 'Synthwave Bas', description: '80ler tarzı elektronik bas ritimleri.' },
   { id: 'sound_thunder', name: 'Kuvvetli Yıldırım', description: 'Güçlü gök gürültüsü ve şimşek.' },
   { id: 'sound_magical', name: 'Sihirli Değnek', description: 'Parıltılı büyü melodisi.' },
+  { id: 'sound_snowstorm', name: '❄️ Çığ ve Fırtına Sesi', description: 'Zafer anınızda çalan ürpertici çığ ve dondurucu fırtına uğultusu.' },
 ];
 
 const AVATAR_OPTIONS = [
@@ -102,6 +106,7 @@ const AVATAR_OPTIONS = [
   { id: 'avatar_unicorn', name: 'Efsanevi Tekboynuz', description: 'Gökkuşağı büyülü unicorn.' },
   { id: 'avatar_pharaoh', name: 'Mısır Firavunu', description: 'Antik piramit hükümdarı.' },
   { id: 'avatar_zombie', name: 'Zombi Saldırganı', description: 'Karanlıktan fırlayan yaşayan ölü.' },
+  { id: 'avatar_snowstorm', name: '❄️ Kar Fırtınası Savaşçısı', description: 'Kutup ayazında dövüşen buz zırhlı efsanevi savaşçı.' },
 ];
 
 const getThemeName = (id: string, profile: UserProfile): string => {
@@ -331,13 +336,15 @@ const getAvatarDesc = (id: string, profile: UserProfile): string => {
 const CARD_SKINS = [
   { id: 'skin_none', name: 'Varsayılan Temiz Kart', description: 'Standart kart tasarımı.' },
   { id: 'skin_holographic', name: '💠 Holografik Mavi Sektör', description: 'Akan siber grid ızgarası ve parıltılar.' },
-  { id: 'skin_rune', name: '🔮 Mistik Rün Parşömeni', description: 'Kadim parlayan rünler ve mistik kenarlık.' }
+  { id: 'skin_rune', name: '🔮 Mistik Rün Parşömeni', description: 'Kadim parlayan rünler ve mistik kenarlık.' },
+  { id: 'skin_snowstorm', name: '❄️ Donmuş Buz Kaplama', description: 'Buz kristalleriyle kaplı, set tamamlandığında buhar çıkaran buz kaplama.' }
 ];
 
 const ACTION_VFX = [
   { id: 'vfx_none', name: 'Efekt Yok', description: 'Sıradan kart oynama animasyonları.' },
   { id: 'vfx_meteor', name: '☄️ Meteor Saldırısı', description: 'Deal Breaker oynandığında tam ekran meteor yağmuru.' },
-  { id: 'vfx_mirror_shield', name: '🛡️ Ayna Kalkan', description: 'Just Say No oynandığında altıgen enerji kalkanı.' }
+  { id: 'vfx_mirror_shield', name: '🛡️ Ayna Kalkan', description: 'Just Say No oynandığında altıgen enerji kalkanı.' },
+  { id: 'vfx_snowstorm', name: '❄️ Çığ Felaketi', description: 'Kart oynandığında ekranı kaplayan kar fırtınası ve buzlanma efekti.' }
 ];
 
 const getCardSkinName = (id: string, profile: UserProfile): string => {
@@ -349,6 +356,7 @@ const getCardSkinName = (id: string, profile: UserProfile): string => {
     case 'skin_none': return 'Default Clean Card';
     case 'skin_holographic': return 'Holographic Blue Grid';
     case 'skin_rune': return 'Mystic Rune Scroll';
+    case 'skin_snowstorm': return 'Frozen Ice Skin';
     default: return id;
   }
 };
@@ -362,6 +370,7 @@ const getCardSkinDesc = (id: string, profile: UserProfile): string => {
     case 'skin_none': return 'Standard card design.';
     case 'skin_holographic': return 'Flowing cyber grid lines and glow.';
     case 'skin_rune': return 'Ancient glowing runes and mystical border.';
+    case 'skin_snowstorm': return 'Covered with ice crystals, emits cold steam on set completion.';
     default: return '';
   }
 };
@@ -375,6 +384,7 @@ const getActionVfxName = (id: string, profile: UserProfile): string => {
     case 'vfx_none': return 'No VFX';
     case 'vfx_meteor': return 'Meteor Strike';
     case 'vfx_mirror_shield': return 'Mirror Shield';
+    case 'vfx_snowstorm': return 'Avalanche Hazard';
     default: return id;
   }
 };
@@ -388,6 +398,7 @@ const getActionVfxDesc = (id: string, profile: UserProfile): string => {
     case 'vfx_none': return 'Standard card play animations.';
     case 'vfx_meteor': return 'Full-screen meteor strike when Deal Breaker is played.';
     case 'vfx_mirror_shield': return 'Hexagonal energy shield when Just Say No is played.';
+    case 'vfx_snowstorm': return 'Full-screen avalanche with freezing screen effect when action card is played.';
     default: return '';
   }
 };

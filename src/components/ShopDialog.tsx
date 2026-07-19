@@ -27,6 +27,7 @@ const AVATAR_EMOJIS: Record<string, string> = {
   avatar_unicorn: '🦄',
   avatar_pharaoh: '👑',
   avatar_zombie: '🧟',
+  avatar_snowstorm: '🥶',
 };
 
 const CARD_BACK_STYLES: Record<string, { color: string; symbol: string; bgClass?: string; pColor?: string }> = {
@@ -44,6 +45,7 @@ const CARD_BACK_STYLES: Record<string, { color: string; symbol: string; bgClass?
   back_laser: { color: '#1E1B4B', symbol: '⚡', pColor: '#A78BFA', bgClass: 'bg-gradient-to-br from-violet-950 to-fuchsia-900' },
   back_galaxy: { color: '#1E1B4B', symbol: '🌌', pColor: '#C084FC', bgClass: 'bg-gradient-to-br from-purple-950 to-indigo-900' },
   back_darkness: { color: '#090514', symbol: '👁️', pColor: '#EC4899', bgClass: 'bg-gradient-to-br from-slate-950 to-purple-950' },
+  back_snowstorm: { color: '#E2E8F0', symbol: '❄️', pColor: '#93C5FD', bgClass: 'bg-gradient-to-br from-blue-100 to-sky-300' },
 };
 
 const BOARD_THEME_COLORS: Record<string, string> = {
@@ -61,6 +63,7 @@ const BOARD_THEME_COLORS: Record<string, string> = {
   theme_matrix: '#022C22',
   theme_space: '#0F172A',
   theme_desert: '#7C2D12',
+  theme_snowstorm: '#0b1329',
 };
 
 const STORE_ITEMS: Omit<StoreItem, 'isUnlocked'>[] = [
@@ -162,7 +165,16 @@ const STORE_ITEMS: Omit<StoreItem, 'isUnlocked'>[] = [
 
   // ACTION VFX (Epic VFX)
   { id: 'vfx_meteor', name: '☄️ Meteor Saldırısı', category: 'action_vfx', price: 1500, description: 'Deal Breaker oynandığında ekrana meteor düşer, darbe anında ekran sallanır ve altın parçacık patlaması tetiklenir.' },
-  { id: 'vfx_mirror_shield', name: '🛡️ Ayna Kalkan', category: 'action_vfx', price: 1300, description: 'Hayır Teşekkürler kartı oynandığında altıgen enerji kalkanı belirir, şok dalgası ve gökkuşağı kırılması efekti.' }
+  { id: 'vfx_mirror_shield', name: '🛡️ Ayna Kalkan', category: 'action_vfx', price: 1300, description: 'Hayır Teşekkürler kartı oynandığında altıgen enerji kalkanı belirir, şok dalgası ve gökkuşağı kırılması efekti.' },
+
+  // KAR FIRTINASI KONSEPT ÜRÜNLERİ (Snowstorm Concept Set)
+  { id: 'avatar_snowstorm', name: '❄️ Kar Fırtınası Savaşçısı', category: 'avatar', price: 300, description: 'Kutup ayazında dövüşen buz zırhlı efsanevi savaşçı.' },
+  { id: 'back_snowstorm', name: '❄️ Kar Fırtınası', category: 'card_back', price: 200, description: 'Buz kristalleriyle kaplı, soğuk kutup rüzgarı desenli kart arkası.' },
+  { id: 'theme_snowstorm', name: '❄️ Dinamik Kar Fırtınası', category: 'board_theme', price: 650, description: 'Sürekli yağan kar taneleri ve buz tutmuş zemin efektiyle yaşayan kış masası.' },
+  { id: 'frame_snowstorm', name: '❄️ Kar Fırtınası Çerçevesi', category: 'profile_frame', price: 250, description: 'Buz parçacıkları saçan, hareketli kar fırtınası aurası.' },
+  { id: 'sound_snowstorm', name: '❄️ Çığ ve Fırtına Sesi', category: 'celebration_sound', price: 200, description: 'Zafer anınızda çalan ürpertici çığ ve dondurucu fırtına uğultusu.' },
+  { id: 'skin_snowstorm', name: '❄️ Donmuş Buz Kaplama', category: 'card_skin', price: 1100, description: 'Kartların üzerinde parıldayan buz kristalleri ve set tamamlandığında buhar çıkma efekti.' },
+  { id: 'vfx_snowstorm', name: '❄️ Çığ Felaketi', category: 'action_vfx', price: 1400, description: 'Aksiyon kartı oynandığında oyun alanını kaplayan kar fırtınası ve ekran donması efekti.' }
 ];
 
 export const ShopDialog: React.FC<Props> = ({ profile, onUpdateProfile }) => {
@@ -342,14 +354,14 @@ export const ShopDialog: React.FC<Props> = ({ profile, onUpdateProfile }) => {
                   {item.category === 'board_theme' && (
                     <div
                       className={`w-full h-full flex flex-col items-center justify-center transition-colors duration-300 ${
-                        item.id === 'theme_atlantis' ? 'theme-atlantis-bg' : item.id === 'theme_volcano' ? 'theme-volcano-bg' : ''
+                        item.id === 'theme_atlantis' ? 'theme-atlantis-bg' : item.id === 'theme_volcano' ? 'theme-volcano-bg' : (item.id === 'theme_snowstorm' ? 'bg-slate-900 border border-blue-300/20' : '')
                       }`}
                       style={{
                         backgroundColor: (item.id === 'theme_atlantis' || item.id === 'theme_volcano') ? undefined : (BOARD_THEME_COLORS[item.id] || '#090D16'),
                       }}
                     >
                       <div className="w-12 h-12 rounded border border-dashed border-white/20 flex items-center justify-center text-white/40 text-[9px] font-black uppercase tracking-wider">
-                        {item.id.includes('atlantis') || item.id.includes('volcano') ? 'Dinamik' : 'Masa'}
+                        {item.id.includes('atlantis') || item.id.includes('volcano') || item.id.includes('snowstorm') ? '❄️ Dinamik' : 'Masa'}
                       </div>
                     </div>
                   )}
@@ -365,7 +377,7 @@ export const ShopDialog: React.FC<Props> = ({ profile, onUpdateProfile }) => {
 
                   {item.category === 'celebration_sound' && (
                     <div className="w-14 h-14 rounded-full bg-amber-500/10 border-2 border-amber-500/30 flex items-center justify-center text-3xl text-amber-400">
-                      🔊
+                      {item.id === 'sound_snowstorm' ? '❄️' : '🔊'}
                     </div>
                   )}
 
@@ -374,14 +386,15 @@ export const ShopDialog: React.FC<Props> = ({ profile, onUpdateProfile }) => {
                       <div className="absolute inset-0 bg-red-500/10 flex items-center justify-center">
                         {item.id === 'skin_holographic' && <div className="skin-holographic-overlay absolute inset-0" />}
                         {item.id === 'skin_rune' && <div className="skin-rune-overlay absolute inset-0" />}
+                        {item.id === 'skin_snowstorm' && <div className="absolute inset-0 bg-gradient-to-br from-blue-300/30 to-sky-100/20 backdrop-blur-[1px] animate-pulse" />}
                       </div>
-                      <span className="text-white text-xs drop-shadow-md z-10">KAPLAMA</span>
+                      <span className="text-white text-xs drop-shadow-md z-10">{item.id === 'skin_snowstorm' ? 'BUZ' : 'KAPLAMA'}</span>
                     </div>
                   )}
 
                   {item.category === 'action_vfx' && (
                     <div className="w-14 h-14 rounded-full bg-red-500/15 border-2 border-red-500/40 flex items-center justify-center text-3xl text-red-400 animate-pulse relative">
-                      {item.id === 'vfx_meteor' ? '☄️' : '🛡️'}
+                      {item.id === 'vfx_meteor' ? '☄️' : (item.id === 'vfx_snowstorm' ? '❄️' : '🛡️')}
                       <div className="absolute inset-0 rounded-full border border-red-400/20 scale-125 animate-ping" />
                     </div>
                   )}
@@ -510,30 +523,35 @@ export const ShopDialog: React.FC<Props> = ({ profile, onUpdateProfile }) => {
                 {previewItem.category === 'board_theme' && (
                   <div
                     className={`w-full h-full rounded-xl p-4 flex flex-col justify-between transition-colors duration-500 border border-white/10 ${
-                      previewItem.id === 'theme_atlantis' ? 'theme-atlantis-bg' : previewItem.id === 'theme_volcano' ? 'theme-volcano-bg' : ''
+                      previewItem.id === 'theme_atlantis' ? 'theme-atlantis-bg' : (previewItem.id === 'theme_volcano' ? 'theme-volcano-bg' : (previewItem.id === 'theme_snowstorm' ? 'bg-slate-950 border border-blue-400/20' : ''))
                     }`}
                     style={{
                       backgroundColor: (previewItem.id === 'theme_atlantis' || previewItem.id === 'theme_volcano') ? undefined : (BOARD_THEME_COLORS[previewItem.id] || '#050B14'),
                     }}
                   >
-                    <div className="w-full flex justify-between items-center border-b border-white/5 pb-2">
+                    {previewItem.id === 'theme_snowstorm' && (
+                      <div className="absolute inset-0 bg-blue-500/5 backdrop-blur-[0.5px] pointer-events-none flex flex-wrap justify-around items-center opacity-30">
+                        <span>❄️</span><span>❄️</span><span>❄️</span><span>❄️</span>
+                      </div>
+                    )}
+                    <div className="w-full flex justify-between items-center border-b border-white/5 pb-2 relative z-10">
                       <div className="flex gap-1.5">
                         <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse" />
                         <span className="w-2 h-2 rounded-full bg-yellow-500 animate-pulse" style={{ animationDelay: '0.2s' }} />
                         <span className="w-2 h-2 rounded-full bg-green-500 animate-pulse" style={{ animationDelay: '0.4s' }} />
                       </div>
                       <span className="text-[9px] font-mono text-white/40">
-                        {previewItem.id.includes('atlantis') || previewItem.id.includes('volcano') ? 'DİNAMİK MASA TEMASI' : 'KLASİK MASA TEMASI'}
+                        {previewItem.id.includes('atlantis') || previewItem.id.includes('volcano') || previewItem.id.includes('snowstorm') ? 'DİNAMİK MASA TEMASI' : 'KLASİK MASA TEMASI'}
                       </span>
                     </div>
 
-                    <div className="grid grid-cols-3 gap-2 my-auto">
+                    <div className="grid grid-cols-3 gap-2 my-auto relative z-10">
                       <div className="bg-white/5 border border-white/10 rounded-lg p-2.5 text-center text-[10px] font-bold shadow-sm">Banka</div>
                       <div className="bg-amber-500/10 border border-amber-500/30 rounded-lg p-2.5 text-center text-[10px] font-bold text-amber-400 animate-pulse shadow-[0_0_10px_rgba(245,158,11,0.2)]">Deste 🃏</div>
                       <div className="bg-white/5 border border-white/10 rounded-lg p-2.5 text-center text-[10px] font-bold shadow-sm">Mülkler</div>
                     </div>
 
-                    <div className="text-center text-[9px] text-white/45 font-black uppercase tracking-wider animate-pulse">✨ {previewItem.name} Deneyimi ✨</div>
+                    <div className="text-center text-[9px] text-white/45 font-black uppercase tracking-wider animate-pulse relative z-10">✨ {previewItem.name} Deneyimi ✨</div>
                   </div>
                 )}
 
@@ -542,10 +560,11 @@ export const ShopDialog: React.FC<Props> = ({ profile, onUpdateProfile }) => {
                     <div className="w-28 h-40 rounded-xl border-2 border-white/10 bg-slate-800 flex flex-col justify-between p-3 shadow-2xl relative overflow-hidden">
                       {previewItem.id === 'skin_holographic' && <div className="skin-holographic-overlay absolute inset-0" />}
                       {previewItem.id === 'skin_rune' && <div className="skin-rune-overlay absolute inset-0 animate-pulse" />}
+                      {previewItem.id === 'skin_snowstorm' && <div className="absolute inset-0 bg-gradient-to-br from-blue-300/40 to-sky-100/15 backdrop-blur-[0.5px] border border-blue-400/20" />}
 
-                      <div className="text-white/20 text-left text-[8px] font-black tracking-widest leading-none select-none">KART ÖRNEĞİ</div>
-                      <span className="text-white text-3xl font-black self-center drop-shadow-xl select-none">🃏</span>
-                      <div className="text-white/20 text-right text-[8px] font-black tracking-widest leading-none select-none">DEAL PRO</div>
+                      <div className="text-white/20 text-left text-[8px] font-black tracking-widest leading-none select-none relative z-10">KART ÖRNEĞİ</div>
+                      <span className="text-white text-3xl font-black self-center drop-shadow-xl select-none relative z-10">🃏</span>
+                      <div className="text-white/20 text-right text-[8px] font-black tracking-widest leading-none select-none relative z-10">DEAL PRO</div>
                     </div>
                     <span className="text-[10px] text-amber-400 font-bold mt-3 animate-pulse">
                       ✨ CANLI KART KAPLAMASI ÖNİZLEMESİ ✨
@@ -574,6 +593,12 @@ export const ShopDialog: React.FC<Props> = ({ profile, onUpdateProfile }) => {
                                 ))}
                               </div>
                               <div className="vfx-shield-shockwave" />
+                            </div>
+                          )}
+                          {previewItem.id === 'vfx_snowstorm' && (
+                            <div className="absolute inset-0 bg-blue-100/10 pointer-events-none flex flex-col items-center justify-center">
+                              <div className="text-4xl animate-spin" style={{ animationDuration: '4s' }}>❄️</div>
+                              <span className="text-[9px] text-blue-300 font-black tracking-widest mt-2 animate-pulse uppercase">ÇIĞ VE BUZ FIRTINASI!</span>
                             </div>
                           )}
                         </>

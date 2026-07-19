@@ -114,32 +114,33 @@ export const AdminDashboard: React.FC<Props> = ({ onSettingsUpdated }) => {
     id: string;
     name: string;
     filename: string;
+    scope?: 'global' | 'duel' | 'actor';
     trExists: boolean;
     enExists: boolean;
   }
 
   const defaultVoiceList: VoiceItem[] = [
-    { id: 'place_bank', name: 'Bankaya Para Koyma', filename: 'place_bank.mp3', trExists: false, enExists: false },
-    { id: 'place_property', name: 'Mülk/Arazi Yerleştirme', filename: 'place_property.mp3', trExists: false, enExists: false },
-    { id: 'play_passgo', name: 'Çizgiden Geç (Pass & Go)', filename: 'play_passgo.mp3', trExists: false, enExists: false },
-    { id: 'play_birthday', name: 'Doğum Günü Kartı', filename: 'play_birthday.mp3', trExists: false, enExists: false },
-    { id: 'play_debt', name: 'Haciz / Borç Tahsildarı', filename: 'play_debt.mp3', trExists: false, enExists: false },
-    { id: 'play_sly', name: 'Sinsi Anlaşma', filename: 'play_sly.mp3', trExists: false, enExists: false },
-    { id: 'play_dealbreaker', name: 'Anlaşma Bozan', filename: 'play_dealbreaker.mp3', trExists: false, enExists: false },
-    { id: 'play_forced', name: 'Zoraki Takas', filename: 'play_forced.mp3', trExists: false, enExists: false },
-    { id: 'play_double', name: 'Çift Kira', filename: 'play_double.mp3', trExists: false, enExists: false },
-    { id: 'play_rent', name: 'Kira Kartı', filename: 'play_rent.mp3', trExists: false, enExists: false },
-    { id: 'play_jsn', name: 'Hayır Teşekkürler (JSN)', filename: 'play_jsn.mp3', trExists: false, enExists: false },
-    { id: 'play_action', name: 'Diğer Aksiyon Kartları', filename: 'play_action.mp3', trExists: false, enExists: false },
-    { id: 'game_start', name: 'Oyun Başlangıcı (Start)', filename: 'game_start.mp3', trExists: false, enExists: false },
-    { id: 'your_turn', name: 'Sıra Sende Splash', filename: 'your_turn.mp3', trExists: false, enExists: false },
-    { id: 'end_turn', name: 'Turu Sonlandırma', filename: 'end_turn.mp3', trExists: false, enExists: false },
-    { id: 'set_completed', name: 'Mülk Seti Tamamlama', filename: 'set_completed.mp3', trExists: false, enExists: false },
-    { id: 'build_house', name: 'Ev İnşa Etme', filename: 'build_house.mp3', trExists: false, enExists: false },
-    { id: 'build_hotel', name: 'Otel İnşa Etme', filename: 'build_hotel.mp3', trExists: false, enExists: false },
-    { id: 'bankruptcy', name: 'İflas Olayı (Bankruptcy)', filename: 'bankruptcy.mp3', trExists: false, enExists: false },
-    { id: 'victory', name: 'Kazanma / Zafer', filename: 'victory.mp3', trExists: false, enExists: false },
-    { id: 'defeat', name: 'Kaybetme / Yenilgi', filename: 'defeat.mp3', trExists: false, enExists: false },
+    { id: 'place_bank', name: 'Bankaya Para Koyma', filename: 'place_bank.mp3', scope: 'actor', trExists: false, enExists: false },
+    { id: 'place_property', name: 'Mülk/Arazi Yerleştirme', filename: 'place_property.mp3', scope: 'actor', trExists: false, enExists: false },
+    { id: 'play_passgo', name: 'Çizgiden Geç (Pass & Go)', filename: 'play_passgo.mp3', scope: 'actor', trExists: false, enExists: false },
+    { id: 'play_birthday', name: 'Doğum Günü Kartı', filename: 'play_birthday.mp3', scope: 'global', trExists: false, enExists: false },
+    { id: 'play_debt', name: 'Haciz / Borç Tahsildarı', filename: 'play_debt.mp3', scope: 'duel', trExists: false, enExists: false },
+    { id: 'play_sly', name: 'Sinsi Anlaşma', filename: 'play_sly.mp3', scope: 'duel', trExists: false, enExists: false },
+    { id: 'play_dealbreaker', name: 'Anlaşma Bozan', filename: 'play_dealbreaker.mp3', scope: 'global', trExists: false, enExists: false },
+    { id: 'play_forced', name: 'Zoraki Takas', filename: 'play_forced.mp3', scope: 'duel', trExists: false, enExists: false },
+    { id: 'play_double', name: 'Çift Kira', filename: 'play_double.mp3', scope: 'duel', trExists: false, enExists: false },
+    { id: 'play_rent', name: 'Kira Kartı', filename: 'play_rent.mp3', scope: 'global', trExists: false, enExists: false },
+    { id: 'play_jsn', name: 'Hayır Teşekkürler (JSN)', filename: 'play_jsn.mp3', scope: 'duel', trExists: false, enExists: false },
+    { id: 'play_action', name: 'Diğer Aksiyon Kartları', filename: 'play_action.mp3', scope: 'actor', trExists: false, enExists: false },
+    { id: 'game_start', name: 'Oyun Başlangıcı (Start)', filename: 'game_start.mp3', scope: 'global', trExists: false, enExists: false },
+    { id: 'your_turn', name: 'Sıra Sende Splash', filename: 'your_turn.mp3', scope: 'actor', trExists: false, enExists: false },
+    { id: 'end_turn', name: 'Turu Sonlandırma', filename: 'end_turn.mp3', scope: 'actor', trExists: false, enExists: false },
+    { id: 'set_completed', name: 'Mülk Seti Tamamlama', filename: 'set_completed.mp3', scope: 'global', trExists: false, enExists: false },
+    { id: 'build_house', name: 'Ev İnşa Etme', filename: 'build_house.mp3', scope: 'actor', trExists: false, enExists: false },
+    { id: 'build_hotel', name: 'Otel İnşa Etme', filename: 'build_hotel.mp3', scope: 'actor', trExists: false, enExists: false },
+    { id: 'bankruptcy', name: 'İflas Olayı (Bankruptcy)', filename: 'bankruptcy.mp3', scope: 'global', trExists: false, enExists: false },
+    { id: 'victory', name: 'Kazanma / Zafer', filename: 'victory.mp3', scope: 'global', trExists: false, enExists: false },
+    { id: 'defeat', name: 'Kaybetme / Yenilgi', filename: 'defeat.mp3', scope: 'global', trExists: false, enExists: false },
   ];
 
   const [voices, setVoices] = useState<VoiceItem[]>(defaultVoiceList);
@@ -1195,6 +1196,7 @@ export const AdminDashboard: React.FC<Props> = ({ onSettingsUpdated }) => {
                     <thead>
                       <tr className="bg-slate-950/80 text-[10px] text-slate-400 uppercase tracking-wider font-bold">
                         <th className="p-3 border-b border-slate-800">Hamle / Kart</th>
+                        <th className="p-3 border-b border-slate-800">Duyulma Kapsamı</th>
                         <th className="p-3 border-b border-slate-800">Dosya Adı</th>
                         <th className="p-3 border-b border-slate-800 text-center">Türkçe Ses (TR)</th>
                         <th className="p-3 border-b border-slate-800 text-center">İngilizce Ses (EN)</th>
@@ -1204,6 +1206,21 @@ export const AdminDashboard: React.FC<Props> = ({ onSettingsUpdated }) => {
                       {voices.map((item) => (
                         <tr key={item.id} className="hover:bg-slate-900/25 transition-colors">
                           <td className="p-3 font-semibold text-slate-200">{item.name}</td>
+                          <td className="p-3">
+                            <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                              item.scope === 'global'
+                                ? 'bg-indigo-500/10 text-indigo-400 border border-indigo-500/20'
+                                : item.scope === 'duel'
+                                  ? 'bg-amber-500/10 text-amber-400 border border-amber-500/20'
+                                  : 'bg-slate-500/10 text-slate-400 border border-slate-500/20'
+                            }`}>
+                              {item.scope === 'global'
+                                ? 'Herkes (Küresel)'
+                                : item.scope === 'duel'
+                                  ? 'Aktör ve Hedef'
+                                  : 'Sadece Aktör'}
+                            </span>
+                          </td>
                           <td className="p-3 font-mono text-slate-400 text-[11px]">{item.filename}</td>
                           
                           {/* TR Column */}

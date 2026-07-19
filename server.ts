@@ -135,10 +135,19 @@ const DEFAULT_SHOP_ITEMS = [
   // CARD SKINS (Live Skins)
   { id: 'skin_holographic', name: '💠 Holografik Mavi Sektör', category: 'card_skin', price: 1200, description: 'Kartların üzerinde akan mavi veri ızgarası, hover titremesi ve set tamamlandığında radyal parıltı efekti.', isUnlocked: false },
   { id: 'skin_rune', name: '🔮 Mistik Rün Parşömeni', category: 'card_skin', price: 1000, description: 'Kart kenarlarında parlayan kadim rünler, parşömen dokusu ve kira ödendiğinde mavi-kırmızı renk geçişi.', isUnlocked: false },
+  { id: 'skin_snowstorm', name: '❄️ Donmuş Buz Kaplama', category: 'card_skin', price: 1100, description: 'Kartların üzerinde parıldayan buz kristalleri ve set tamamlandığında buhar çıkma efekti.', isUnlocked: false },
 
   // ACTION VFX (Epic VFX)
   { id: 'vfx_meteor', name: '☄️ Meteor Saldırısı', category: 'action_vfx', price: 1500, description: 'Deal Breaker oynandığında ekrana meteor düşer, darbe anında ekran sallanır ve altın parçacık patlaması tetiklenir.', isUnlocked: false },
-  { id: 'vfx_mirror_shield', name: '🛡️ Ayna Kalkan', category: 'action_vfx', price: 1300, description: 'Hayır Teşekkürler kartı oynandığında altıgen enerji kalkanı belirir, şok dalgası ve gökkuşağı kırılması efekti.', isUnlocked: false }
+  { id: 'vfx_mirror_shield', name: '🛡️ Ayna Kalkan', category: 'action_vfx', price: 1300, description: 'Hayır Teşekkürler kartı oynandığında altıgen enerji kalkanı belirir, şok dalgası ve gökkuşağı kırılması efekti.', isUnlocked: false },
+  { id: 'vfx_snowstorm', name: '❄️ Çığ Felaketi', category: 'action_vfx', price: 1400, description: 'Aksiyon kartı oynandığında oyun alanını kaplayan kar fırtınası ve ekran donması efekti.', isUnlocked: false },
+
+  // SNOWSTORM OTHERS (Avatars, Themes, Frames, Sounds)
+  { id: 'avatar_snowstorm', name: '❄️ Kar Fırtınası Savaşçısı', category: 'avatar', price: 300, description: 'Kutup ayazında dövüşen buz zırhlı efsanevi savaşçı.', isUnlocked: false },
+  { id: 'back_snowstorm', name: '❄️ Kar Fırtınası', category: 'card_back', price: 200, description: 'Buz kristalleriyle kaplı, soğuk kutup rüzgarı desenli kart arkası.', isUnlocked: false },
+  { id: 'theme_snowstorm', name: '❄️ Dinamik Kar Fırtınası', category: 'board_theme', price: 650, description: 'Sürekli yağan kar taneleri ve buz tutmuş zemin efektiyle yaşayan kış masası.', isUnlocked: false },
+  { id: 'frame_snowstorm', name: '❄️ Kar Fırtınası Çerçevesi', category: 'profile_frame', price: 250, description: 'Buz parçacıkları saçan, hareketli kar fırtınası aurası.', isUnlocked: false },
+  { id: 'sound_snowstorm', name: '❄️ Çığ ve Fırtına Sesi', category: 'celebration_sound', price: 200, description: 'Zafer anınızda çalan ürpertici çığ ve dondurucu fırtına uğultusu.', isUnlocked: false }
 ];
 
 // Helper to load/save users
@@ -501,27 +510,27 @@ async function startServer() {
   // Get voiceovers list and check existence on disk
   app.get('/api/admin/voice-list', (req, res) => {
     const list = [
-      { id: 'place_bank', name: 'Bankaya Para Koyma', filename: 'place_bank.mp3' },
-      { id: 'place_property', name: 'Mülk/Arazi Yerleştirme', filename: 'place_property.mp3' },
-      { id: 'play_passgo', name: 'Çizgiden Geç (Pass & Go)', filename: 'play_passgo.mp3' },
-      { id: 'play_birthday', name: 'Doğum Günü Kartı', filename: 'play_birthday.mp3' },
-      { id: 'play_debt', name: 'Haciz / Borç Tahsildarı', filename: 'play_debt.mp3' },
-      { id: 'play_sly', name: 'Sinsi Anlaşma', filename: 'play_sly.mp3' },
-      { id: 'play_dealbreaker', name: 'Anlaşma Bozan', filename: 'play_dealbreaker.mp3' },
-      { id: 'play_forced', name: 'Zoraki Takas', filename: 'play_forced.mp3' },
-      { id: 'play_double', name: 'Çift Kira', filename: 'play_double.mp3' },
-      { id: 'play_rent', name: 'Kira Kartı', filename: 'play_rent.mp3' },
-      { id: 'play_jsn', name: 'Hayır Teşekkürler (JSN)', filename: 'play_jsn.mp3' },
-      { id: 'play_action', name: 'Diğer Aksiyon Kartları', filename: 'play_action.mp3' },
-      { id: 'game_start', name: 'Oyun Başlangıcı (Start)', filename: 'game_start.mp3' },
-      { id: 'your_turn', name: 'Sıra Sende Splash', filename: 'your_turn.mp3' },
-      { id: 'end_turn', name: 'Turu Sonlandırma', filename: 'end_turn.mp3' },
-      { id: 'set_completed', name: 'Mülk Seti Tamamlama', filename: 'set_completed.mp3' },
-      { id: 'build_house', name: 'Ev İnşa Etme', filename: 'build_house.mp3' },
-      { id: 'build_hotel', name: 'Otel İnşa Etme', filename: 'build_hotel.mp3' },
-      { id: 'bankruptcy', name: 'İflas Olayı (Bankruptcy)', filename: 'bankruptcy.mp3' },
-      { id: 'victory', name: 'Kazanma / Zafer', filename: 'victory.mp3' },
-      { id: 'defeat', name: 'Kaybetme / Yenilgi', filename: 'defeat.mp3' },
+      { id: 'place_bank', name: 'Bankaya Para Koyma', filename: 'place_bank.mp3', scope: 'actor' },
+      { id: 'place_property', name: 'Mülk/Arazi Yerleştirme', filename: 'place_property.mp3', scope: 'actor' },
+      { id: 'play_passgo', name: 'Çizgiden Geç (Pass & Go)', filename: 'play_passgo.mp3', scope: 'actor' },
+      { id: 'play_birthday', name: 'Doğum Günü Kartı', filename: 'play_birthday.mp3', scope: 'global' },
+      { id: 'play_debt', name: 'Haciz / Borç Tahsildarı', filename: 'play_debt.mp3', scope: 'duel' },
+      { id: 'play_sly', name: 'Sinsi Anlaşma', filename: 'play_sly.mp3', scope: 'duel' },
+      { id: 'play_dealbreaker', name: 'Anlaşma Bozan', filename: 'play_dealbreaker.mp3', scope: 'global' },
+      { id: 'play_forced', name: 'Zoraki Takas', filename: 'play_forced.mp3', scope: 'duel' },
+      { id: 'play_double', name: 'Çift Kira', filename: 'play_double.mp3', scope: 'duel' },
+      { id: 'play_rent', name: 'Kira Kartı', filename: 'play_rent.mp3', scope: 'global' },
+      { id: 'play_jsn', name: 'Hayır Teşekkürler (JSN)', filename: 'play_jsn.mp3', scope: 'duel' },
+      { id: 'play_action', name: 'Diğer Aksiyon Kartları', filename: 'play_action.mp3', scope: 'actor' },
+      { id: 'game_start', name: 'Oyun Başlangıcı (Start)', filename: 'game_start.mp3', scope: 'global' },
+      { id: 'your_turn', name: 'Sıra Sende Splash', filename: 'your_turn.mp3', scope: 'actor' },
+      { id: 'end_turn', name: 'Turu Sonlandırma', filename: 'end_turn.mp3', scope: 'actor' },
+      { id: 'set_completed', name: 'Mülk Seti Tamamlama', filename: 'set_completed.mp3', scope: 'global' },
+      { id: 'build_house', name: 'Ev İnşa Etme', filename: 'build_house.mp3', scope: 'actor' },
+      { id: 'build_hotel', name: 'Otel İnşa Etme', filename: 'build_hotel.mp3', scope: 'actor' },
+      { id: 'bankruptcy', name: 'İflas Olayı (Bankruptcy)', filename: 'bankruptcy.mp3', scope: 'global' },
+      { id: 'victory', name: 'Kazanma / Zafer', filename: 'victory.mp3', scope: 'global' },
+      { id: 'defeat', name: 'Kaybetme / Yenilgi', filename: 'defeat.mp3', scope: 'global' },
     ];
 
     try {
@@ -1415,6 +1424,15 @@ async function startServer() {
               player.hand.splice(cardIdx, 1);
               match.discardPile.push(card);
 
+              if (payload && payload.isDoubleRent) {
+                const drIdx = player.hand.findIndex((c) => c.actionType === 'double-rent');
+                if (drIdx !== -1) {
+                  const drCard = player.hand.splice(drIdx, 1)[0];
+                  match.discardPile.push(drCard);
+                  match.actionsPlayedThisTurn++;
+                }
+              }
+
               // Process different action card mechanics
               await processActionCard(match, player, card, payload);
               match.actionsPlayedThisTurn++;
@@ -1550,6 +1568,34 @@ async function startServer() {
                 req.targetPlayerId = prevSourceId;
                 req.jsnCount = (req.jsnCount || 0) + 1;
                 match.actionRequestStartedAt = Date.now();
+
+                // Auto-resolve if the new target is a bot or disconnected
+                const newTarget = match.players.find((p) => p.id === req.targetPlayerId);
+                if (newTarget && (newTarget.isBot || newTarget.isDisconnected)) {
+                  const botJsnIdx = newTarget.hand.findIndex((c) => c.actionType === 'just-say-no');
+                  if (botJsnIdx !== -1) {
+                    // Bot plays counter JSN!
+                    const botJsnCard = newTarget.hand.splice(botJsnIdx, 1)[0];
+                    match.discardPile.push(botJsnCard);
+                    match.logs.push({
+                      id: `jsn-bot-counter-${Date.now()}`,
+                      message: `🛡️ ${newTarget.username} 'Hayır Teşekkürler' diyerek senin savunmanı engelledi! (Reddete Reddet!)`,
+                      timestamp: Date.now(),
+                    });
+                    req.sourcePlayerId = req.targetPlayerId;
+                    req.targetPlayerId = targetPlayer.id; // back to human player
+                    req.jsnCount = (req.jsnCount || 0) + 1;
+                    match.actionRequestStartedAt = Date.now();
+                  } else {
+                    // Bot has no JSN! The human JSN defense succeeds, clear request
+                    match.logs.push({
+                      id: `jsn-win-bot-${Date.now()}`,
+                      message: `🛡️ Savunma başarılı oldu! ${targetPlayer.username}'in hamlesi engellendi.`,
+                      timestamp: Date.now(),
+                    });
+                    resolveRequest(match, req.id);
+                  }
+                }
               }
             } else if (decision === 'decline') {
               const jsnCount = req.jsnCount || 0;
@@ -1565,8 +1611,15 @@ async function startServer() {
                 // Even number of JSNs: original action succeeds!
                 if (req.originalAction) {
                   executeOriginalActionServer(match, req);
+                  resolveRequest(match, req.id);
+                } else if (req.amountDue > 0) {
+                  // Payment request: change back to normal payment so target player pays
+                  req.jsnCount = 0;
+                  req.type = 'make-payment';
+                  match.actionRequestStartedAt = Date.now();
+                } else {
+                  resolveRequest(match, req.id);
                 }
-                resolveRequest(match, req.id);
               }
             } else if (decision === 'pay') {
               // If it is a property-steal action (originalAction), execute it. Otherwise, handle standard payment.

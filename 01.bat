@@ -1,4 +1,4 @@
 @echo off
-cd /d "C:\Projeler\BenimProjem"
+cd /d "%~dp0"
 npm run dev
 pause
