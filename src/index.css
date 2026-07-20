@@ -576,3 +576,132 @@ body::before {
   -webkit-text-fill-color: transparent;
   animation: premium-badge-shine 3s linear infinite;
 }
+
+/* ============================================
+   3D SHOP CARDS & PREMIUM EFFECT STYLES
+   ============================================ */
+
+.shop-card-3d {
+  perspective: 1000px;
+  transform-style: preserve-3d;
+  transition: transform 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275), border-color 0.3s ease, box-shadow 0.3s ease;
+}
+
+.shop-card-3d:hover {
+  transform: translateY(-8px) rotateX(5deg) rotateY(-3deg) scale(1.025);
+  box-shadow: 0 22px 45px -12px rgba(0, 0, 0, 0.8);
+}
+
+.premium-item-glow {
+  position: relative;
+  border-color: rgba(245, 158, 11, 0.35) !important;
+  box-shadow: 0 0 16px rgba(245, 158, 11, 0.08), inset 0 0 10px rgba(245, 158, 11, 0.03);
+  background: linear-gradient(135deg, rgba(15, 23, 42, 0.45) 0%, rgba(20, 10, 5, 0.5) 100%) !important;
+}
+
+.premium-item-glow:hover {
+  border-color: rgba(245, 158, 11, 0.7) !important;
+  box-shadow: 0 22px 45px -12px rgba(0, 0, 0, 0.8), 0 0 25px rgba(245, 158, 11, 0.3), inset 0 0 15px rgba(245, 158, 11, 0.15);
+}
+
+.premium-shimmer-overlay {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    115deg,
+    transparent 0%,
+    rgba(255, 215, 0, 0) 30%,
+    rgba(255, 215, 0, 0.04) 45%,
+    rgba(255, 215, 0, 0.12) 50%,
+    rgba(255, 215, 0, 0.04) 55%,
+    rgba(255, 215, 0, 0) 70%,
+    transparent 100%
+  );
+  background-size: 200% 200%;
+  animation: holo-shimmer 4s linear infinite;
+  pointer-events: none;
+  z-index: 1;
+}
+
+/* ============================================
+   ANIMATED AVATAR PROFILE FRAMES
+   ============================================ */
+
+/* Spinning Steampunk Gear Frame overlay */
+@keyframes frame-gear-spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+.frame-steampunk-spin {
+  animation: frame-gear-spin 15s linear infinite;
+}
+
+/* Electric Arcs for Thunder Frame */
+@keyframes frame-thunder-shock {
+  0%, 100% { border-color: #facc15; box-shadow: 0 0 10px #eab308, inset 0 0 6px #ca8a04; opacity: 1; }
+  50% { border-color: #fef08a; box-shadow: 0 0 24px #facc15, inset 0 0 14px #eab308; opacity: 0.85; filter: saturate(1.5); }
+}
+.frame-thunder-active {
+  animation: frame-thunder-shock 0.4s ease-in-out infinite;
+}
+
+/* Matrix Binary rain overlay */
+@keyframes matrix-rain-flow {
+  0% { background-position: 0 0; }
+  100% { background-position: 0 200px; }
+}
+.frame-matrix-rain {
+  background-image: linear-gradient(rgba(34, 197, 94, 0.15) 50%, transparent 50%), linear-gradient(90deg, rgba(34, 197, 94, 0.06), transparent);
+  background-size: 4px 4px, 12px 12px;
+  animation: matrix-rain-flow 5s linear infinite;
+}
+
+/* Lava flowing effect for Fire frame */
+@keyframes lava-flow-shift {
+  0% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+  100% { background-position: 0% 50%; }
+}
+.frame-lava-flow {
+  background-size: 200% 200%;
+  animation: lava-flow-shift 4s ease infinite;
+}
+
+/* Rainbow spectrum cycle */
+@keyframes rainbow-cycle-hue {
+  0% { filter: hue-rotate(0deg); }
+  100% { filter: hue-rotate(360deg); }
+}
+.frame-rainbow-cycle {
+  animation: rainbow-cycle-hue 6s linear infinite;
+}
+
+/* Ice frost shimmer */
+@keyframes ice-frost-pulse {
+  0%, 100% { filter: brightness(1); border-color: #bfdbfe; }
+  50% { filter: brightness(1.3); border-color: #38bdf8; box-shadow: 0 0 20px #7dd3fc; }
+}
+.frame-ice-shimmer {
+  animation: ice-frost-pulse 2.5s ease-in-out infinite;
+}
+
+/* Dark purple void smoke pulse */
+@keyframes void-smoke-pulse {
+  0%, 100% { transform: scale(1); filter: drop-shadow(0 0 5px #581c87); }
+  50% { transform: scale(1.02); filter: drop-shadow(0 0 15px #7e22ce) brightness(1.2); }
+}
+.frame-void-active {
+  animation: void-smoke-pulse 3s ease-in-out infinite;
+}
+
+/* Galaxy rotating space dust */
+@keyframes space-dust-rotate {
+  0% { transform: rotate(0deg) scale(1); }
+  50% { transform: rotate(180deg) scale(1.03); }
+  100% { transform: rotate(360deg) scale(1); }
+}
+.frame-galaxy-rotate {
+  animation: space-dust-rotate 12s linear infinite;
+}
+

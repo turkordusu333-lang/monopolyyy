@@ -1,10 +1,13 @@
 import React, { Component } from 'react';
 import { UserProfile } from './types';
+import { motion, AnimatePresence } from 'motion/react';
 import { MainMenu } from './components/MainMenu';
 import { GameRoom } from './components/GameRoom';
 import { sounds } from './lib/SoundSystem';
 import { initTranslations, addTranslationListener } from './lib/TranslationSystem';
 import { API_BASE_URL } from './lib/apiConfig';
+import { GlobalToast } from './components/GlobalToast';
+import { STORE_ITEMS } from './components/ShopDialog';
 
 interface ErrorBoundaryProps {
   children: React.ReactNode;
@@ -63,6 +66,9 @@ export default function App() {
   // Navigation states
   const [currentRoom, setCurrentRoom] = React.useState<{ roomId: string; isOffline: boolean; password?: string } | null>(null);
 
+  // Transition states for card flip
+  const [isFlippingTransition, setIsFlippingTransition] = React.useState(false);
+
   // Translation update listener state
   const [translationVersion, setTranslationVersion] = React.useState(0);
 
@@ -89,6 +95,70 @@ export default function App() {
     if (profile?.settings?.language) {
       localStorage.setItem('language', profile.settings.language);
       initTranslations();
+    }
+  }, [profile]);
+
+  // Track achievement and item unlock state changes for live corner notifications!
+  const prevAchievementsRef = React.useRef<any[]>([]);
+  const prevUnlockedItemsRef = React.useRef<string[]>([]);
+
+  React.useEffect(() => {
+    if (profile) {
+      // 1. Achievements tracking
+      if (prevAchievementsRef.current && prevAchievementsRef.current.length > 0) {
+        profile.achievements.forEach((ach) => {
+          const prevAch = prevAchievementsRef.current.find((pa) => pa.id === ach.id);
+          if (prevAch && !prevAch.completed && ach.completed) {
+            window.dispatchEvent(
+              new CustomEvent('show-global-toast', {
+                detail: {
+                  type: 'achievement',
+                  title: profile.settings.language === 'en' ? '🏆 Achievement Unlocked!' : '🏆 Başarım Kilidi Açıldı!',
+                  message: ach.title,
+                  description: ach.description,
+                  rewardCoins: ach.rewardCoins,
+                  emoji: '🏆',
+                },
+              })
+            );
+          }
+        });
+      }
+      prevAchievementsRef.current = JSON.parse(JSON.stringify(profile.achievements || []));
+
+      // 2. Unlocked items tracking
+      if (prevUnlockedItemsRef.current && prevUnlockedItemsRef.current.length > 0) {
+        profile.unlockedItems.forEach((itemId) => {
+          if (!prevUnlockedItemsRef.current.includes(itemId)) {
+            const storeItem = STORE_ITEMS.find((item) => item.id === itemId);
+            if (storeItem) {
+              window.dispatchEvent(
+                new CustomEvent('show-global-toast', {
+                  detail: {
+                    type: 'unlock',
+                    title: profile.settings.language === 'en' ? '✨ New Item Unlocked!' : '✨ Yeni Öğe Kilidi Açıldı!',
+                    message: storeItem.name,
+                    description: storeItem.description,
+                    category: storeItem.category,
+                    itemId: storeItem.id,
+                    emoji:
+                      storeItem.category === 'board_theme'
+                        ? '🎨'
+                        : storeItem.category === 'card_skin'
+                        ? '🃏'
+                        : storeItem.category === 'card_back'
+                        ? '🎴'
+                        : storeItem.category === 'avatar'
+                        ? '👤'
+                        : '🎁',
+                  },
+                })
+              );
+            }
+          }
+        });
+      }
+      prevUnlockedItemsRef.current = [...(profile.unlockedItems || [])];
     }
   }, [profile]);
 
@@ -150,7 +220,20 @@ export default function App() {
   };
 
   const handleJoinRoom = (roomId: string, isOffline: boolean, password?: string) => {
-    setCurrentRoom({ roomId, isOffline, password });
+    // Play sounds
+    sounds.playCoin(profile?.settings);
+    sounds.playDraw(profile?.settings);
+    
+    // Set transition state
+    setIsFlippingTransition(true);
+    
+    setTimeout(() => {
+      setCurrentRoom({ roomId, isOffline, password });
+    }, 650);
+    
+    setTimeout(() => {
+      setIsFlippingTransition(false);
+    }, 1500);
   };
 
   const handleLeaveRoom = () => {
@@ -284,6 +367,55 @@ export default function App() {
           )}
         </div>
       )}
+      {/* 🎴 Cinematic Card Flip Transition Overlay */}
+      <AnimatePresence>
+        {isFlippingTransition && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.4 }}
+            className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/95 backdrop-blur-md pointer-events-auto select-none"
+          >
+            <motion.div
+              initial={{ rotateY: 0, scale: 0.8 }}
+              animate={{ 
+                rotateY: [0, 180, 360],
+                scale: [0.8, 1.1, 1],
+                filter: ['blur(0px)', 'blur(2px)', 'blur(0px)']
+              }}
+              transition={{ duration: 1.3, ease: "easeInOut" }}
+              className="w-64 h-96 rounded-3xl border-2 border-amber-400/40 p-1 flex items-center justify-center relative overflow-hidden shadow-[0_0_60px_rgba(245,158,11,0.35)] bg-gradient-to-br from-slate-900 to-slate-950"
+              style={{ transformStyle: 'preserve-3d', perspective: '1200px' }}
+            >
+              {/* Holographic background */}
+              <div className="absolute inset-0 bg-gradient-to-tr from-indigo-500/10 via-purple-500/10 to-pink-500/10" />
+              
+              {/* Card back logo and design */}
+              <div className="absolute inset-2 border border-white/5 rounded-2xl flex flex-col items-center justify-between p-6">
+                <div className="text-[10px] font-black tracking-widest text-slate-500">DEAL MASTER PRO</div>
+                
+                <div className="relative">
+                  <div className="w-20 h-20 rounded-full border border-amber-500/30 flex items-center justify-center bg-amber-500/5">
+                    <span className="text-4xl animate-pulse">🃏</span>
+                  </div>
+                  {/* Glowing ring */}
+                  <div className="absolute inset-0 rounded-full border border-amber-400/20 animate-ping" />
+                </div>
+
+                <div className="text-[10px] font-black tracking-widest text-amber-500/80 animate-pulse">
+                  {profile?.settings?.language === 'en' ? 'ENTERING ARENA...' : 'ARENAYA GİRİLİYOR...'}
+                </div>
+              </div>
+
+              {/* Felt details */}
+              <div className="absolute inset-0 bg-[radial-gradient(rgba(255,255,255,0.02)_1.5px,transparent_1.5px)] [background-size:16px_16px] opacity-40 pointer-events-none" />
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      <GlobalToast profile={profile} />
     </div>
   );
 }

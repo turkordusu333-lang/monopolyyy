@@ -9,10 +9,12 @@
   "questsEnabled": true,
   "codexTabEnabled": true,
   "rankedLeagueEnabled": true,
-  "turnTimeoutSeconds": 120,
-  "actionTimeoutSeconds": 30,
+  "turnTimeoutSeconds": 60,
+  "actionTimeoutSeconds": 15,
   "targetSets": 3,
   "turnActionLimit": 3,
-  "goldMultiplier": 5,
-  "maintenanceMode": false
+  "goldMultiplier": 1,
+  "maintenanceMode": false,
+  "enableSystemVoiceovers": true,
+  "bonusTimePerActionSeconds": 5
 }

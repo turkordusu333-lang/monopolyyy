@@ -335,57 +335,115 @@ export class BotEngine {
    * Returns a list of card IDs to pay with.
    */
   static selectPayment(botPlayer: GamePlayer, amountDue: number): string[] {
-    const selectedIds: string[] = [];
-    let accumulated = 0;
+    const bankCards = botPlayer.bank.map((c) => ({ id: c.id, value: c.value, isProperty: false, isCompletedSet: false }));
+    const propertyCards: { id: string; value: number; isProperty: boolean; isCompletedSet: boolean }[] = [];
 
-    // List of all items available to pay with (sorted by value ascending to pay with cheapest first)
-    // We prefer money in the bank first
-    const bankCards = [...botPlayer.bank].sort((a, b) => a.value - b.value);
+    for (const colorKey in botPlayer.properties) {
+      const color = colorKey as CardColor;
+      const propSet = botPlayer.properties[color];
+      if (!propSet) continue;
 
-    for (const card of bankCards) {
-      if (accumulated >= amountDue) break;
-      selectedIds.push(card.id);
-      accumulated += card.value;
+      const isCompleted = propSet.cards.length >= MAX_IN_SET[color];
+      propSet.cards.forEach((c) => {
+        propertyCards.push({ id: c.id, value: c.value, isProperty: true, isCompletedSet: isCompleted });
+      });
     }
 
-    // If bank is not enough, select properties (starting with single properties, avoiding completed sets)
-    if (accumulated < amountDue) {
-      const singleProperties: Card[] = [];
-      const completedSetProperties: Card[] = [];
+    const cards = [...bankCards, ...propertyCards];
+    const totalValue = cards.reduce((sum, c) => sum + c.value, 0);
+    if (totalValue <= amountDue) {
+      return cards.map((c) => c.id);
+    }
 
-      for (const colorKey in botPlayer.properties) {
-        const color = colorKey as CardColor;
-        const propSet = botPlayer.properties[color];
-        if (!propSet) continue;
+    // Solve for best subset
+    let bestSubset: typeof cards | null = null;
+    let bestValue = Infinity;
+    let bestCompletedSetCount = Infinity;
+    let bestPropCount = Infinity;
+    let bestCardCount = Infinity;
 
-        const isCompleted = propSet.cards.length >= MAX_IN_SET[color];
-        if (isCompleted) {
-          completedSetProperties.push(...propSet.cards);
-        } else {
-          singleProperties.push(...propSet.cards);
+    const n = cards.length;
+
+    // To prevent any performance/hanging issues, if N is too large, use a fallback
+    if (n > 14) {
+      // Simple greedy fallback
+      const sorted = [...cards].sort((a, b) => {
+        if (a.isCompletedSet !== b.isCompletedSet) return a.isCompletedSet ? 1 : -1;
+        if (a.isProperty !== b.isProperty) return a.isProperty ? 1 : -1;
+        return a.value - b.value;
+      });
+      const selection: string[] = [];
+      let sum = 0;
+      for (const card of sorted) {
+        if (sum < amountDue) {
+          selection.push(card.id);
+          sum += card.value;
         }
       }
-
-      // Sort properties by value ascending
-      singleProperties.sort((a, b) => a.value - b.value);
-      completedSetProperties.sort((a, b) => a.value - b.value);
-
-      // Add single properties
-      for (const card of singleProperties) {
-        if (accumulated >= amountDue) break;
-        selectedIds.push(card.id);
-        accumulated += card.value;
-      }
-
-      // Add completed set properties if still needed
-      for (const card of completedSetProperties) {
-        if (accumulated >= amountDue) break;
-        selectedIds.push(card.id);
-        accumulated += card.value;
-      }
+      return selection;
     }
 
-    return selectedIds;
+    const search = (index: number, current: typeof cards, currentSum: number, currentPropCount: number, currentCompletedSetCount: number) => {
+      if (currentSum >= amountDue) {
+        let update = false;
+        if (currentSum < bestValue) {
+          update = true;
+        } else if (currentSum === bestValue) {
+          if (currentCompletedSetCount < bestCompletedSetCount) {
+            update = true;
+          } else if (currentCompletedSetCount === bestCompletedSetCount) {
+            if (currentPropCount < bestPropCount) {
+              update = true;
+            } else if (currentPropCount === bestPropCount) {
+              if (current.length < bestCardCount) {
+                update = true;
+              }
+            }
+          }
+        }
+
+        if (update) {
+          bestSubset = [...current];
+          bestValue = currentSum;
+          bestCompletedSetCount = currentCompletedSetCount;
+          bestPropCount = currentPropCount;
+          bestCardCount = current.length;
+        }
+        return;
+      }
+
+      if (index >= n) return;
+
+      // Option 1: Include cards[index]
+      const card = cards[index];
+      current.push(card);
+      search(
+        index + 1,
+        current,
+        currentSum + card.value,
+        currentPropCount + (card.isProperty ? 1 : 0),
+        currentCompletedSetCount + (card.isCompletedSet ? 1 : 0)
+      );
+      current.pop();
+
+      // Option 2: Exclude cards[index]
+      search(index + 1, current, currentSum, currentPropCount, currentCompletedSetCount);
+    };
+
+    // Sort to optimize search (completed sets at the very end, single properties next, cheaper cash first)
+    const sortedCards = [...cards].sort((a, b) => {
+      if (a.isCompletedSet !== b.isCompletedSet) {
+        return a.isCompletedSet ? 1 : -1; // Completed sets last
+      }
+      if (a.isProperty !== b.isProperty) {
+        return a.isProperty ? 1 : -1; // Cash first, properties last
+      }
+      return a.value - b.value; // Cheaper first
+    });
+
+    search(0, [], 0, 0, 0);
+
+    return bestSubset ? (bestSubset as typeof cards).map((c) => c.id) : [];
   }
 
   /**

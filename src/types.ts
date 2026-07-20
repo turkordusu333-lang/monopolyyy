@@ -66,6 +66,7 @@ export interface Achievement {
   currentValue: number;
   completed: boolean;
   rewardCoins: number;
+  type?: string;
 }
 
 export interface DailyQuest {
@@ -77,12 +78,13 @@ export interface DailyQuest {
   claimed: boolean;
   rewardCoins: number;
   rewardXp: number;
+  type?: string;
 }
 
 export interface StoreItem {
   id: string;
   name: string;
-  category: 'avatar' | 'card_back' | 'board_theme' | 'sound_pack' | 'profile_frame' | 'celebration_sound' | 'card_skin' | 'action_vfx';
+  category: 'avatar' | 'card_back' | 'board_theme' | 'sound_pack' | 'profile_frame' | 'celebration_sound' | 'card_skin' | 'action_vfx' | 'player_board';
   price: number;
   previewUrl?: string;
   previewColor?: string;
@@ -103,6 +105,7 @@ export interface UserSettings {
   language?: string; // Active system language code
   cardSkin?: string; // ID of unlocked card skin
   actionVfx?: string; // ID of unlocked action VFX
+  playerBoard?: string; // ID of unlocked player board theme/style!
 }
 
 export interface Friend {
@@ -178,6 +181,7 @@ export interface GamePlayer {
   avatarId: string;
   avatarUrl?: string;
   profileFrame?: string;
+  playerBoard?: string; // ID of unlocked player board theme/style!
   isBot: boolean;
   isDisconnected?: boolean;
   isSpeaking?: boolean;

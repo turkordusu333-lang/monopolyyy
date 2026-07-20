@@ -38,6 +38,7 @@ interface AdminSettings {
   goldMultiplier: number;
   maintenanceMode: boolean;
   enableSystemVoiceovers: boolean;
+  bonusTimePerActionSeconds?: number;
 }
 
 interface Stats {
@@ -54,7 +55,7 @@ interface Props {
 }
 
 export const AdminDashboard: React.FC<Props> = ({ onSettingsUpdated }) => {
-  const [activeTab, setActiveTab] = useState<'analytics' | 'rules' | 'players' | 'quests' | 'tournaments' | 'translations' | 'voices'>('analytics');
+  const [activeTab, setActiveTab] = useState<'analytics' | 'rules' | 'players' | 'quests' | 'achievements' | 'tournaments' | 'translations' | 'voices'>('analytics');
   const [settings, setSettings] = useState<AdminSettings>({
     enable3DCardFlip: true,
     enablePropertySetGlow: true,
@@ -72,7 +73,8 @@ export const AdminDashboard: React.FC<Props> = ({ onSettingsUpdated }) => {
     turnActionLimit: 3,
     goldMultiplier: 1.0,
     maintenanceMode: false,
-    enableSystemVoiceovers: true
+    enableSystemVoiceovers: true,
+    bonusTimePerActionSeconds: 10
   });
 
   const [stats, setStats] = useState<Stats>({
@@ -91,14 +93,25 @@ export const AdminDashboard: React.FC<Props> = ({ onSettingsUpdated }) => {
   const [editLevel, setEditLevel] = useState(1);
   const [editXp, setEditXp] = useState(0);
 
-  const [quests, setQuests] = useState<Quest[]>([]);
+  const [quests, setQuests] = useState<any[]>([]);
   const [newQuestDesc, setNewQuestDesc] = useState('');
   const [newQuestTarget, setNewQuestTarget] = useState(3);
   const [newQuestCoins, setNewQuestCoins] = useState(50);
   const [newQuestXp, setNewQuestXp] = useState(40);
+  const [newQuestType, setNewQuestType] = useState('games_played');
+
+  const [achievements, setAchievements] = useState<any[]>([]);
+  const [newAchTitle, setNewAchTitle] = useState('');
+  const [newAchDesc, setNewAchDesc] = useState('');
+  const [newAchTarget, setNewAchTarget] = useState(5);
+  const [newAchCoins, setNewAchCoins] = useState(150);
+  const [newAchType, setNewAchType] = useState('games_played');
+
+  const [tournaments, setTournaments] = useState<any[]>([]);
+  const [selectedTournamentId, setSelectedTournamentId] = useState<string | null>(null);
 
   const [tournamentName, setTournamentName] = useState('');
-  const [tournamentPlayers, setTournamentPlayers] = useState('Bot Memo, Bot Can, Bot Defne');
+  const [tournamentPlayers, setTournamentPlayers] = useState('Bot Memo, Bot Can, Bot Defne, Bot Su');
 
   const [notification, setNotification] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
 
@@ -219,6 +232,12 @@ export const AdminDashboard: React.FC<Props> = ({ onSettingsUpdated }) => {
   useEffect(() => {
     if (activeTab === 'voices') {
       fetchVoiceList();
+    } else if (activeTab === 'quests') {
+      fetchQuests();
+    } else if (activeTab === 'achievements') {
+      fetchAchievements();
+    } else if (activeTab === 'tournaments') {
+      fetchTournaments();
     }
   }, [activeTab]);
 
@@ -236,6 +255,8 @@ export const AdminDashboard: React.FC<Props> = ({ onSettingsUpdated }) => {
     fetchStats();
     fetchPlayers();
     fetchQuests();
+    fetchAchievements();
+    fetchTournaments();
     fetchTranslations();
 
     const interval = setInterval(fetchStats, 5000); // refresh stats every 5s
@@ -361,6 +382,24 @@ export const AdminDashboard: React.FC<Props> = ({ onSettingsUpdated }) => {
       .catch(err => console.error('Error fetching quests:', err));
   };
 
+  const fetchAchievements = () => {
+    fetch(`${API_BASE_URL}/api/admin/achievements`)
+      .then(res => res.json())
+      .then(data => {
+        if (data) setAchievements(data);
+      })
+      .catch(err => console.error('Error fetching achievements:', err));
+  };
+
+  const fetchTournaments = () => {
+    fetch(`${API_BASE_URL}/api/tournaments`)
+      .then(res => res.json())
+      .then(data => {
+        if (data) setTournaments(data);
+      })
+      .catch(err => console.error('Error fetching tournaments:', err));
+  };
+
   const handleSaveSettings = (updatedSettings = settings) => {
     fetch(`${API_BASE_URL}/api/admin/settings`, {
       method: 'POST',
@@ -433,7 +472,8 @@ export const AdminDashboard: React.FC<Props> = ({ onSettingsUpdated }) => {
         description: newQuestDesc.trim(),
         targetValue: newQuestTarget,
         rewardCoins: newQuestCoins,
-        rewardXp: newQuestXp
+        rewardXp: newQuestXp,
+        type: newQuestType
       })
     })
       .then(res => res.json())
@@ -463,6 +503,49 @@ export const AdminDashboard: React.FC<Props> = ({ onSettingsUpdated }) => {
       .catch(err => console.error(err));
   };
 
+  const handleAddAchievement = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newAchTitle.trim() || !newAchDesc.trim()) return;
+
+    fetch(`${API_BASE_URL}/api/admin/achievements/add`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        title: newAchTitle.trim(),
+        description: newAchDesc.trim(),
+        targetValue: newAchTarget,
+        rewardCoins: newAchCoins,
+        type: newAchType
+      })
+    })
+      .then(res => res.json())
+      .then(data => {
+        if (data.success) {
+          setAchievements(data.achievements);
+          setNewAchTitle('');
+          setNewAchDesc('');
+          setNotification({ message: 'Yeni kalıcı başarım eklendi!', type: 'success' });
+        }
+      })
+      .catch(err => console.error(err));
+  };
+
+  const handleDeleteAchievement = (achievementId: string) => {
+    fetch(`${API_BASE_URL}/api/admin/achievements/delete`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ achievementId })
+    })
+      .then(res => res.json())
+      .then(data => {
+        if (data.success) {
+          setAchievements(data.achievements);
+          setNotification({ message: 'Başarım başarıyla silindi.', type: 'success' });
+        }
+      })
+      .catch(err => console.error(err));
+  };
+
   const handleCreateTournament = (e: React.FormEvent) => {
     e.preventDefault();
     if (!tournamentName.trim()) return;
@@ -482,7 +565,57 @@ export const AdminDashboard: React.FC<Props> = ({ onSettingsUpdated }) => {
       .then(data => {
         if (data.success) {
           setTournamentName('');
+          setTournaments(data.tournaments);
           setNotification({ message: `"${tournamentName}" turnuvası kuruldu!`, type: 'success' });
+        }
+      })
+      .catch(err => console.error(err));
+  };
+
+  const handleDeleteTournament = (tournamentId: string) => {
+    fetch(`${API_BASE_URL}/api/admin/tournaments/delete`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ tournamentId })
+    })
+      .then(res => res.json())
+      .then(data => {
+        if (data.success) {
+          setTournaments(data.tournaments);
+          if (selectedTournamentId === tournamentId) setSelectedTournamentId(null);
+          setNotification({ message: 'Turnuva başarıyla silindi.', type: 'success' });
+        }
+      })
+      .catch(err => console.error(err));
+  };
+
+  const handleAdvanceTournamentRound = (tournamentId: string) => {
+    fetch(`${API_BASE_URL}/api/admin/tournaments/advance`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ tournamentId })
+    })
+      .then(res => res.json())
+      .then(data => {
+        if (data.success) {
+          setTournaments(data.tournaments);
+          setNotification({ message: 'Turnuva turu otomatik simüle edildi ve ilerletildi!', type: 'success' });
+        }
+      })
+      .catch(err => console.error(err));
+  };
+
+  const handleAdminSubmitMatchScore = (tournamentId: string, matchId: string, winnerName: string, score1: number, score2: number) => {
+    fetch(`${API_BASE_URL}/api/tournaments/match/submit`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ tournamentId, matchId, winnerName, score1, score2 })
+    })
+      .then(res => res.json())
+      .then(data => {
+        if (data.success) {
+          setTournaments(data.tournaments);
+          setNotification({ message: `Maç sonucu girildi: ${winnerName} kazandı!`, type: 'success' });
         }
       })
       .catch(err => console.error(err));
@@ -561,6 +694,14 @@ export const AdminDashboard: React.FC<Props> = ({ onSettingsUpdated }) => {
             }`}
           >
             <span>📜</span> Görev Tasarımcısı
+          </button>
+          <button
+            onClick={() => setActiveTab('achievements')}
+            className={`w-full px-4 py-3 rounded-xl text-left text-sm font-semibold flex items-center gap-3 transition-all ${
+              activeTab === 'achievements' ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-600/20' : 'text-slate-400 hover:bg-slate-900/60 hover:text-slate-200'
+            }`}
+          >
+            <span>🏅</span> Başarımlar & Rozetler
           </button>
           <button
             onClick={() => setActiveTab('tournaments')}
@@ -783,6 +924,23 @@ export const AdminDashboard: React.FC<Props> = ({ onSettingsUpdated }) => {
                       className="w-full accent-indigo-600"
                     />
                   </div>
+                  {/* Slider - Kart Oynama Ek Süresi */}
+                  <div className="space-y-2">
+                    <div className="flex justify-between text-xs">
+                      <span className="text-slate-300">Kart Oynama Ek Süresi (Bonus)</span>
+                      <span className="text-emerald-400 font-bold">+{settings.bonusTimePerActionSeconds ?? 10} Saniye</span>
+                    </div>
+                    <input
+                      type="range"
+                      min="0"
+                      max="30"
+                      step="1"
+                      value={settings.bonusTimePerActionSeconds ?? 10}
+                      onChange={(e) => handleSliderChange('bonusTimePerActionSeconds', Number(e.target.value))}
+                      onMouseUp={() => handleSaveSettings()}
+                      className="w-full accent-indigo-600"
+                    />
+                  </div>
                   {/* Slider 3 */}
                   <div className="space-y-2">
                     <div className="flex justify-between text-xs">
@@ -922,28 +1080,47 @@ export const AdminDashboard: React.FC<Props> = ({ onSettingsUpdated }) => {
           {/* TAB 4: QUESTS */}
           {activeTab === 'quests' && (
             <div className="space-y-6">
-              <h3 className="text-sm font-bold uppercase tracking-wider text-slate-300">Günlük Görev Havuzu Editörü</h3>
+              <div>
+                <h3 className="text-sm font-bold uppercase tracking-wider text-slate-300">Günlük Görev Havuzu Tasarımcısı</h3>
+                <p className="text-xs text-slate-500 mt-1">Sistemdeki tüm aktif oyuncular için günlük görev havuzunu yönetin. Değişiklikler anında tüm çevrimiçi profillere yansıtılır.</p>
+              </div>
 
               {/* Add quest form */}
               <form onSubmit={handleAddQuest} className="bg-slate-900/30 border border-slate-800 p-5 rounded-2xl space-y-4">
-                <span className="text-xs text-slate-400 uppercase tracking-wider block font-semibold">Yeni Günlük Görev Ekle</span>
+                <span className="text-xs text-slate-400 uppercase tracking-wider block font-bold">Yeni Günlük Görev Ekle</span>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div className="space-y-1">
                     <label className="text-[10px] text-slate-500 uppercase font-bold">Görev Açıklaması</label>
                     <input
                       type="text"
                       required
-                      placeholder="Örn: 3 kira kartı oyna."
+                      placeholder="Örn: 3 kez bankaya para yerleştir."
                       value={newQuestDesc}
                       onChange={(e) => setNewQuestDesc(e.target.value)}
                       className="w-full px-3 py-2 text-xs rounded-xl bg-slate-950 border border-slate-800 text-slate-100 focus:outline-none focus:border-indigo-500"
                     />
                   </div>
-                  <div className="grid grid-cols-3 gap-2">
+                  <div className="grid grid-cols-4 gap-2">
                     <div className="space-y-1">
-                      <label className="text-[10px] text-slate-500 uppercase font-bold">Hedef (Target)</label>
+                      <label className="text-[10px] text-slate-500 uppercase font-bold">Gereken Eylem Tipi</label>
+                      <select
+                        value={newQuestType}
+                        onChange={(e) => setNewQuestType(e.target.value)}
+                        className="w-full px-2 py-2 text-xs rounded-xl bg-slate-950 border border-slate-800 text-slate-100 focus:outline-none focus:border-indigo-500"
+                      >
+                        <option value="games_played">Maç Oyna</option>
+                        <option value="games_won">Maç Kazan</option>
+                        <option value="money_banked">Para Bankala</option>
+                        <option value="cards_stolen">Mülk/Kart Çal</option>
+                        <option value="sets_completed">Set Tamamla</option>
+                        <option value="rent_collected">Kira Topla</option>
+                      </select>
+                    </div>
+                    <div className="space-y-1">
+                      <label className="text-[10px] text-slate-500 uppercase font-bold">Hedef Değer</label>
                       <input
                         type="number"
+                        min="1"
                         value={newQuestTarget}
                         onChange={(e) => setNewQuestTarget(Number(e.target.value))}
                         className="w-full px-3 py-2 text-xs rounded-xl bg-slate-950 border border-slate-800 text-slate-100 focus:outline-none focus:border-indigo-500"
@@ -953,6 +1130,7 @@ export const AdminDashboard: React.FC<Props> = ({ onSettingsUpdated }) => {
                       <label className="text-[10px] text-slate-500 uppercase font-bold">Altın Ödülü</label>
                       <input
                         type="number"
+                        min="1"
                         value={newQuestCoins}
                         onChange={(e) => setNewQuestCoins(Number(e.target.value))}
                         className="w-full px-3 py-2 text-xs rounded-xl bg-slate-950 border border-slate-800 text-slate-100 focus:outline-none focus:border-indigo-500"
@@ -962,6 +1140,7 @@ export const AdminDashboard: React.FC<Props> = ({ onSettingsUpdated }) => {
                       <label className="text-[10px] text-slate-500 uppercase font-bold">XP Ödülü</label>
                       <input
                         type="number"
+                        min="1"
                         value={newQuestXp}
                         onChange={(e) => setNewQuestXp(Number(e.target.value))}
                         className="w-full px-3 py-2 text-xs rounded-xl bg-slate-950 border border-slate-800 text-slate-100 focus:outline-none focus:border-indigo-500"
@@ -971,25 +1150,35 @@ export const AdminDashboard: React.FC<Props> = ({ onSettingsUpdated }) => {
                 </div>
                 <button
                   type="submit"
-                  className="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-xs font-semibold"
+                  className="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-xs font-semibold cursor-pointer"
                 >
-                  Görevi Havuza Gönder
+                  Görevi Havuza Ekle
                 </button>
               </form>
 
               {/* Active Quests Pool List */}
               <div className="bg-slate-900/30 border border-slate-800 rounded-2xl p-5 space-y-4">
-                <span className="text-xs text-slate-400 uppercase tracking-wider block font-semibold">Aktif Havuzdaki Görevler ({quests.length})</span>
+                <span className="text-xs text-slate-400 uppercase tracking-wider block font-semibold">Aktif Görev Havuzu ({quests.length})</span>
                 <div className="space-y-2">
                   {quests.map((q) => (
                     <div key={q.id} className="p-3.5 rounded-xl bg-slate-900/60 border border-slate-800 flex items-center justify-between text-xs">
                       <div>
-                        <p className="font-semibold text-slate-200">{q.description}</p>
-                        <p className="text-[10px] text-slate-500 mt-1">Hedef Sınırı: {q.targetValue} | Ödül: {q.rewardCoins} Altın, {q.rewardXp} XP</p>
+                        <div className="flex items-center gap-2">
+                          <p className="font-semibold text-slate-200">{q.description}</p>
+                          <span className="px-2 py-0.5 rounded bg-slate-850 border border-slate-800 text-[9px] text-indigo-400 uppercase font-mono">
+                            {q.type === 'games_played' && 'Maç'}
+                            {q.type === 'games_won' && 'Kazanma'}
+                            {q.type === 'money_banked' && 'Bankalama'}
+                            {q.type === 'cards_stolen' && 'Çalma'}
+                            {q.type === 'sets_completed' && 'Set'}
+                            {q.type === 'rent_collected' && 'Kira'}
+                          </span>
+                        </div>
+                        <p className="text-[10px] text-slate-500 mt-1">Hedef: {q.targetValue} | Ödül: {q.rewardCoins} Altın, {q.rewardXp} XP</p>
                       </div>
                       <button
                         onClick={() => handleDeleteQuest(q.id)}
-                        className="p-2 rounded bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 font-bold transition-all"
+                        className="p-2 px-3 rounded bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 font-bold transition-all cursor-pointer text-[10px]"
                       >
                         Sil
                       </button>
@@ -1003,44 +1192,292 @@ export const AdminDashboard: React.FC<Props> = ({ onSettingsUpdated }) => {
             </div>
           )}
 
-          {/* TAB 5: TOURNAMENTS */}
-          {activeTab === 'tournaments' && (
+          {/* TAB: ACHIEVEMENTS */}
+          {activeTab === 'achievements' && (
             <div className="space-y-6">
-              <h3 className="text-sm font-bold uppercase tracking-wider text-slate-300">Yeni Canlı Turnuva Başlatma Paneli</h3>
+              <div>
+                <h3 className="text-sm font-bold uppercase tracking-wider text-slate-300">Kalıcı Başarımlar & Rozetler</h3>
+                <p className="text-xs text-slate-500 mt-1">Kullanıcıların ömür boyu kilidini açabileceği başarımları ve rozetleri tasarlayın. Oyuncuların ilerlemeleri kalıcı olarak izlenir.</p>
+              </div>
 
-              <form onSubmit={handleCreateTournament} className="bg-slate-900/30 border border-slate-800 p-5 rounded-2xl space-y-4">
-                <span className="text-xs text-slate-400 uppercase tracking-wider block font-semibold">Turnuva Yapılandırması</span>
-                <div className="space-y-3">
-                  <div className="space-y-1">
-                    <label className="text-[10px] text-slate-500 uppercase font-bold">Turnuva İsmi</label>
-                    <input
-                      type="text"
-                      required
-                      placeholder="Örn: Monopoly Deal Türkiye Ligi"
-                      value={tournamentName}
-                      onChange={(e) => setTournamentName(e.target.value)}
-                      className="w-full px-3 py-2.5 text-xs rounded-xl bg-slate-950 border border-slate-800 text-slate-100 focus:outline-none focus:border-indigo-500"
-                    />
+              {/* Add achievement form */}
+              <form onSubmit={handleAddAchievement} className="bg-slate-900/30 border border-slate-800 p-5 rounded-2xl space-y-4">
+                <span className="text-xs text-slate-400 uppercase tracking-wider block font-bold">Yeni Kalıcı Başarım Ekle</span>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="space-y-3">
+                    <div className="space-y-1">
+                      <label className="text-[10px] text-slate-500 uppercase font-bold">Başarım Başlığı</label>
+                      <input
+                        type="text"
+                        required
+                        placeholder="Örn: Emlak Kralı"
+                        value={newAchTitle}
+                        onChange={(e) => setNewAchTitle(e.target.value)}
+                        className="w-full px-3 py-2 text-xs rounded-xl bg-slate-950 border border-slate-800 text-slate-100 focus:outline-none focus:border-indigo-500"
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <label className="text-[10px] text-slate-500 uppercase font-bold">Açıklama / Koşul Metni</label>
+                      <input
+                        type="text"
+                        required
+                        placeholder="Örn: Toplamda 15 mülk seti tamamla."
+                        value={newAchDesc}
+                        onChange={(e) => setNewAchDesc(e.target.value)}
+                        className="w-full px-3 py-2 text-xs rounded-xl bg-slate-950 border border-slate-800 text-slate-100 focus:outline-none focus:border-indigo-500"
+                      />
+                    </div>
                   </div>
-                  <div className="space-y-1">
-                    <label className="text-[10px] text-slate-500 uppercase font-bold">Katılımcılar (Virgülle ayırın)</label>
-                    <textarea
-                      required
-                      rows={3}
-                      value={tournamentPlayers}
-                      onChange={(e) => setTournamentPlayers(e.target.value)}
-                      className="w-full px-3 py-2 text-xs rounded-xl bg-slate-950 border border-slate-800 text-slate-100 focus:outline-none focus:border-indigo-500 font-mono"
-                    />
-                    <p className="text-[9px] text-slate-500">Katılımcı isimlerini virgülle ayırarak girin (Örn: Oyuncu1, Bot Memo, Bot Can).</p>
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                    <div className="space-y-1">
+                      <label className="text-[10px] text-slate-500 uppercase font-bold">Eylem Tipi</label>
+                      <select
+                        value={newAchType}
+                        onChange={(e) => setNewAchType(e.target.value)}
+                        className="w-full px-2 py-2 text-xs rounded-xl bg-slate-950 border border-slate-800 text-slate-100 focus:outline-none focus:border-indigo-500"
+                      >
+                        <option value="games_played">Toplam Maç</option>
+                        <option value="games_won">Toplam Kazanma</option>
+                        <option value="money_banked">Para Bankalama</option>
+                        <option value="cards_stolen">Mülk/Kart Çalma</option>
+                        <option value="sets_completed">Set Tamamlama</option>
+                        <option value="rent_collected">Kira Toplama</option>
+                      </select>
+                    </div>
+                    <div className="space-y-1">
+                      <label className="text-[10px] text-slate-500 uppercase font-bold">Eşik Değer (Hedef)</label>
+                      <input
+                        type="number"
+                        min="1"
+                        value={newAchTarget}
+                        onChange={(e) => setNewAchTarget(Number(e.target.value))}
+                        className="w-full px-3 py-2 text-xs rounded-xl bg-slate-950 border border-slate-800 text-slate-100 focus:outline-none focus:border-indigo-500"
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <label className="text-[10px] text-slate-500 uppercase font-bold">Altın Ödülü</label>
+                      <input
+                        type="number"
+                        min="1"
+                        value={newAchCoins}
+                        onChange={(e) => setNewAchCoins(Number(e.target.value))}
+                        className="w-full px-3 py-2 text-xs rounded-xl bg-slate-950 border border-slate-800 text-slate-100 focus:outline-none focus:border-indigo-500"
+                      />
+                    </div>
                   </div>
                 </div>
                 <button
                   type="submit"
-                  className="px-5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-xs font-semibold"
+                  className="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-xs font-semibold cursor-pointer"
                 >
-                  Turnuva Kurasını Çek ve Başlat
+                  Başarımı Kaydet ve Yayınla
                 </button>
               </form>
+
+              {/* Achievements list */}
+              <div className="bg-slate-900/30 border border-slate-800 rounded-2xl p-5 space-y-4">
+                <span className="text-xs text-slate-400 uppercase tracking-wider block font-semibold">Mevcut Kalıcı Başarımlar ({achievements.length})</span>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  {achievements.map((ach) => (
+                    <div key={ach.id} className="p-4 rounded-xl bg-slate-900/60 border border-slate-800 flex items-start justify-between gap-4 text-xs">
+                      <div className="space-y-1">
+                        <div className="flex items-center gap-2">
+                          <span className="text-lg">🏅</span>
+                          <span className="font-bold text-slate-200">{ach.title}</span>
+                          <span className="px-1.5 py-0.5 rounded bg-slate-800 border border-slate-700 text-[8px] text-amber-400 font-mono">
+                            {ach.rewardCoins} 🪙
+                          </span>
+                        </div>
+                        <p className="text-slate-400 text-xs leading-relaxed">{ach.description}</p>
+                        <p className="text-[10px] text-slate-500">
+                          Eylem: <span className="font-mono text-indigo-400">{ach.type}</span> | Limit: <span className="text-slate-300 font-bold">{ach.targetValue}</span>
+                        </p>
+                      </div>
+                      <button
+                        onClick={() => handleDeleteAchievement(ach.id)}
+                        className="p-1.5 rounded bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 font-semibold cursor-pointer text-[10px] transition-all"
+                      >
+                        Sil
+                      </button>
+                    </div>
+                  ))}
+                  {achievements.length === 0 && (
+                    <p className="text-slate-500 col-span-2 text-center py-6 text-xs">Tanımlanmış başarım veya rozet yok.</p>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* TAB 5: TOURNAMENTS */}
+          {activeTab === 'tournaments' && (
+            <div className="space-y-6">
+              <div>
+                <h3 className="text-sm font-bold uppercase tracking-wider text-slate-300">Turnuva Bracket Tasarımcısı & Canlı Yönetim Hub'ı</h3>
+                <p className="text-xs text-slate-500 mt-1">Yeni eleme usulü turnuvalar oluşturun, turları simüle edin, botları ilerletin ve şampiyonları ödüllendirin.</p>
+              </div>
+
+              <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                {/* Form: Create tournament */}
+                <div className="lg:col-span-1 bg-slate-900/30 border border-slate-800 p-5 rounded-2xl space-y-4 h-fit">
+                  <span className="text-xs text-slate-400 uppercase tracking-wider block font-semibold">Turnuva Kurulumu</span>
+                  <form onSubmit={handleCreateTournament} className="space-y-3">
+                    <div className="space-y-1">
+                      <label className="text-[10px] text-slate-500 uppercase font-bold">Turnuva Adı</label>
+                      <input
+                        type="text"
+                        required
+                        placeholder="Örn: Yaz Sezonu Kupası"
+                        value={tournamentName}
+                        onChange={(e) => setTournamentName(e.target.value)}
+                        className="w-full px-3 py-2 text-xs rounded-xl bg-slate-950 border border-slate-800 text-slate-100 focus:outline-none focus:border-indigo-500"
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <label className="text-[10px] text-slate-500 uppercase font-bold">Katılımcı İsimleri (Virgülle Ayırın)</label>
+                      <textarea
+                        required
+                        rows={4}
+                        value={tournamentPlayers}
+                        onChange={(e) => setTournamentPlayers(e.target.value)}
+                        className="w-full px-3 py-2 text-xs rounded-xl bg-slate-950 border border-slate-800 text-slate-100 focus:outline-none focus:border-indigo-500 font-mono"
+                      />
+                      <p className="text-[9px] text-slate-500">En az 2 katılımcı girin. "Bot" kelimesini içeren isimler otomatik olarak yapay zeka tarafından oynatılır.</p>
+                    </div>
+                    <button
+                      type="submit"
+                      className="w-full py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-xs font-semibold cursor-pointer transition-all"
+                    >
+                      Turnuva Oluştur & Kurayı Çek
+                    </button>
+                  </form>
+                </div>
+
+                {/* Tournaments List & Live Status */}
+                <div className="lg:col-span-2 space-y-4">
+                  <div className="bg-slate-900/30 border border-slate-800 rounded-2xl p-5 space-y-4">
+                    <span className="text-xs text-slate-400 uppercase tracking-wider block font-semibold">Kayıtlı Turnuvalar ({tournaments.length})</span>
+                    <div className="space-y-3">
+                      {tournaments.map((t) => (
+                        <div
+                          key={t.id}
+                          className={`p-4 rounded-xl border transition-all ${
+                            selectedTournamentId === t.id
+                              ? 'bg-indigo-950/20 border-indigo-500/50'
+                              : 'bg-slate-900/40 border-slate-800 hover:border-slate-750'
+                          }`}
+                        >
+                          <div className="flex items-center justify-between gap-4">
+                            <div>
+                              <div className="flex items-center gap-2">
+                                <h4 className="font-bold text-slate-200 text-xs">{t.name}</h4>
+                                <span className={`px-2 py-0.5 rounded text-[8px] uppercase font-bold ${
+                                  t.status === 'completed' ? 'bg-emerald-500/10 text-emerald-400' : 'bg-amber-500/10 text-amber-400'
+                                }`}>
+                                  {t.status === 'completed' ? 'Tamamlandı' : `Canlı (Tur ${t.currentRound})`}
+                                </span>
+                              </div>
+                              <p className="text-[10px] text-slate-500 mt-1">
+                                Katılımcı sayısı: {t.participants.length} | Oluşturulma: {new Date(t.createdAt).toLocaleDateString('tr-TR')}
+                              </p>
+                              {t.winner && (
+                                <p className="text-[10px] text-emerald-400 font-semibold mt-1">🏆 Kazanan Şampiyon: {t.winner}</p>
+                              )}
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <button
+                                onClick={() => setSelectedTournamentId(selectedTournamentId === t.id ? null : t.id)}
+                                className="px-3 py-1.5 rounded bg-indigo-600/10 hover:bg-indigo-600/20 text-indigo-400 text-[10px] font-bold cursor-pointer"
+                              >
+                                {selectedTournamentId === t.id ? 'Detay Kapat' : 'Görünüm & Kontrol'}
+                              </button>
+                              <button
+                                onClick={() => handleDeleteTournament(t.id)}
+                                className="p-1.5 rounded bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 cursor-pointer text-[10px]"
+                              >
+                                Sil
+                              </button>
+                            </div>
+                          </div>
+
+                          {/* BRACKET VISUALIZER AND ADMIN GAMEPLAY SUBMISSIONS */}
+                          {selectedTournamentId === t.id && (
+                            <div className="mt-5 border-t border-slate-800/80 pt-4 space-y-4">
+                              <div className="flex items-center justify-between border-b border-slate-900 pb-2">
+                                <span className="text-[11px] uppercase tracking-wider text-indigo-400 font-bold">Turnuva Eşleşme Şeması (Tur {t.currentRound})</span>
+                                {t.status === 'active' && (
+                                  <button
+                                    onClick={() => handleAdvanceTournamentRound(t.id)}
+                                    className="px-3 py-1 bg-amber-600 hover:bg-amber-500 text-white font-bold rounded text-[10px] transition-all cursor-pointer shadow-md"
+                                  >
+                                    🔄 Bot Karşılaşmalarını Simüle Et & Turu İlerlet
+                                  </button>
+                                )}
+                              </div>
+
+                              <div className="space-y-3">
+                                {t.rounds.map((round: any) => (
+                                  <div key={round.roundNumber} className="bg-slate-950/40 p-3 rounded-xl border border-slate-900 space-y-2">
+                                    <div className="flex justify-between items-center text-[10px] text-slate-500 border-b border-slate-900 pb-1">
+                                      <span className="font-bold uppercase">Tur {round.roundNumber}</span>
+                                      <span>{round.matches.length} Karşılaşma</span>
+                                    </div>
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                                      {round.matches.map((m: any) => {
+                                        const isBotMatch = m.player1?.toLowerCase().includes('bot') && m.player2?.toLowerCase().includes('bot');
+                                        return (
+                                          <div key={m.id} className="p-2.5 rounded-lg bg-slate-900/60 border border-slate-800 text-[11px] flex flex-col justify-between">
+                                            <div className="flex items-center justify-between font-mono">
+                                              <span className={m.winner === m.player1 ? 'text-emerald-400 font-bold' : 'text-slate-300'}>
+                                                {m.player1} {m.winner === m.player1 && '🏆'}
+                                              </span>
+                                              <span className="text-slate-500 text-[9px]">VS</span>
+                                              <span className={m.winner === m.player2 ? 'text-emerald-400 font-bold' : 'text-slate-300'}>
+                                                {m.player2} {m.winner === m.player2 && '🏆'}
+                                              </span>
+                                            </div>
+
+                                            {m.status === 'completed' ? (
+                                              <div className="mt-2 text-[9px] text-slate-500 text-center bg-slate-950/50 py-1 rounded">
+                                                Sonuç: {m.score1} - {m.score2} (Kazanan: <span className="text-emerald-400 font-bold">{m.winner}</span>)
+                                              </div>
+                                            ) : (
+                                              <div className="mt-2.5 border-t border-slate-900 pt-2 flex flex-col gap-1">
+                                                <span className="text-[9px] text-slate-500 block">Maç Sonucunu Gir (Admin Kararı)</span>
+                                                <div className="flex items-center gap-1">
+                                                  <button
+                                                    onClick={() => handleAdminSubmitMatchScore(t.id, m.id, m.player1, 3, 1)}
+                                                    className="flex-1 py-1 rounded bg-slate-800 hover:bg-slate-700 text-slate-200 text-[9px] transition-all cursor-pointer"
+                                                  >
+                                                    {m.player1} Kazandır
+                                                  </button>
+                                                  <button
+                                                    onClick={() => handleAdminSubmitMatchScore(t.id, m.id, m.player2, 1, 3)}
+                                                    className="flex-1 py-1 rounded bg-slate-800 hover:bg-slate-700 text-slate-200 text-[9px] transition-all cursor-pointer"
+                                                  >
+                                                    {m.player2} Kazandır
+                                                  </button>
+                                                </div>
+                                              </div>
+                                            )}
+                                          </div>
+                                        );
+                                      })}
+                                    </div>
+                                  </div>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      ))}
+                      {tournaments.length === 0 && (
+                        <p className="text-slate-500 text-center py-6 text-xs">Aktif veya geçmiş turnuva kaydı bulunmamaktadır.</p>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              </div>
             </div>
           )}
 

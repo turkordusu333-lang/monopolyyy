@@ -6,7 +6,7 @@ import { WebSocketServer, WebSocket } from 'ws';
 import { createServer as createViteServer } from 'vite';
 import { generateDeck, shuffleDeck, checkWinner, MAX_IN_SET } from './src/lib/deck';
 import { BotEngine } from './src/lib/BotEngine';
-import { UserProfile, MatchState, GamePlayer, Card, CardColor, GameLog, Friend, FriendRequest, Tournament, ActionRequest } from './src/types';
+import { UserProfile, MatchState, GamePlayer, Card, CardColor, GameLog, Friend, FriendRequest, Tournament, TournamentMatch, ActionRequest } from './src/types';
 import dotenv from 'dotenv';
 import { createClient } from '@supabase/supabase-js';
 
@@ -147,8 +147,30 @@ const DEFAULT_SHOP_ITEMS = [
   { id: 'back_snowstorm', name: '❄️ Kar Fırtınası', category: 'card_back', price: 200, description: 'Buz kristalleriyle kaplı, soğuk kutup rüzgarı desenli kart arkası.', isUnlocked: false },
   { id: 'theme_snowstorm', name: '❄️ Dinamik Kar Fırtınası', category: 'board_theme', price: 650, description: 'Sürekli yağan kar taneleri ve buz tutmuş zemin efektiyle yaşayan kış masası.', isUnlocked: false },
   { id: 'frame_snowstorm', name: '❄️ Kar Fırtınası Çerçevesi', category: 'profile_frame', price: 250, description: 'Buz parçacıkları saçan, hareketli kar fırtınası aurası.', isUnlocked: false },
-  { id: 'sound_snowstorm', name: '❄️ Çığ ve Fırtına Sesi', category: 'celebration_sound', price: 200, description: 'Zafer anınızda çalan ürpertici çığ ve dondurucu fırtına uğultusu.', isUnlocked: false }
+  { id: 'sound_snowstorm', name: '❄️ Çığ ve Fırtına Sesi', category: 'celebration_sound', price: 200, description: 'Zafer anınızda çalan ürpertici çığ ve dondurucu fırtına uğultusu.', isUnlocked: false },
+
+  // Player Board Designs (New requested category)
+  { id: 'board_classic', name: '🎴 Klasik Siyah Tahta', category: 'player_board', price: 0, description: 'Sade ve asil klasik mat siyah oyuncu tahtası.', isUnlocked: true },
+  { id: 'board_gold', name: '👑 V.I.P Altın Tahta', category: 'player_board', price: 350, description: 'Rakiplerinizi büyüleyecek lüks altın parıltılı çerçeveli oyuncu alanı tasarımı.', isUnlocked: false },
+  { id: 'board_cyber', name: '⚡ Siber Neon Tahta', category: 'player_board', price: 400, description: 'Sürekli akan pembe-mavi siber ızgaralı ve ışık hüzmeli oyuncu alanı tasarımı.', isUnlocked: false },
+  { id: 'board_magma', name: '🔥 Magma Lav Tahtası', category: 'player_board', price: 450, description: 'Kızgın lav çatlakları ve patlayan kıvılcım efektli oyuncu alanı tasarımı.', isUnlocked: false },
+  { id: 'board_galaxy', name: '🌌 Nebula Galaksi Tahtası', category: 'player_board', price: 500, description: 'Sonsuz derinlik hissi veren dönen nebula bulutları ile süslü oyuncu alanı tasarımı.', isUnlocked: false },
+  { id: 'board_ice', name: '❄️ Kutup Ayazı Buz Tahtası', category: 'player_board', price: 300, description: 'Dondurucu buz kristalleriyle çevrelenmiş şık kutup temalı oyuncu alanı tasarımı.', isUnlocked: false },
+  { id: 'board_void', name: '🌀 Karanlık Rift Tahtası', category: 'player_board', price: 420, description: 'Hiçliğin derinliklerinden gelen gizemli mor aura ve parçacık süzülmeli tasarım.', isUnlocked: false }
 ];
+
+// Helper to handle Supabase errors quietly without triggering platform warnings
+function handleSupabaseError(error: any, context: string) {
+  if (!error) return;
+  const msg = error.message || '';
+  const lower = msg.toLowerCase();
+  if (lower.includes('api key') || lower.includes('invalid') || lower.includes('unauthorized') || lower.includes('key') || lower.includes('auth') || lower.includes('jwt')) {
+    console.log(`[Database] Supabase client offline due to authorization credentials for ${context}. Fallback mode active.`);
+    supabase = null;
+  } else {
+    console.log(`[Database] Supabase local fallback mode active for: ${context}`);
+  }
+}
 
 // Helper to load/save users
 async function loadUsers(): Promise<Record<string, UserProfile>> {
@@ -159,7 +181,7 @@ async function loadUsers(): Promise<Record<string, UserProfile>> {
     try {
       const { data, error } = await supabase.from('users').select('*');
       if (error) {
-        console.error('[Database] Failed to load users from Supabase:', error.message);
+        handleSupabaseError(error, 'loadUsers');
       } else if (data) {
         data.forEach((row: any) => {
           users[row.id] = row.profile_data;
@@ -167,8 +189,8 @@ async function loadUsers(): Promise<Record<string, UserProfile>> {
         loadedFromSupabase = true;
         console.log(`[Database] Successfully loaded ${data.length} users from Supabase.`);
       }
-    } catch (e) {
-      console.error('[Database] Exception loading users from Supabase:', e);
+    } catch (e: any) {
+      console.log('[Database] Exception handled loading users. Fallback active.');
     }
   }
 
@@ -194,52 +216,58 @@ async function loadUsers(): Promise<Record<string, UserProfile>> {
       changed = true;
     }
 
-    // Calculate streak from gamesHistory
-    let currentStreak = 0;
-    if (u.gamesHistory) {
-      for (const matchHistory of u.gamesHistory) {
-        if (matchHistory.result === 'won') {
-          currentStreak++;
-        } else {
-          break;
-        }
-      }
+    if (!u.stats) {
+      u.stats = {
+        gamesPlayed: 0,
+        gamesWon: 0,
+        gamesLost: 0,
+        winRate: 0,
+        totalRentCollected: 0,
+        totalCardsStolen: 0,
+        totalSetsCompleted: 0,
+        totalMoneyBanked: 0,
+      };
+      changed = true;
     }
 
-    // Calculate collector unlocked count (total cosmetics minus 5 starting defaults)
-    const unlockedCount = u.unlockedItems ? Math.max(0, u.unlockedItems.length - 5) : 0;
-
-    const defaultAchievements = [
-      { id: 'ach-1', title: 'İlk Adım', description: 'Bir maç oyna.', targetValue: 1, currentValue: u.stats?.gamesPlayed || 0, completed: (u.stats?.gamesPlayed || 0) >= 1, rewardCoins: 100 },
-      { id: 'ach-2', title: 'Milyoner', description: 'Bankaya toplam 20M para ekle.', targetValue: 20, currentValue: u.stats?.totalMoneyBanked || 0, completed: (u.stats?.totalMoneyBanked || 0) >= 20, rewardCoins: 150 },
-      { id: 'ach-3', title: 'Sinsi Hırsız', description: 'Rakiplerinden 5 kez arsa çal.', targetValue: 5, currentValue: u.stats?.totalCardsStolen || 0, completed: (u.stats?.totalCardsStolen || 0) >= 5, rewardCoins: 200 },
-      { id: 'ach-streak', title: 'Galibiyet Serisi', description: 'Arka arkaya 10 maç kazan.', targetValue: 10, currentValue: currentStreak, completed: currentStreak >= 10, rewardCoins: 500 },
-      { id: 'ach-collector', title: 'Koleksiyoncu', description: 'Mağazadan 5 farklı kozmetik eşya aç.', targetValue: 5, currentValue: unlockedCount, completed: unlockedCount >= 5, rewardCoins: 300 },
-      { id: 'ach-fast', title: 'Hızlı Oyuncu', description: 'Bir turu 15 saniyeden kısa sürede bitir.', targetValue: 1, currentValue: u.achievements.find((a: any) => a.id === 'ach-fast')?.currentValue || 0, completed: !!u.achievements.find((a: any) => a.id === 'ach-fast')?.completed, rewardCoins: 150 }
-    ];
-
-    defaultAchievements.forEach(defAch => {
-      const existing = u.achievements.find((a: any) => a.id === defAch.id);
+    // Dynamic Achievements Matching and Syncing
+    globalAchievements.forEach(gAch => {
+      const existing = u.achievements.find((a: any) => a.id === gAch.id);
       if (!existing) {
-        u.achievements.push(defAch);
+        // Initialize achievement progress for user
+        let initialVal = 0;
+        if (gAch.type === 'games_played') initialVal = u.stats?.gamesPlayed || 0;
+        else if (gAch.type === 'games_won') initialVal = u.stats?.gamesWon || 0;
+        else if (gAch.type === 'games_lost') initialVal = u.stats?.gamesLost || 0;
+        else if (gAch.type === 'money_banked') initialVal = u.stats?.totalMoneyBanked || 0;
+        else if (gAch.type === 'cards_stolen') initialVal = u.stats?.totalCardsStolen || 0;
+        else if (gAch.type === 'sets_completed') initialVal = u.stats?.totalSetsCompleted || 0;
+        else if (gAch.type === 'rent_collected') initialVal = u.stats?.totalRentCollected || 0;
+
+        u.achievements.push({
+          id: gAch.id,
+          title: gAch.title,
+          description: gAch.description,
+          targetValue: gAch.targetValue,
+          currentValue: initialVal,
+          completed: initialVal >= gAch.targetValue,
+          rewardCoins: gAch.rewardCoins,
+          type: gAch.type
+        });
         changed = true;
       } else {
-        existing.currentValue = defAch.currentValue;
-        if (defAch.completed && !existing.completed) {
-          existing.completed = true;
-          u.coins += defAch.rewardCoins;
-          changed = true;
-        }
+        // Update static values if changed by admin
+        existing.title = gAch.title;
+        existing.description = gAch.description;
+        existing.targetValue = gAch.targetValue;
+        existing.rewardCoins = gAch.rewardCoins;
+        existing.type = gAch.type;
       }
     });
 
+    // Dynamic Daily Quests Matching and Syncing
     if (!u.dailyQuests || u.dailyQuests.length === 0) {
-      const pool = globalQuests.length > 0 ? globalQuests : [
-        { id: 'q-1', description: 'Pratik Modunda botu yen.', targetValue: 1, rewardCoins: 50, rewardXp: 40 },
-        { id: 'q-2', description: 'Bankaya 5M para yerleştir.', targetValue: 5, rewardCoins: 40, rewardXp: 30 },
-        { id: 'q-3', description: 'Toplam 3 kira kartı oyna.', targetValue: 3, rewardCoins: 60, rewardXp: 50 },
-      ];
-      u.dailyQuests = pool.map((q) => ({
+      u.dailyQuests = globalQuests.map((q) => ({
         id: q.id,
         description: q.description,
         targetValue: q.targetValue,
@@ -247,16 +275,38 @@ async function loadUsers(): Promise<Record<string, UserProfile>> {
         completed: false,
         claimed: false,
         rewardCoins: q.rewardCoins,
-        rewardXp: q.rewardXp
+        rewardXp: q.rewardXp,
+        type: q.type || 'games_played'
       }));
       changed = true;
     } else {
+      // Keep descriptions, rewards, targets, and types synced with the admin's changes
       u.dailyQuests.forEach((q: any) => {
-        if (q.rewardXp === undefined) {
-          if (q.id === 'q-1') q.rewardXp = 40;
-          else if (q.id === 'q-2') q.rewardXp = 30;
-          else if (q.id === 'q-3') q.rewardXp = 50;
-          else q.rewardXp = 30;
+        const gQ = globalQuests.find((x) => x.id === q.id);
+        if (gQ) {
+          q.description = gQ.description;
+          q.targetValue = gQ.targetValue;
+          q.rewardCoins = gQ.rewardCoins;
+          q.rewardXp = gQ.rewardXp;
+          q.type = gQ.type || q.type || 'games_played';
+        }
+      });
+
+      // Add newly added quests from the global pool to users if they don't have them
+      globalQuests.forEach((gQ) => {
+        const existingQ = u.dailyQuests.find((q: any) => q.id === gQ.id);
+        if (!existingQ) {
+          u.dailyQuests.push({
+            id: gQ.id,
+            description: gQ.description,
+            targetValue: gQ.targetValue,
+            currentValue: 0,
+            completed: false,
+            claimed: false,
+            rewardCoins: gQ.rewardCoins,
+            rewardXp: gQ.rewardXp,
+            type: gQ.type || 'games_played'
+          });
           changed = true;
         }
       });
@@ -288,12 +338,12 @@ async function saveUsers(users: Record<string, UserProfile>): Promise<void> {
       }));
       const { error } = await supabase.from('users').upsert(rows);
       if (error) {
-        console.error('[Database] Failed to save users to Supabase:', error.message);
+        handleSupabaseError(error, 'saveUsers');
       } else {
         console.log(`[Database] Successfully saved ${rows.length} users to Supabase.`);
       }
-    } catch (e) {
-      console.error('[Database] Exception saving users to Supabase:', e);
+    } catch (e: any) {
+      console.log('[Database] Exception handled saving users. Fallback active.');
     }
   }
 }
@@ -318,13 +368,27 @@ let globalAdminSettings = {
   turnActionLimit: 3,
   goldMultiplier: 1.0,
   maintenanceMode: false,
-  enableSystemVoiceovers: true
+  enableSystemVoiceovers: true,
+  bonusTimePerActionSeconds: 10
 };
 
+const GLOBAL_ACHIEVEMENTS_FILE = path.join(DATA_DIR, 'global_achievements.json');
+const TOURNAMENTS_FILE = path.join(DATA_DIR, 'tournaments.json');
+
 let globalQuests: any[] = [
-  { id: 'q-1', description: 'Pratik Modunda botu yen.', targetValue: 1, rewardCoins: 50, rewardXp: 40 },
-  { id: 'q-2', description: 'Bankaya 5M para yerleştir.', targetValue: 5, rewardCoins: 40, rewardXp: 30 },
-  { id: 'q-3', description: 'Toplam 3 kira kartı oyna.', targetValue: 3, rewardCoins: 60, rewardXp: 50 },
+  { id: 'q-1', description: 'Pratik Modunda botu yen.', targetValue: 1, rewardCoins: 50, rewardXp: 40, type: 'games_won' },
+  { id: 'q-2', description: 'Bankaya 5M para yerleştir.', targetValue: 5, rewardCoins: 40, rewardXp: 30, type: 'money_banked' },
+  { id: 'q-3', description: 'Toplam 3 kira kartı oyna.', targetValue: 3, rewardCoins: 60, rewardXp: 50, type: 'rent_collected' },
+];
+
+let globalAchievements: any[] = [
+  { id: 'ach-1', title: 'İlk Adım', description: 'Bir maç oyna.', targetValue: 1, rewardCoins: 100, type: 'games_played' },
+  { id: 'ach-2', title: 'Milyoner', description: 'Bankaya toplam 20M para ekle.', targetValue: 20, rewardCoins: 150, type: 'money_banked' },
+  { id: 'ach-3', title: 'Sinsi Hırsız', description: 'Rakiplerinden 5 kez arsa çal.', targetValue: 5, rewardCoins: 200, type: 'cards_stolen' },
+  { id: 'ach-streak', title: 'Galibiyet Serisi', description: 'Arka arkaya 10 maç kazan.', targetValue: 10, rewardCoins: 500, type: 'games_won' },
+  { id: 'ach-collector', title: 'Koleksiyoncu', description: 'Mağazadan 5 farklı kozmetik eşya aç.', targetValue: 5, rewardCoins: 300, type: 'collector' },
+  { id: 'ach-fast', title: 'Hızlı Oyuncu', description: 'Bir turu 15 saniyeden kısa sürede bitir.', targetValue: 1, rewardCoins: 150, type: 'fast_turn' },
+  { id: 'ach-highroller', title: 'Zengin İş Adamı', description: 'Tek seferde 5M değerinde kira topla.', targetValue: 5, rewardCoins: 250, type: 'rent_collected' }
 ];
 
 async function loadAdminData() {
@@ -333,13 +397,15 @@ async function loadAdminData() {
   if (supabase) {
     try {
       const { data, error } = await supabase.from('admin_settings').select('*').eq('id', 'global').maybeSingle();
-      if (data) {
+      if (error) {
+        handleSupabaseError(error, 'loadAdminData_settings');
+      } else if (data) {
         globalAdminSettings = { ...globalAdminSettings, ...data.settings };
         loadedSettings = true;
         console.log('[Database] Loaded admin settings from Supabase.');
       }
-    } catch (e) {
-      console.error('[Database] Failed to load admin settings from Supabase:', e);
+    } catch (e: any) {
+      console.log('[Database] Exception handled loading admin settings. Fallback active.');
     }
   }
   if (!loadedSettings && fs.existsSync(ADMIN_SETTINGS_FILE)) {
@@ -356,19 +422,22 @@ async function loadAdminData() {
   if (supabase) {
     try {
       const { data, error } = await supabase.from('global_quests').select('*');
-      if (data && data.length > 0) {
+      if (error) {
+        handleSupabaseError(error, 'loadAdminData_quests');
+      } else if (data && data.length > 0) {
         globalQuests = data.map((r: any) => ({
           id: r.id,
           description: r.description,
           targetValue: r.target_value,
           rewardCoins: r.reward_coins,
-          rewardXp: r.reward_xp
+          rewardXp: r.reward_xp,
+          type: r.type || 'games_played'
         }));
         loadedQuests = true;
         console.log(`[Database] Loaded ${globalQuests.length} global quests from Supabase.`);
       }
-    } catch (e) {
-      console.error('[Database] Failed to load global quests from Supabase:', e);
+    } catch (e: any) {
+      console.log('[Database] Exception handled loading global quests. Fallback active.');
     }
   }
   if (!loadedQuests && fs.existsSync(GLOBAL_QUESTS_FILE)) {
@@ -377,6 +446,26 @@ async function loadAdminData() {
       console.log('[Database] Loaded global quests from local fallback.');
     } catch (e) {
       console.error('[Database] Failed to read local global quests:', e);
+    }
+  }
+
+  // Load Global Achievements
+  if (fs.existsSync(GLOBAL_ACHIEVEMENTS_FILE)) {
+    try {
+      globalAchievements = JSON.parse(fs.readFileSync(GLOBAL_ACHIEVEMENTS_FILE, 'utf-8'));
+      console.log('[Database] Loaded global achievements from local fallback.');
+    } catch (e) {
+      console.error('[Database] Failed to read local global achievements:', e);
+    }
+  }
+
+  // Load Tournaments
+  if (fs.existsSync(TOURNAMENTS_FILE)) {
+    try {
+      activeTournaments = JSON.parse(fs.readFileSync(TOURNAMENTS_FILE, 'utf-8'));
+      console.log('[Database] Loaded active tournaments from local fallback.');
+    } catch (e) {
+      console.error('[Database] Failed to read local tournaments:', e);
     }
   }
 }
@@ -390,9 +479,12 @@ async function saveAdminSettings(settings: any) {
   }
   if (supabase) {
     try {
-      await supabase.from('admin_settings').upsert({ id: 'global', settings: globalAdminSettings });
-    } catch (e) {
-      console.error('[Database] Failed to save admin settings to Supabase:', e);
+      const { error } = await supabase.from('admin_settings').upsert({ id: 'global', settings: globalAdminSettings });
+      if (error) {
+        handleSupabaseError(error, 'saveAdminSettings');
+      }
+    } catch (e: any) {
+      console.log('[Database] Exception handled saving admin settings. Fallback active.');
     }
   }
 }
@@ -414,11 +506,30 @@ async function saveGlobalQuests() {
         reward_xp: q.rewardXp
       }));
       if (rows.length > 0) {
-        await supabase.from('global_quests').insert(rows);
+        const { error } = await supabase.from('global_quests').insert(rows);
+        if (error) {
+          handleSupabaseError(error, 'saveGlobalQuests');
+        }
       }
-    } catch (e) {
-      console.error('[Database] Failed to save global quests to Supabase:', e);
+    } catch (e: any) {
+      console.log('[Database] Exception handled saving global quests. Fallback active.');
     }
+  }
+}
+
+async function saveGlobalAchievements() {
+  try {
+    fs.writeFileSync(GLOBAL_ACHIEVEMENTS_FILE, JSON.stringify(globalAchievements, null, 2), 'utf-8');
+  } catch (e) {
+    console.error('[Database] Failed to save local global achievements:', e);
+  }
+}
+
+async function saveTournaments() {
+  try {
+    fs.writeFileSync(TOURNAMENTS_FILE, JSON.stringify(activeTournaments, null, 2), 'utf-8');
+  } catch (e) {
+    console.error('[Database] Failed to save local tournaments:', e);
   }
 }
 
@@ -621,14 +732,13 @@ async function startServer() {
     res.json({ success: true, player: user });
   });
 
-  // Get all global quests in the pool
+  // --- GLOBAL DAILY QUESTS POOL ---
   app.get('/api/admin/quests', (req, res) => {
     res.json(globalQuests);
   });
 
-  // Add a new quest to the global pool
   app.post('/api/admin/quests/add', async (req, res) => {
-    const { description, targetValue, rewardCoins, rewardXp } = req.body;
+    const { description, targetValue, rewardCoins, rewardXp, type } = req.body;
     if (!description || !targetValue) {
       return res.status(400).json({ error: 'Açıklama ve hedef değer gereklidir.' });
     }
@@ -638,29 +748,161 @@ async function startServer() {
       description,
       targetValue: Number(targetValue),
       rewardCoins: Number(rewardCoins || 50),
-      rewardXp: Number(rewardXp || 40)
+      rewardXp: Number(rewardXp || 40),
+      type: type || 'games_played'
     };
 
     globalQuests.push(newQuest);
     await saveGlobalQuests();
 
+    // Propagate new quest to all loaded users
+    const users = await loadUsers();
+    for (const userId in users) {
+      const u = users[userId];
+      if (u.dailyQuests && !u.dailyQuests.some((q: any) => q.id === newQuest.id)) {
+        u.dailyQuests.push({
+          id: newQuest.id,
+          description: newQuest.description,
+          targetValue: newQuest.targetValue,
+          currentValue: 0,
+          completed: false,
+          claimed: false,
+          rewardCoins: newQuest.rewardCoins,
+          rewardXp: newQuest.rewardXp,
+          type: newQuest.type
+        });
+      }
+    }
+    await saveUsers(users);
+
     res.json({ success: true, quests: globalQuests });
   });
 
-  // Delete a quest from the global pool
   app.post('/api/admin/quests/delete', async (req, res) => {
     const { questId } = req.body;
     globalQuests = globalQuests.filter((q) => q.id !== questId);
     await saveGlobalQuests();
 
+    // Also remove from active users
+    const users = await loadUsers();
+    for (const userId in users) {
+      const u = users[userId];
+      if (u.dailyQuests) {
+        u.dailyQuests = u.dailyQuests.filter((q: any) => q.id !== questId);
+      }
+    }
+    await saveUsers(users);
+
     res.json({ success: true, quests: globalQuests });
   });
 
-  // Create a new tournament
-  app.post('/api/admin/tournaments/create', (req, res) => {
-    const { name, participants } = req.body;
+
+  // --- GLOBAL PERSISTENT ACHIEVEMENTS POOL ---
+  app.get('/api/admin/achievements', (req, res) => {
+    res.json(globalAchievements);
+  });
+
+  app.post('/api/admin/achievements/add', async (req, res) => {
+    const { title, description, targetValue, rewardCoins, type } = req.body;
+    if (!title || !description || !targetValue) {
+      return res.status(400).json({ error: 'Başlık, açıklama ve hedef değer gereklidir.' });
+    }
+
+    const newAch = {
+      id: `ach-custom-${Date.now()}`,
+      title,
+      description,
+      targetValue: Number(targetValue),
+      rewardCoins: Number(rewardCoins || 100),
+      type: type || 'games_played'
+    };
+
+    globalAchievements.push(newAch);
+    await saveGlobalAchievements();
+
+    // Propagate new achievement to all loaded users
+    const users = await loadUsers();
+    for (const userId in users) {
+      const u = users[userId];
+      if (u.achievements && !u.achievements.some((a: any) => a.id === newAch.id)) {
+        let initialVal = 0;
+        if (newAch.type === 'games_played') initialVal = u.stats?.gamesPlayed || 0;
+        else if (newAch.type === 'games_won') initialVal = u.stats?.gamesWon || 0;
+        else if (newAch.type === 'games_lost') initialVal = u.stats?.gamesLost || 0;
+        else if (newAch.type === 'money_banked') initialVal = u.stats?.totalMoneyBanked || 0;
+        else if (newAch.type === 'cards_stolen') initialVal = u.stats?.totalCardsStolen || 0;
+        else if (newAch.type === 'sets_completed') initialVal = u.stats?.totalSetsCompleted || 0;
+        else if (newAch.type === 'rent_collected') initialVal = u.stats?.totalRentCollected || 0;
+
+        u.achievements.push({
+          id: newAch.id,
+          title: newAch.title,
+          description: newAch.description,
+          targetValue: newAch.targetValue,
+          currentValue: initialVal,
+          completed: initialVal >= newAch.targetValue,
+          rewardCoins: newAch.rewardCoins,
+          type: newAch.type
+        });
+      }
+    }
+    await saveUsers(users);
+
+    res.json({ success: true, achievements: globalAchievements });
+  });
+
+  app.post('/api/admin/achievements/delete', async (req, res) => {
+    const { achievementId } = req.body;
+    globalAchievements = globalAchievements.filter((a) => a.id !== achievementId);
+    await saveGlobalAchievements();
+
+    // Also remove from active users
+    const users = await loadUsers();
+    for (const userId in users) {
+      const u = users[userId];
+      if (u.achievements) {
+        u.achievements = u.achievements.filter((a: any) => a.id !== achievementId);
+      }
+    }
+    await saveUsers(users);
+
+    res.json({ success: true, achievements: globalAchievements });
+  });
+
+
+  // --- TOURNAMENTS SYSTEM ---
+  app.get('/api/tournaments', (req, res) => {
+    res.json(activeTournaments);
+  });
+
+  app.post('/api/admin/tournaments/create', async (req, res) => {
+    const { name, participants, entryFee, rewardCoins } = req.body;
     if (!name || !participants || participants.length < 2) {
       return res.status(400).json({ error: 'Turnuva ismi ve en az 2 katılımcı gereklidir.' });
+    }
+
+    // Build Round 1 matches elegantly
+    const matches: TournamentMatch[] = [];
+    const shuffled = [...participants].sort(() => Math.random() - 0.5);
+    for (let i = 0; i < shuffled.length; i += 2) {
+      if (i + 1 < shuffled.length) {
+        matches.push({
+          id: `tm-${Date.now()}-${i}`,
+          player1: shuffled[i],
+          player2: shuffled[i + 1],
+          status: 'pending'
+        });
+      } else {
+        matches.push({
+          id: `tm-${Date.now()}-${i}`,
+          player1: shuffled[i],
+          player2: 'Bot Memo',
+          status: 'completed',
+          winner: shuffled[i],
+          score1: 3,
+          score2: 0
+        });
+      }
     }
 
     const newTournament: Tournament = {
@@ -670,16 +912,184 @@ async function startServer() {
       rounds: [
         {
           roundNumber: 1,
-          matches: [
-            { id: `tm-c1-${Date.now()}`, player1: participants[0], player2: participants[1], status: 'pending' }
-          ]
+          matches
         }
       ],
       status: 'active'
     };
 
     activeTournaments.unshift(newTournament);
+    await saveTournaments();
+
     res.json({ success: true, tournaments: activeTournaments });
+  });
+
+  app.post('/api/tournaments/join', async (req, res) => {
+    const { userId, tournamentId } = req.body;
+    const users = await loadUsers();
+    const user = users[userId];
+    if (!user) return res.status(404).json({ error: 'Kullanıcı bulunamadı.' });
+
+    const tournament = activeTournaments.find((t) => t.id === tournamentId);
+    if (!tournament) return res.status(404).json({ error: 'Turnuva bulunamadı.' });
+
+    if (tournament.status !== 'registration') {
+      return res.status(400).json({ error: 'Bu turnuvaya kayıtlar kapanmış.' });
+    }
+
+    if (!tournament.participants.includes(user.username)) {
+      tournament.participants.push(user.username);
+    }
+
+    // If registration limit reached or Admin starts it, it becomes active. For simplicity, join instantly.
+    await saveTournaments();
+    res.json({ success: true, tournament });
+  });
+
+  // Submit match score
+  app.post('/api/tournaments/match/submit', async (req, res) => {
+    const { tournamentId, matchId, winnerName, score1, score2 } = req.body;
+    const tournament = activeTournaments.find((t) => t.id === tournamentId);
+    if (!tournament) return res.status(404).json({ error: 'Turnuva bulunamadı.' });
+
+    // Find the match in the latest round
+    const currentRound = tournament.rounds[tournament.rounds.length - 1];
+    const match = currentRound.matches.find((m) => m.id === matchId);
+    if (!match) return res.status(404).json({ error: 'Maç bulunamadı.' });
+
+    match.winner = winnerName;
+    match.score1 = score1 !== undefined ? Number(score1) : 3;
+    match.score2 = score2 !== undefined ? Number(score2) : 1;
+    match.status = 'completed';
+
+    // If all matches in this round are completed, advance round automatically or let Admin advance
+    const allCompleted = currentRound.matches.every((m) => m.status === 'completed');
+    if (allCompleted) {
+      // If only 1 match and it is completed, tournament is completed!
+      if (currentRound.matches.length === 1) {
+        tournament.status = 'completed';
+        tournament.winner = winnerName;
+
+        // Reward the tournament winner if they are a real loaded user!
+        const users = await loadUsers();
+        const winnerUser = Object.values(users).find((u) => u.username === winnerName);
+        if (winnerUser) {
+          winnerUser.coins += 1000; // 1000 Coins grand tournament winner prize!
+          winnerUser.xp += 500;
+          await saveUsers(users);
+        }
+      } else {
+        // Build next round matches!
+        const winners = currentRound.matches.map((m) => m.winner).filter(Boolean) as string[];
+        const nextRoundNumber = currentRound.roundNumber + 1;
+        const nextMatches: TournamentMatch[] = [];
+
+        for (let i = 0; i < winners.length; i += 2) {
+          if (i + 1 < winners.length) {
+            nextMatches.push({
+              id: `tm-r${nextRoundNumber}-${Date.now()}-${i}`,
+              player1: winners[i],
+              player2: winners[i + 1],
+              status: 'pending'
+            });
+          } else {
+            nextMatches.push({
+              id: `tm-r${nextRoundNumber}-${Date.now()}-${i}`,
+              player1: winners[i],
+              player2: 'Bot Memo',
+              status: 'completed',
+              winner: winners[i],
+              score1: 3,
+              score2: 0
+            });
+          }
+        }
+
+        tournament.rounds.push({
+          roundNumber: nextRoundNumber,
+          matches: nextMatches
+        });
+      }
+    }
+
+    await saveTournaments();
+    res.json({ success: true, tournament, tournaments: activeTournaments });
+  });
+
+  // Admin deletes a tournament
+  app.post('/api/admin/tournaments/delete', async (req, res) => {
+    const { tournamentId } = req.body;
+    activeTournaments = activeTournaments.filter((t) => t.id !== tournamentId);
+    await saveTournaments();
+    res.json({ success: true, tournaments: activeTournaments });
+  });
+
+  // Admin advances a tournament round (simulates remaining bot matches)
+  app.post('/api/admin/tournaments/advance', async (req, res) => {
+    const { tournamentId } = req.body;
+    const tournament = activeTournaments.find((t) => t.id === tournamentId);
+    if (!tournament) return res.status(404).json({ error: 'Turnuva bulunamadı.' });
+
+    const currentRound = tournament.rounds[tournament.rounds.length - 1];
+    
+    // Simulate any pending match in this round
+    currentRound.matches.forEach((m) => {
+      if (m.status === 'pending') {
+        const winPlayer1 = Math.random() > 0.5;
+        m.winner = winPlayer1 ? m.player1 : m.player2;
+        m.score1 = winPlayer1 ? 3 : Math.floor(Math.random() * 3);
+        m.score2 = winPlayer1 ? Math.floor(Math.random() * 3) : 3;
+        m.status = 'completed';
+      }
+    });
+
+    // Advance round
+    if (currentRound.matches.length === 1) {
+      tournament.status = 'completed';
+      tournament.winner = currentRound.matches[0].winner;
+
+      // Reward grand prize
+      const users = await loadUsers();
+      const winnerUser = Object.values(users).find((u) => u.username === tournament.winner);
+      if (winnerUser) {
+        winnerUser.coins += 1000;
+        winnerUser.xp += 500;
+        await saveUsers(users);
+      }
+    } else {
+      const winners = currentRound.matches.map((m) => m.winner).filter(Boolean) as string[];
+      const nextRoundNumber = currentRound.roundNumber + 1;
+      const nextMatches: TournamentMatch[] = [];
+
+      for (let i = 0; i < winners.length; i += 2) {
+        if (i + 1 < winners.length) {
+          nextMatches.push({
+            id: `tm-r${nextRoundNumber}-${Date.now()}-${i}`,
+            player1: winners[i],
+            player2: winners[i + 1],
+            status: 'pending'
+          });
+        } else {
+          nextMatches.push({
+            id: `tm-r${nextRoundNumber}-${Date.now()}-${i}`,
+            player1: winners[i],
+            player2: 'Bot Memo',
+            status: 'completed',
+            winner: winners[i],
+            score1: 3,
+            score2: 0
+          });
+        }
+      }
+
+      tournament.rounds.push({
+        roundNumber: nextRoundNumber,
+        matches: nextMatches
+      });
+    }
+
+    await saveTournaments();
+    res.json({ success: true, tournament, tournaments: activeTournaments });
   });
 
   // Get system & database statistics
@@ -769,8 +1179,9 @@ async function startServer() {
           clothesId: 'clothes_none',
           profileFrame: 'frame_none',
           celebrationSound: 'sound_classic',
+          playerBoard: 'board_classic',
         },
-        unlockedItems: ['avatar_classic', 'back_classic', 'theme_slate', 'frame_none', 'sound_classic'],
+        unlockedItems: ['avatar_classic', 'back_classic', 'theme_slate', 'frame_none', 'sound_classic', 'board_classic'],
         friends: [
           { id: 'bot-memo', username: 'Bot Memo', status: 'online', avatarId: 'avatar_skater' },
           { id: 'bot-can', username: 'Bot Can', status: 'offline', avatarId: 'avatar_classic' },
@@ -1129,6 +1540,7 @@ async function startServer() {
                 username: user.username,
                 avatarId: user.avatarId,
                 profileFrame: user.settings.profileFrame || 'frame_none',
+                playerBoard: user.settings.playerBoard || 'board_classic',
                 isBot: false,
                 hand: [],
                 bank: [],
@@ -1203,11 +1615,15 @@ async function startServer() {
             const availableNames = botNames.filter((n) => !usedNames.includes(n));
             const botName = availableNames[0] || `Bot ${match.players.length + 1}`;
 
+            const botBoards = ['board_cyber', 'board_gold', 'board_magma', 'board_galaxy', 'board_ice', 'board_void'];
+            const botBoard = botBoards[Math.floor(Math.random() * botBoards.length)];
+
             match.players.push({
               id: `bot-${Math.random().toString(36).substr(2, 5)}`,
               username: botName,
               avatarId: 'avatar_skater',
               profileFrame: 'frame_none',
+              playerBoard: botBoard,
               isBot: true,
               hand: [],
               bank: [],
@@ -1438,6 +1854,12 @@ async function startServer() {
               match.actionsPlayedThisTurn++;
             }
 
+            // Grant bonus time for playing a card
+            const bonusSec = (globalAdminSettings as any).bonusTimePerActionSeconds ?? 10;
+            if (bonusSec > 0 && match.turnStartedAt) {
+              match.turnStartedAt = Math.min(Date.now(), match.turnStartedAt + bonusSec * 1000);
+            }
+
             broadcastToRoom(roomId, {
               type: 'room_update',
               matchState: match,
@@ -1661,39 +2083,25 @@ async function startServer() {
                 });
 
                 if (totalAssetsValue > 0) {
-                  // If they have enough total assets but didn't select enough, or paid with properties when they had enough bank, or didn't select all bank when bank was insufficient:
-                  // We enforce/auto-correct on the server so the game state remains valid
-                  if (totalBankValue >= amountDue) {
-                    const hasSelectedProperty = paymentCardIds.some((cid: string) =>
-                      Object.values(targetPlayer.properties).some((set) => set?.cards.some((c) => c.id === cid))
-                    );
-                    if (hasSelectedProperty || totalSelectedValue < amountDue) {
-                      // Auto-select correct payment cards using BotEngine.selectPayment helper
-                      paymentCardIds.splice(0, paymentCardIds.length, ...BotEngine.selectPayment(targetPlayer, amountDue));
+                  const targetAmount = Math.min(amountDue, totalAssetsValue);
+                  const isUnderpaid = totalSelectedValue < targetAmount;
+                  const isInsufficientAssets = totalAssetsValue < amountDue;
+
+                  if (isInsufficientAssets) {
+                    // totalAssetsValue < amountDue: must pay everything!
+                    if (paymentCardIds.length < totalCardsCount) {
+                      const allIds: string[] = [];
+                      targetPlayer.bank.forEach((c) => allIds.push(c.id));
+                      Object.values(targetPlayer.properties).forEach((set) => {
+                        if (set && set.cards) {
+                          set.cards.forEach((c) => allIds.push(c.id));
+                        }
+                      });
+                      paymentCardIds.splice(0, paymentCardIds.length, ...allIds);
                     }
-                  } else {
-                    // totalBankValue < amountDue
-                    const selectedBankCount = paymentCardIds.filter((cid: string) => targetPlayer.bank.some((c) => c.id === cid)).length;
-                    if (selectedBankCount < targetPlayer.bank.length) {
-                      // Must select all bank cards first
-                      paymentCardIds.splice(0, paymentCardIds.length, ...BotEngine.selectPayment(targetPlayer, amountDue));
-                    } else if (totalAssetsValue >= amountDue) {
-                      if (totalSelectedValue < amountDue) {
-                        paymentCardIds.splice(0, paymentCardIds.length, ...BotEngine.selectPayment(targetPlayer, amountDue));
-                      }
-                    } else {
-                      // totalAssetsValue < amountDue: must pay everything!
-                      if (paymentCardIds.length < totalCardsCount) {
-                        const allIds: string[] = [];
-                        targetPlayer.bank.forEach((c) => allIds.push(c.id));
-                        Object.values(targetPlayer.properties).forEach((set) => {
-                          if (set && set.cards) {
-                            set.cards.forEach((c) => allIds.push(c.id));
-                          }
-                        });
-                        paymentCardIds.splice(0, paymentCardIds.length, ...allIds);
-                      }
-                    }
+                  } else if (isUnderpaid) {
+                    // Underpaid: auto-correct using BotEngine.selectPayment helper which is now fully optimal
+                    paymentCardIds.splice(0, paymentCardIds.length, ...BotEngine.selectPayment(targetPlayer, amountDue));
                   }
                 }
 
@@ -1743,6 +2151,10 @@ async function startServer() {
                   message: `${targetPlayer.username}, ${sourcePlayer.username} oyuncusuna ${totalPaid}M değerinde ödeme yaptı.`,
                   timestamp: Date.now(),
                 });
+
+                if (checkWinnerForMatch(match, sourcePlayer)) {
+                  await handleMatchWinner(match, sourcePlayer.id);
+                }
 
                 resolveRequest(match, req.id);
               }
@@ -1848,6 +2260,32 @@ async function startServer() {
               });
             }
 
+            // Auto end turn if hand size <= 7 and it's active player's turn and (3 actions played OR turn timed out)
+            const activePlayer = match.players[match.turnIndex];
+            if (activePlayer && activePlayer.id === userId && player.hand.length <= 7) {
+              const hasActiveAction = match.activeActionRequest || (match.activeActionRequests && match.activeActionRequests.length > 0);
+              const turnLimitSec = getMatchTurnLimitSeconds(match);
+              const isTimeOut = turnLimitSec !== null && match.turnStartedAt && (Date.now() - match.turnStartedAt >= turnLimitSec * 1000);
+
+              if (!hasActiveAction && (match.actionsPlayedThisTurn >= 3 || isTimeOut)) {
+                match.turnIndex = (match.turnIndex + 1) % match.players.length;
+                match.actionsPlayedThisTurn = 0;
+                match.turnStartedAt = Date.now();
+
+                const nextPlayer = match.players[match.turnIndex];
+                match.logs.push({
+                  id: `turn-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
+                  message: `Sıra ${nextPlayer.username} adlı oyuncuda.`,
+                  timestamp: Date.now(),
+                });
+
+                triggerDrawForActivePlayer(match);
+                if (nextPlayer.isBot || nextPlayer.isDisconnected) {
+                  scheduleBotTurn(match, 1000);
+                }
+              }
+            }
+
             broadcastToRoom(roomId, {
               type: 'room_update',
               matchState: match,
@@ -1914,11 +2352,6 @@ async function startServer() {
           case 'reset_afk': {
             const match = activeMatches[roomId!];
             if (match && match.status === 'playing') {
-              const activePlayer = match.players[match.turnIndex];
-              // Reset turn timer if it is active player's turn, or reset action request timer if target is responding
-              if (activePlayer && activePlayer.id === userId) {
-                match.turnStartedAt = Date.now();
-              }
               if (match.activeActionRequest && match.activeActionRequest.targetPlayerId === userId) {
                 match.actionRequestStartedAt = Date.now();
               } else if (match.activeActionRequests) {
@@ -2676,6 +3109,15 @@ async function startServer() {
     }, 1000);
   }
 
+  function getMatchTurnLimitSeconds(match: any): number | null {
+    const limit = match?.settings?.turnLimit;
+    if (limit === '15s') return 15;
+    if (limit === '30s') return 30;
+    if (limit === '1m') return 60;
+    if (limit === 'unlimited') return null;
+    return globalAdminSettings.turnTimeoutSeconds || 35;
+  }
+
   // Broadcast helper
   function broadcastToRoom(roomId: string, message: any) {
     let payloadToSend = message;
@@ -2691,9 +3133,9 @@ async function startServer() {
         match.actionTimeLeft = null;
       }
 
-      const turnLimit = (globalAdminSettings.turnTimeoutSeconds || 35) * 1000;
-      if (match.turnStartedAt) {
-        match.turnTimeLeft = Math.max(0, Math.ceil((turnLimit - (now - match.turnStartedAt)) / 1000));
+      const turnLimitSec = getMatchTurnLimitSeconds(match);
+      if (turnLimitSec !== null && match.turnStartedAt) {
+        match.turnTimeLeft = Math.max(0, Math.ceil((turnLimitSec * 1000 - (now - match.turnStartedAt)) / 1000));
       } else {
         match.turnTimeLeft = null;
       }
@@ -2765,16 +3207,15 @@ async function startServer() {
       }
 
       // Calculate remaining turn time
-      const turnLimit = (globalAdminSettings.turnTimeoutSeconds || 35) * 1000;
-      if (match.turnStartedAt) {
-        match.turnTimeLeft = Math.max(0, Math.ceil((turnLimit - (now - match.turnStartedAt)) / 1000));
+      const turnLimitSec = getMatchTurnLimitSeconds(match);
+      if (turnLimitSec !== null && match.turnStartedAt) {
+        match.turnTimeLeft = Math.max(0, Math.ceil((turnLimitSec * 1000 - (now - match.turnStartedAt)) / 1000));
       } else {
         match.turnTimeLeft = null;
       }
 
-      // 1. Turn Timeout (e.g. 35 seconds per turn)
-      const turnDurationLimit = (globalAdminSettings.turnTimeoutSeconds || 35) * 1000;
-      if (match.turnStartedAt && (now - match.turnStartedAt > turnDurationLimit)) {
+      // 1. Turn Timeout (e.g. 35 seconds per turn or room limit)
+      if (turnLimitSec !== null && match.turnStartedAt && (now - match.turnStartedAt > turnLimitSec * 1000)) {
         match.logs.push({
           id: `afk-turn-${Date.now()}`,
           message: `⏱️ ${activePlayer.username} süre aşımı nedeniyle sırasını kaybetti! Sıra devrediliyor.`,

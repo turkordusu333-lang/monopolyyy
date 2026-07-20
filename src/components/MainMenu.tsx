@@ -123,6 +123,17 @@ export const MainMenu: React.FC<Props> = ({ profile, onUpdateProfile, onJoinRoom
     }
   }, [activeTab]);
 
+  // Admin login custom states
+  const [showAdminLoginModal, setShowAdminLoginModal] = React.useState(false);
+  const [adminPasswordInput, setAdminPasswordInput] = React.useState('');
+  const [adminLoginError, setAdminLoginError] = React.useState('');
+  const [isAdminAuthenticated, setIsAdminAuthenticated] = React.useState(false);
+
+  // Room joining custom password states
+  const [showRoomPasswordModal, setShowRoomPasswordModal] = React.useState(false);
+  const [roomPasswordInput, setRoomPasswordInput] = React.useState('');
+  const [pendingRoomId, setPendingRoomId] = React.useState('');
+
   const handleCreateRoom = (offline: boolean = false) => {
     const rid = offline
       ? `offline-${Math.random().toString(36).substr(2, 5)}`
@@ -138,16 +149,13 @@ export const MainMenu: React.FC<Props> = ({ profile, onUpdateProfile, onJoinRoom
 
   const handleJoinExistingRoom = (roomId: string, hasPassword?: boolean) => {
     sounds.playPlay(profile.settings);
-    let enteredPassword = undefined;
     if (hasPassword) {
-      const promptText = profile.settings.language === 'en' 
-        ? "Enter room password:" 
-        : "Oda şifresini giriniz:";
-      const ans = window.prompt(promptText);
-      if (ans === null) return; // User cancelled
-      enteredPassword = ans.trim();
+      setPendingRoomId(roomId);
+      setRoomPasswordInput('');
+      setShowRoomPasswordModal(true);
+    } else {
+      onJoinRoom(roomId, false, undefined);
     }
-    onJoinRoom(roomId, false, enteredPassword);
   };
 
   const handleRegisterTournament = () => {
@@ -320,11 +328,16 @@ export const MainMenu: React.FC<Props> = ({ profile, onUpdateProfile, onJoinRoom
                 key={tab.id}
                 onClick={() => {
                   if (tab.id === 'admin') {
-                    const pass = prompt('Yönetici şifresini giriniz:');
-                    if (pass !== 'admin123') {
-                      alert('Hatalı şifre!');
-                      return;
+                    if (isAdminAuthenticated) {
+                      setActiveTab('admin');
+                      sounds.playPlay(profile.settings);
+                    } else {
+                      setAdminPasswordInput('');
+                      setAdminLoginError('');
+                      setShowAdminLoginModal(true);
+                      sounds.playPlay(profile.settings);
                     }
+                    return;
                   }
                   setActiveTab(tab.id as any);
                   sounds.playPlay(profile.settings);
@@ -1056,6 +1069,206 @@ export const MainMenu: React.FC<Props> = ({ profile, onUpdateProfile, onJoinRoom
                   className="px-5 py-2 bg-red-600 hover:bg-red-500 text-white font-extrabold rounded-xl text-xs uppercase tracking-wide transition-all active:scale-95 transform"
                 >
                   Kapat (Tamam)
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+
+        {/* Custom Admin Login Modal */}
+        {showAdminLoginModal && (
+          <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-md z-[150] flex items-center justify-center p-4">
+            <motion.div
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.9, opacity: 0 }}
+              transition={{ duration: 0.2, ease: 'easeOut' }}
+              className="bg-slate-900 border border-white/10 rounded-3xl max-w-md w-full overflow-hidden shadow-2xl text-left"
+            >
+              {/* Header */}
+              <div className="p-5 border-b border-white/10 flex justify-between items-center bg-black/20">
+                <div>
+                  <h3 className="text-base font-black text-amber-400 uppercase tracking-wider flex items-center gap-2">
+                    <span>🔐</span> {profile.settings.language === 'en' ? 'Admin Authentication' : 'Yönetici Girişi'}
+                  </h3>
+                  <p className="text-[11px] text-slate-400 mt-0.5">
+                    {profile.settings.language === 'en'
+                      ? 'Please enter the administrator password to gain dashboard access.'
+                      : 'Yönetici paneline erişebilmek için lütfen yetkili şifresini giriniz.'}
+                  </p>
+                </div>
+                <button
+                  onClick={() => {
+                    setShowAdminLoginModal(false);
+                    sounds.playPlay(profile.settings);
+                  }}
+                  className="w-7 h-7 rounded-full bg-white/5 hover:bg-white/10 flex items-center justify-center text-slate-400 hover:text-white transition-all text-xs font-bold"
+                >
+                  ✕
+                </button>
+              </div>
+
+              {/* Form Input Content */}
+              <div className="p-5 space-y-4">
+                <div className="space-y-1.5">
+                  <label className="text-[10px] text-slate-400 uppercase tracking-widest font-black">
+                    {profile.settings.language === 'en' ? 'Admin Password' : 'Yönetici Şifresi'}
+                  </label>
+                  <input
+                    type="password"
+                    placeholder="••••••••"
+                    value={adminPasswordInput}
+                    onChange={(e) => {
+                      setAdminPasswordInput(e.target.value);
+                      if (adminLoginError) setAdminLoginError('');
+                    }}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        // Submit login
+                        const isCorrect = adminPasswordInput === 'admin123';
+                        if (isCorrect) {
+                          sounds.playCoin(profile.settings);
+                          setIsAdminAuthenticated(true);
+                          setActiveTab('admin');
+                          setShowAdminLoginModal(false);
+                        } else {
+                          setAdminLoginError(
+                            profile.settings.language === 'en'
+                              ? 'Invalid password! Access denied.'
+                              : 'Hatalı şifre girdiniz! Erişim reddedildi.'
+                          );
+                        }
+                      }
+                    }}
+                    className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-3 text-sm text-white focus:outline-none focus:border-amber-500/50 focus:ring-1 focus:ring-amber-500/30 transition-all font-mono"
+                    autoFocus
+                  />
+                </div>
+
+                {adminLoginError && (
+                  <motion.div
+                    initial={{ opacity: 0, y: -5 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    className="bg-rose-500/10 border border-rose-500/20 rounded-xl px-3 py-2.5 text-xs text-rose-400 font-medium flex items-center gap-2"
+                  >
+                    <span>⚠️</span> {adminLoginError}
+                  </motion.div>
+                )}
+              </div>
+
+              {/* Action Footer */}
+              <div className="p-4 border-t border-white/10 bg-black/20 flex items-center justify-end gap-2.5">
+                <button
+                  onClick={() => {
+                    setShowAdminLoginModal(false);
+                    sounds.playPlay(profile.settings);
+                  }}
+                  className="px-4 py-2 hover:bg-white/5 text-slate-400 hover:text-white font-bold rounded-xl text-xs transition-all active:scale-95 cursor-pointer"
+                >
+                  {profile.settings.language === 'en' ? 'Cancel' : 'İptal'}
+                </button>
+                <button
+                  onClick={() => {
+                    const isCorrect = adminPasswordInput === 'admin123';
+                    if (isCorrect) {
+                      sounds.playCoin(profile.settings);
+                      setIsAdminAuthenticated(true);
+                      setActiveTab('admin');
+                      setShowAdminLoginModal(false);
+                    } else {
+                      setAdminLoginError(
+                        profile.settings.language === 'en'
+                          ? 'Invalid password! Access denied.'
+                          : 'Hatalı şifre girdiniz! Erişim reddedildi.'
+                      );
+                    }
+                  }}
+                  className="px-5 py-2 bg-amber-500 hover:bg-amber-400 text-slate-950 font-black rounded-xl text-xs uppercase tracking-wider transition-all active:scale-95 shadow-lg shadow-amber-500/10 cursor-pointer"
+                >
+                  {profile.settings.language === 'en' ? 'Unlock Access' : 'Giriş Yap'}
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+
+        {/* Custom Room Password Prompt Modal */}
+        {showRoomPasswordModal && (
+          <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-md z-[150] flex items-center justify-center p-4">
+            <motion.div
+              initial={{ scale: 0.9, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.9, opacity: 0 }}
+              transition={{ duration: 0.2, ease: 'easeOut' }}
+              className="bg-slate-900 border border-white/10 rounded-3xl max-w-sm w-full overflow-hidden shadow-2xl text-left"
+            >
+              {/* Header */}
+              <div className="p-5 border-b border-white/10 flex justify-between items-center bg-black/20">
+                <div>
+                  <h3 className="text-sm font-black text-white flex items-center gap-2 uppercase tracking-wide">
+                    <span>🔑</span> {profile.settings.language === 'en' ? 'Locked Room' : 'Şifreli Oda'}
+                  </h3>
+                  <p className="text-[11px] text-slate-400 mt-0.5">
+                    {profile.settings.language === 'en'
+                      ? 'This room requires a password to join.'
+                      : 'Bu odaya girmek için bir şifre gerekiyor.'}
+                  </p>
+                </div>
+                <button
+                  onClick={() => {
+                    setShowRoomPasswordModal(false);
+                    sounds.playPlay(profile.settings);
+                  }}
+                  className="w-7 h-7 rounded-full bg-white/5 hover:bg-white/10 flex items-center justify-center text-slate-400 hover:text-white transition-all text-xs font-bold"
+                >
+                  ✕
+                </button>
+              </div>
+
+              {/* Form Input */}
+              <div className="p-5 space-y-4">
+                <div className="space-y-1.5">
+                  <label className="text-[10px] text-slate-400 uppercase tracking-widest font-black">
+                    {profile.settings.language === 'en' ? 'Room Password' : 'Oda Şifresi'}
+                  </label>
+                  <input
+                    type="password"
+                    placeholder="••••••••"
+                    value={roomPasswordInput}
+                    onChange={(e) => setRoomPasswordInput(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        sounds.playPlay(profile.settings);
+                        setShowRoomPasswordModal(false);
+                        onJoinRoom(pendingRoomId, false, roomPasswordInput.trim());
+                      }
+                    }}
+                    className="w-full bg-black/40 border border-white/10 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:border-red-500/50 focus:ring-1 focus:ring-red-500/30 transition-all font-mono"
+                    autoFocus
+                  />
+                </div>
+              </div>
+
+              {/* Action Footer */}
+              <div className="p-4 border-t border-white/10 bg-black/20 flex items-center justify-end gap-2">
+                <button
+                  onClick={() => {
+                    setShowRoomPasswordModal(false);
+                    sounds.playPlay(profile.settings);
+                  }}
+                  className="px-4 py-2 hover:bg-white/5 text-slate-400 hover:text-white font-bold rounded-xl text-xs transition-all active:scale-95 cursor-pointer"
+                >
+                  {profile.settings.language === 'en' ? 'Cancel' : 'İptal'}
+                </button>
+                <button
+                  onClick={() => {
+                    sounds.playPlay(profile.settings);
+                    setShowRoomPasswordModal(false);
+                    onJoinRoom(pendingRoomId, false, roomPasswordInput.trim());
+                  }}
+                  className="px-5 py-2 bg-red-600 hover:bg-red-500 text-white font-black rounded-xl text-xs uppercase tracking-wider transition-all active:scale-95 cursor-pointer shadow-lg shadow-red-600/10"
+                >
+                  {profile.settings.language === 'en' ? 'Join' : 'Katıl'}
                 </button>
               </div>
             </motion.div>

@@ -10,7 +10,7 @@ interface Props {
   onUpdateProfile: (updated: UserProfile) => void;
 }
 
-const AVATAR_EMOJIS: Record<string, string> = {
+export const AVATAR_EMOJIS: Record<string, string> = {
   avatar_classic: '👑',
   avatar_skater: '🛹',
   avatar_neon: '🌌',
@@ -30,7 +30,7 @@ const AVATAR_EMOJIS: Record<string, string> = {
   avatar_snowstorm: '🥶',
 };
 
-const CARD_BACK_STYLES: Record<string, { color: string; symbol: string; bgClass?: string; pColor?: string }> = {
+export const CARD_BACK_STYLES: Record<string, { color: string; symbol: string; bgClass?: string; pColor?: string }> = {
   back_classic: { color: '#EF4444', symbol: '▲', pColor: '#FCA5A5' },
   back_cosmic: { color: '#0F172A', symbol: '★', pColor: '#818CF8' },
   back_gold: { color: '#D97706', symbol: '♛', pColor: '#FBBF24' },
@@ -48,7 +48,7 @@ const CARD_BACK_STYLES: Record<string, { color: string; symbol: string; bgClass?
   back_snowstorm: { color: '#E2E8F0', symbol: '❄️', pColor: '#93C5FD', bgClass: 'bg-gradient-to-br from-blue-100 to-sky-300' },
 };
 
-const BOARD_THEME_COLORS: Record<string, string> = {
+export const BOARD_THEME_COLORS: Record<string, string> = {
   theme_slate: '#0F172A',
   theme_green: '#064E3B',
   theme_purple: '#581C87',
@@ -66,7 +66,107 @@ const BOARD_THEME_COLORS: Record<string, string> = {
   theme_snowstorm: '#0b1329',
 };
 
-const STORE_ITEMS: Omit<StoreItem, 'isUnlocked'>[] = [
+export const BOARD_THEME_STYLES: Record<string, { bgClass: string; icon: string; badge: string; glowColor: string }> = {
+  theme_slate: { bgClass: 'bg-gradient-to-br from-slate-900 via-slate-800 to-slate-950', icon: '📁', badge: 'Klasik', glowColor: 'rgba(71, 85, 105, 0.4)' },
+  theme_green: { bgClass: 'bg-gradient-to-br from-emerald-950 via-green-900 to-emerald-950', icon: '🟢', badge: 'Klasik Keçe', glowColor: 'rgba(16, 185, 129, 0.4)' },
+  theme_purple: { bgClass: 'bg-gradient-to-br from-purple-950 via-violet-900 to-slate-950 border-amber-500/20 border', icon: '👑', badge: 'Kraliyet Kadifesi', glowColor: 'rgba(168, 85, 247, 0.4)' },
+  theme_cyberpunk: { bgClass: 'bg-gradient-to-br from-blue-950 via-indigo-900 to-fuchsia-950 border-pink-500/20 border', icon: '⚡', badge: 'Siber Izgara', glowColor: 'rgba(236, 72, 153, 0.4)' },
+  theme_lava: { bgClass: 'bg-gradient-to-br from-red-950 via-orange-950 to-black', icon: '🔥', badge: 'Magma Krateri', glowColor: 'rgba(239, 68, 68, 0.4)' },
+  theme_abyss: { bgClass: 'bg-gradient-to-br from-slate-950 via-blue-950 to-black', icon: '🌀', badge: 'Karanlık Çukur', glowColor: 'rgba(14, 165, 233, 0.4)' },
+  theme_gold: { bgClass: 'bg-gradient-to-br from-amber-950 via-yellow-900 to-stone-900 border-yellow-500/20 border', icon: '💰', badge: 'Hazine Odası', glowColor: 'rgba(245, 158, 11, 0.4)' },
+  theme_sakura: { bgClass: 'bg-gradient-to-br from-rose-950 via-pink-950 to-stone-900', icon: '🌸', badge: 'Sakura Vadisi', glowColor: 'rgba(244, 114, 182, 0.4)' },
+  theme_ice: { bgClass: 'bg-gradient-to-br from-sky-950 via-blue-900 to-slate-950', icon: '❄️', badge: 'Kar Fırtınası', glowColor: 'rgba(56, 189, 248, 0.4)' },
+  theme_retro: { bgClass: 'bg-gradient-to-br from-purple-900 via-fuchsia-950 to-indigo-950', icon: '🕹️', badge: 'Atari Salonu', glowColor: 'rgba(192, 132, 252, 0.4)' },
+  theme_toxic: { bgClass: 'bg-gradient-to-br from-teal-950 via-emerald-950 to-neutral-950', icon: '☣️', badge: 'Zehirli Vaha', glowColor: 'rgba(16, 185, 129, 0.4)' },
+  theme_matrix: { bgClass: 'bg-gradient-to-br from-black via-emerald-950 to-black border-green-500/20 border', icon: '💾', badge: 'Sanal Matris', glowColor: 'rgba(34, 197, 94, 0.4)' },
+  theme_space: { bgClass: 'bg-gradient-to-br from-slate-950 via-indigo-950 to-black', icon: '🚀', badge: 'Uzay İstasyonu', glowColor: 'rgba(99, 102, 241, 0.4)' },
+  theme_desert: { bgClass: 'bg-gradient-to-br from-amber-950 via-orange-950 to-stone-900', icon: '🏜️', badge: 'Kayıp Tapınak', glowColor: 'rgba(245, 158, 11, 0.4)' },
+  theme_atlantis: { bgClass: 'theme-atlantis-bg border-cyan-500/30 border', icon: '🌊', badge: 'Atlantis Canlı Mat', glowColor: 'rgba(6, 182, 212, 0.5)' },
+  theme_volcano: { bgClass: 'theme-volcano-bg border-red-500/30 border', icon: '🌋', badge: 'Volkanik Canlı Mat', glowColor: 'rgba(239, 68, 68, 0.5)' },
+  theme_snowstorm: { bgClass: 'bg-slate-900 border border-blue-400/30 shadow-[inset_0_0_20px_rgba(59,130,246,0.2)]', icon: '❄️', badge: 'Buzlu Canlı Mat', glowColor: 'rgba(147, 197, 253, 0.5)' },
+};
+
+export const PLAYER_BOARD_STYLES: Record<string, { bgClass: string; borderClass: string; textClass: string; glowClass: string; icon: string; nameTr: string; nameEn: string; descTr: string; descEn: string }> = {
+  board_classic: {
+    bgClass: 'bg-slate-900/90',
+    borderClass: 'border-slate-800',
+    textClass: 'text-slate-200',
+    glowClass: '',
+    icon: '🎴',
+    nameTr: 'Klasik Siyah Tahta',
+    nameEn: 'Classic Dark Board',
+    descTr: 'Sade ve asil klasik mat siyah oyun tahtası.',
+    descEn: 'Simple and noble classic matte dark gaming board.'
+  },
+  board_gold: {
+    bgClass: 'bg-gradient-to-br from-amber-950/90 to-amber-900/90',
+    borderClass: 'border-amber-400 border-2',
+    textClass: 'text-amber-100',
+    glowClass: 'shadow-[0_0_15px_rgba(245,158,11,0.5)] ring-1 ring-amber-400/30',
+    icon: '👑',
+    nameTr: 'V.I.P Altın Tahta',
+    nameEn: 'V.I.P Golden Board',
+    descTr: 'Altın işlemeli kenarlar ve sarı asil parıltılı kaplama.',
+    descEn: 'Gold-embroidered borders with royal yellow glow.'
+  },
+  board_cyber: {
+    bgClass: 'bg-gradient-to-br from-indigo-950/95 to-slate-950/95',
+    borderClass: 'border-fuchsia-500 border-2',
+    textClass: 'text-pink-100',
+    glowClass: 'shadow-[0_0_15px_rgba(236,72,153,0.5)] ring-1 ring-pink-400/30',
+    icon: '⚡',
+    nameTr: 'Siber Neon Izgara',
+    nameEn: 'Cyber Neon Grid',
+    descTr: 'Neon pembe ve mavi siber çizgileriyle parlayan siber kart yuvası.',
+    descEn: 'Sleek cyber slots glowing with neon pink and blue grids.'
+  },
+  board_magma: {
+    bgClass: 'bg-gradient-to-br from-red-950/95 to-black/95',
+    borderClass: 'border-orange-500 border-2',
+    textClass: 'text-orange-100',
+    glowClass: 'shadow-[0_0_15px_rgba(249,115,22,0.5)] ring-1 ring-orange-500/30 animate-pulse',
+    icon: '🔥',
+    nameTr: 'Magma Lav Tahtası',
+    nameEn: 'Magma Lava Board',
+    descTr: 'Sürekli kızışan aktif volkanik kor ve ateş efekti.',
+    descEn: 'Constantly heating active volcanic embers and fire effect.'
+  },
+  board_galaxy: {
+    bgClass: 'bg-gradient-to-br from-purple-950/95 via-indigo-950/95 to-black/95',
+    borderClass: 'border-purple-400 border-2',
+    textClass: 'text-purple-100',
+    glowClass: 'shadow-[0_0_15px_rgba(168,85,247,0.5)] ring-1 ring-purple-400/30',
+    icon: '🌌',
+    nameTr: 'Nebula Galaksi Tahtası',
+    nameEn: 'Nebula Galaxy Board',
+    descTr: 'Mor yıldız tozu süzülmesi ve derin uzay görselliği.',
+    descEn: 'Deep space visuals with floating purple star dust.'
+  },
+  board_ice: {
+    bgClass: 'bg-gradient-to-br from-sky-950/90 to-blue-950/90',
+    borderClass: 'border-blue-400 border-2',
+    textClass: 'text-sky-100',
+    glowClass: 'shadow-[0_0_15px_rgba(56,189,248,0.5)] ring-1 ring-sky-400/30',
+    icon: '❄️',
+    nameTr: 'Kutup Ayazı Buz Tahtası',
+    nameEn: 'Frosty Glacier Board',
+    descTr: 'Dondurucu rüzgar altında parıldayan kristal buz tabakası.',
+    descEn: 'Crystal ice layer shining under sub-zero winds.'
+  },
+  board_void: {
+    bgClass: 'bg-gradient-to-br from-violet-950/95 to-stone-950/95',
+    borderClass: 'border-violet-600 border-2',
+    textClass: 'text-violet-100',
+    glowClass: 'shadow-[0_0_15px_rgba(139,92,246,0.4)] ring-1 ring-violet-600/30',
+    icon: '🌀',
+    nameTr: 'Karanlık Rift Tahtası',
+    nameEn: 'Abyssal Void Board',
+    descTr: 'Derin boşluktan çıkan mor aura ve gizemli karanlık.',
+    descEn: 'Mysterious dark aura rising from the infinite void.'
+  }
+};
+
+export const STORE_ITEMS: Omit<StoreItem, 'isUnlocked'>[] = [
   // Avatars
   { id: 'avatar_skater', name: 'Cool Kaykaycı', category: 'avatar', price: 100, description: 'Sokak modasına uygun şık kaykaycı avatarı.' },
   { id: 'avatar_neon', name: 'Cyber Neon', category: 'avatar', price: 250, description: 'Gelecekten gelen neon parıltılı hacker siber tasarımı.' },
@@ -174,11 +274,20 @@ const STORE_ITEMS: Omit<StoreItem, 'isUnlocked'>[] = [
   { id: 'frame_snowstorm', name: '❄️ Kar Fırtınası Çerçevesi', category: 'profile_frame', price: 250, description: 'Buz parçacıkları saçan, hareketli kar fırtınası aurası.' },
   { id: 'sound_snowstorm', name: '❄️ Çığ ve Fırtına Sesi', category: 'celebration_sound', price: 200, description: 'Zafer anınızda çalan ürpertici çığ ve dondurucu fırtına uğultusu.' },
   { id: 'skin_snowstorm', name: '❄️ Donmuş Buz Kaplama', category: 'card_skin', price: 1100, description: 'Kartların üzerinde parıldayan buz kristalleri ve set tamamlandığında buhar çıkma efekti.' },
-  { id: 'vfx_snowstorm', name: '❄️ Çığ Felaketi', category: 'action_vfx', price: 1400, description: 'Aksiyon kartı oynandığında oyun alanını kaplayan kar fırtınası ve ekran donması efekti.' }
+  { id: 'vfx_snowstorm', name: '❄️ Çığ Felaketi', category: 'action_vfx', price: 1400, description: 'Aksiyon kartı oynandığında oyun alanını kaplayan kar fırtınası ve ekran donması efekti.' },
+
+  // Player Board Designs (New requested category)
+  { id: 'board_classic', name: '🎴 Klasik Siyah Tahta', category: 'player_board', price: 0, description: 'Sade ve asil klasik mat siyah oyuncu tahtası.' },
+  { id: 'board_gold', name: '👑 V.I.P Altın Tahta', category: 'player_board', price: 350, description: 'Rakiplerinizi büyüleyecek lüks altın parıltılı çerçeveli oyuncu alanı tasarımı.' },
+  { id: 'board_cyber', name: '⚡ Siber Neon Tahta', category: 'player_board', price: 400, description: 'Sürekli akan pembe-mavi siber ızgaralı ve ışık hüzmeli oyuncu alanı tasarımı.' },
+  { id: 'board_magma', name: '🔥 Magma Lav Tahtası', category: 'player_board', price: 450, description: 'Kızgın lav çatlakları ve patlayan kıvılcım efektli oyuncu alanı tasarımı.' },
+  { id: 'board_galaxy', name: '🌌 Nebula Galaksi Tahtası', category: 'player_board', price: 500, description: 'Sonsuz derinlik hissi veren dönen nebula bulutları ile süslü oyuncu alanı tasarımı.' },
+  { id: 'board_ice', name: '❄️ Kutup Ayazı Buz Tahtası', category: 'player_board', price: 300, description: 'Dondurucu buz kristalleriyle çevrelenmiş şık kutup temalı oyuncu alanı tasarımı.' },
+  { id: 'board_void', name: '🌀 Karanlık Rift Tahtası', category: 'player_board', price: 420, description: 'Hiçliğin derinliklerinden gelen gizemli mor aura ve parçacık süzülmeli tasarım.' }
 ];
 
 export const ShopDialog: React.FC<Props> = ({ profile, onUpdateProfile }) => {
-  const [activeCategory, setActiveCategory] = React.useState<'all' | 'avatar' | 'card_back' | 'board_theme' | 'profile_frame' | 'celebration_sound' | 'card_skin' | 'action_vfx'>('all');
+  const [activeCategory, setActiveCategory] = React.useState<'all' | 'avatar' | 'card_back' | 'board_theme' | 'profile_frame' | 'celebration_sound' | 'card_skin' | 'action_vfx' | 'player_board'>('all');
   const [buyingId, setBuyingId] = React.useState<string | null>(null);
   const [error, setError] = React.useState<string | null>(null);
   const [previewItem, setPreviewItem] = React.useState<typeof STORE_ITEMS[0] | null>(null);
@@ -285,6 +394,7 @@ export const ShopDialog: React.FC<Props> = ({ profile, onUpdateProfile }) => {
           { id: 'celebration_sound', label: t('shop_tab_sounds', profile) },
           { id: 'card_skin', label: t('shop_tab_card_skins', profile) },
           { id: 'action_vfx', label: t('shop_tab_action_vfx', profile) },
+          { id: 'player_board', label: profile.settings.language === 'en' ? '🏆 Player Boards' : '🏆 Oyuncu Tahtaları' },
         ].map((tab) => (
           <button
             key={tab.id}
@@ -306,129 +416,201 @@ export const ShopDialog: React.FC<Props> = ({ profile, onUpdateProfile }) => {
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
         {filteredItems.map((item) => {
           const isUnlocked = item.id === 'sound_classic' || profile.unlockedItems.includes(item.id);
+          const isPremium = item.price >= 350 || item.id.includes('theme_atlantis') || item.id.includes('theme_volcano') || item.id.includes('skin_') || item.id.includes('vfx_');
 
           return (
             <div
               key={item.id}
-              className="bg-black/20 border border-white/5 rounded-2xl p-4 flex flex-col justify-between hover:border-white/10 transition-all relative group"
+              className={`rounded-2xl p-4 flex flex-col justify-between transition-all relative group shop-card-3d ${
+                isPremium
+                  ? 'premium-item-glow'
+                  : 'bg-black/25 border border-white/5 hover:border-white/10 shadow-lg'
+              }`}
             >
-              <div>
-                {/* Visual Preview Container */}
-                <div
-                  onClick={() => {
-                    setPreviewItem(item);
-                    sounds.playPlay(profile.settings);
-                  }}
-                  className="aspect-[4/3] rounded-xl mb-4 bg-black/40 flex items-center justify-center relative overflow-hidden group border border-white/5 cursor-pointer hover:bg-black/60 transition-all"
-                  title="Önizlemek için Tıklayın"
-                >
-                  {/* Glassmorphic hover overlay */}
-                  <div className="absolute inset-0 bg-red-600/0 group-hover:bg-red-600/10 flex items-center justify-center transition-all duration-300">
-                    <span className="opacity-0 group-hover:opacity-100 bg-black/80 border border-white/10 text-white font-bold text-xs px-3 py-1.5 rounded-full shadow-lg transform translate-y-2 group-hover:translate-y-0 transition-all">
-                      🔍 Önizleme Penceresi
-                    </span>
+              {isPremium && <div className="premium-shimmer-overlay rounded-2xl" />}
+
+              <div className="relative z-10 flex flex-col h-full justify-between">
+                <div>
+                  {/* Visual Preview Container */}
+                  <div
+                    onClick={() => {
+                      setPreviewItem(item);
+                      sounds.playPlay(profile.settings);
+                    }}
+                    className={`aspect-[4/3] rounded-xl mb-4 bg-black/40 flex items-center justify-center relative overflow-hidden group border cursor-pointer hover:bg-black/60 transition-all ${
+                      isPremium ? 'border-amber-500/25' : 'border-white/5'
+                    }`}
+                    title="Önizlemek için Tıklayın"
+                  >
+                    {isPremium && (
+                      <div className="absolute top-2 left-2 z-20 bg-amber-500/20 border border-amber-400/30 px-2 py-0.5 rounded-full flex items-center gap-1 shadow-sm">
+                        <span className="text-[8px] font-black tracking-widest text-amber-400 uppercase">✨ PREMİUM ✨</span>
+                      </div>
+                    )}
+
+                    {/* Glassmorphic hover overlay */}
+                    <div className="absolute inset-0 bg-red-600/0 group-hover:bg-red-600/10 flex items-center justify-center transition-all duration-300 z-10">
+                      <span className="opacity-0 group-hover:opacity-100 bg-black/85 border border-white/10 text-white font-black text-[10px] px-3 py-1.5 rounded-full shadow-lg transform translate-y-2 group-hover:translate-y-0 transition-all tracking-wider">
+                        🔍 ÖNİZLEME PENCERESİ
+                      </span>
+                    </div>
+
+                    {item.category === 'avatar' && (
+                      <div className="w-18 h-18 rounded-full border-4 border-red-500/80 flex items-center justify-center text-4xl bg-gradient-to-br from-slate-800 to-slate-900 shadow-xl shadow-red-950/40 group-hover:scale-110 group-hover:rotate-6 transition-all duration-300 relative overflow-hidden">
+                        {AVATAR_EMOJIS[item.id] || '👑'}
+                        <div className="absolute inset-0 bg-white/5 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none" />
+                      </div>
+                    )}
+
+                    {item.category === 'card_back' && (() => {
+                      const cBack = CARD_BACK_STYLES[item.id] || { color: '#EF4444', symbol: '▲', pColor: '#FFF' };
+                      return (
+                        <div className="relative p-1">
+                          <div
+                            className={`w-14 h-22 rounded-xl border flex flex-col justify-between p-2 shadow-xl transition-all duration-300 ${cBack.bgClass || ''} group-hover:scale-110 group-hover:rotate-3 relative overflow-hidden`}
+                            style={{
+                              backgroundColor: cBack.bgClass ? undefined : cBack.color,
+                              borderColor: cBack.pColor || 'rgba(255, 255, 255, 0.2)',
+                              boxShadow: `0 8px 16px -4px rgba(0,0,0,0.5), 0 0 12px ${(cBack.pColor || '#FFFFFF')}25`
+                            }}
+                          >
+                            <div className="text-[6px] font-black text-white/30 select-none text-left tracking-wide">DEAL</div>
+                            <span className="text-white text-3xl font-black self-center drop-shadow-[0_2px_4px_rgba(0,0,0,0.5)] select-none animate-pulse">
+                              {cBack.symbol}
+                            </span>
+                            <div className="text-[6px] font-black text-white/30 select-none text-right tracking-wide">PRO</div>
+                            {/* Inner thin border frame to look like a premium playing card */}
+                            <div className="absolute inset-1 border border-white/5 rounded-lg pointer-events-none" />
+                          </div>
+                        </div>
+                      );
+                    })()}
+
+                    {item.category === 'board_theme' && (() => {
+                      const tStyle = BOARD_THEME_STYLES[item.id] || { bgClass: 'bg-slate-900', icon: '📁', badge: 'Klasik', glowColor: 'rgba(255,255,255,0.1)' };
+                      return (
+                        <div
+                          className={`w-full h-full flex flex-col items-center justify-center transition-all duration-300 relative ${tStyle.bgClass}`}
+                          style={{
+                            boxShadow: `inset 0 0 25px ${tStyle.glowColor}`
+                          }}
+                        >
+                          <div className="text-3xl filter drop-shadow-[0_0_8px_rgba(255,255,255,0.15)] animate-bounce-subtle select-none z-10">
+                            {tStyle.icon}
+                          </div>
+                          <div className="absolute bottom-2 bg-black/60 border border-white/10 px-2.5 py-0.5 rounded-full text-[8px] font-black tracking-wider uppercase text-slate-300 z-10">
+                            {tStyle.badge}
+                          </div>
+                          {/* Felt pattern overlay texture */}
+                          <div className="absolute inset-0 bg-[radial-gradient(rgba(255,255,255,0.03)_1.2px,transparent_1.2px)] [background-size:10px_10px] opacity-60 pointer-events-none" />
+                        </div>
+                      );
+                    })()}
+
+                    {item.category === 'profile_frame' && (
+                      <div className="scale-100 group-hover:scale-110 transition-transform duration-300">
+                        <AvatarWithFrame
+                          avatarId="avatar_classic"
+                          avatarUrl={profile.avatarUrl}
+                          frameId={item.id}
+                          sizeClassName="w-20 h-20 text-4xl"
+                        />
+                      </div>
+                    )}
+
+                    {item.category === 'celebration_sound' && (
+                      <div className="flex flex-col items-center gap-2">
+                        <div className="w-14 h-14 rounded-full bg-gradient-to-br from-amber-500/20 to-red-500/10 border border-amber-500/30 flex items-center justify-center text-3xl text-amber-400 shadow-[0_0_15px_rgba(245,158,11,0.15)] group-hover:scale-110 group-hover:rotate-12 transition-all duration-300">
+                          {item.id === 'sound_snowstorm' ? '❄️' : '🔊'}
+                        </div>
+                        {/* Animated audio visualizer waves */}
+                        <div className="flex gap-0.5 items-end justify-center h-3 w-10">
+                          <div className="w-0.75 bg-amber-500 rounded-full animate-pulse h-1" />
+                          <div className="w-0.75 bg-amber-400 rounded-full animate-pulse h-2" style={{ animationDelay: '0.15s' }} />
+                          <div className="w-0.75 bg-red-500 rounded-full animate-pulse h-3" style={{ animationDelay: '0.3s' }} />
+                          <div className="w-0.75 bg-amber-400 rounded-full animate-pulse h-1.5" style={{ animationDelay: '0.45s' }} />
+                        </div>
+                      </div>
+                    )}
+
+                    {item.category === 'card_skin' && (
+                      <div className="w-16 h-24 rounded-xl border border-white/25 bg-slate-900 flex flex-col justify-between p-2 shadow-2xl relative overflow-hidden group-hover:scale-110 group-hover:-rotate-2 transition-all duration-300">
+                        {/* Live overlay elements */}
+                        <div className="absolute inset-0 pointer-events-none">
+                          {item.id === 'skin_holographic' && <div className="skin-holographic-overlay absolute inset-0" />}
+                          {item.id === 'skin_rune' && <div className="skin-rune-overlay absolute inset-0" />}
+                          {item.id === 'skin_snowstorm' && <div className="absolute inset-0 bg-gradient-to-br from-blue-300/30 to-sky-100/20 backdrop-blur-[1px] animate-pulse" />}
+                        </div>
+                        <div className="text-[5px] font-black text-amber-400 tracking-wider z-10 select-none">PRO SKIN</div>
+                        <div className="text-xl self-center z-10 filter drop-shadow-[0_2px_4px_rgba(0,0,0,0.5)]">
+                          {item.id === 'skin_holographic' ? '💠' : item.id === 'skin_rune' ? '🔮' : '❄️'}
+                        </div>
+                        <div className="text-[6px] font-black text-slate-400 bg-black/60 border border-white/10 px-1 py-0.5 rounded text-center z-10 select-none">
+                          {item.id === 'skin_holographic' ? 'HOLOGRAM' : item.id === 'skin_rune' ? 'RÜN' : 'DONMUŞ'}
+                        </div>
+                      </div>
+                    )}
+
+                    {item.category === 'action_vfx' && (
+                      <div className="relative">
+                        <div className="w-14 h-14 rounded-full bg-gradient-to-br from-red-600/20 to-orange-500/15 border-2 border-red-500/40 flex items-center justify-center text-3xl text-red-400 group-hover:scale-110 transition-all duration-300 relative shadow-[0_0_20px_rgba(239,68,68,0.25)]">
+                          <span className="animate-pulse">{item.id === 'vfx_meteor' ? '☄️' : (item.id === 'vfx_snowstorm' ? '❄️' : '🛡️')}</span>
+                          <div className="absolute inset-0 rounded-full border border-red-500/25 scale-125 animate-ping" />
+                        </div>
+                        <div className="absolute -bottom-1 -right-1 bg-red-600 border border-red-400/20 text-white font-extrabold text-[7px] px-1 rounded uppercase tracking-wider scale-90">VFX</div>
+                      </div>
+                    )}
+
+                    {item.category === 'player_board' && (() => {
+                      const bStyle = PLAYER_BOARD_STYLES[item.id] || PLAYER_BOARD_STYLES.board_classic;
+                      return (
+                        <div className={`w-[130px] p-2 rounded-xl border-2 transition-all duration-300 flex flex-col justify-between ${bStyle.bgClass} ${bStyle.borderClass} ${bStyle.glowClass}`}>
+                          <div className="flex items-center gap-1">
+                            <span className="text-sm select-none">{bStyle.icon}</span>
+                            <span className="text-[8px] font-black tracking-wider uppercase truncate max-w-[80px] text-slate-100">
+                              {profile.settings.language === 'en' ? bStyle.nameEn.split(' ')[0] : bStyle.nameTr.split(' ')[0]}
+                            </span>
+                          </div>
+                          <div className="flex gap-0.5 mt-2">
+                            <div className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse" />
+                            <div className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse" style={{ animationDelay: '0.1s' }} />
+                            <div className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse" style={{ animationDelay: '0.2s' }} />
+                          </div>
+                        </div>
+                      );
+                    })()}
+
+                    {isUnlocked && (
+                      <div className="absolute top-2 right-2 bg-emerald-500/20 border border-emerald-500/30 text-emerald-400 text-[10px] font-bold px-2.5 py-0.5 rounded-full z-20 shadow-sm animate-pulse">
+                        Açık
+                      </div>
+                    )}
                   </div>
 
-                  {item.category === 'avatar' && (
-                    <div className="w-16 h-16 rounded-full border-4 border-red-500 flex items-center justify-center text-3xl bg-slate-800 shadow-lg animate-bounce-subtle">
-                      {AVATAR_EMOJIS[item.id] || '👑'}
-                    </div>
-                  )}
-
-                  {item.category === 'card_back' && (() => {
-                    const cBack = CARD_BACK_STYLES[item.id] || { color: '#EF4444', symbol: '▲' };
-                    return (
-                      <div
-                        className={`w-16 h-24 rounded-lg border-2 border-white/15 flex items-center justify-center font-bold text-3xl shadow-2xl transition-all duration-300 ${cBack.bgClass || ''} group-hover:scale-110`}
-                        style={{
-                          backgroundColor: cBack.bgClass ? undefined : cBack.color,
-                        }}
-                      >
-                        <span className="text-white font-black drop-shadow-md">
-                          {cBack.symbol}
-                        </span>
-                      </div>
-                    );
-                  })()}
-
-                  {item.category === 'board_theme' && (
-                    <div
-                      className={`w-full h-full flex flex-col items-center justify-center transition-colors duration-300 ${
-                        item.id === 'theme_atlantis' ? 'theme-atlantis-bg' : item.id === 'theme_volcano' ? 'theme-volcano-bg' : (item.id === 'theme_snowstorm' ? 'bg-slate-900 border border-blue-300/20' : '')
-                      }`}
-                      style={{
-                        backgroundColor: (item.id === 'theme_atlantis' || item.id === 'theme_volcano') ? undefined : (BOARD_THEME_COLORS[item.id] || '#090D16'),
-                      }}
-                    >
-                      <div className="w-12 h-12 rounded border border-dashed border-white/20 flex items-center justify-center text-white/40 text-[9px] font-black uppercase tracking-wider">
-                        {item.id.includes('atlantis') || item.id.includes('volcano') || item.id.includes('snowstorm') ? '❄️ Dinamik' : 'Masa'}
-                      </div>
-                    </div>
-                  )}
-
-                  {item.category === 'profile_frame' && (
-                    <AvatarWithFrame
-                      avatarId="avatar_classic"
-                      avatarUrl={profile.avatarUrl}
-                      frameId={item.id}
-                      sizeClassName="w-20 h-20 text-4xl"
-                    />
-                  )}
-
-                  {item.category === 'celebration_sound' && (
-                    <div className="w-14 h-14 rounded-full bg-amber-500/10 border-2 border-amber-500/30 flex items-center justify-center text-3xl text-amber-400">
-                      {item.id === 'sound_snowstorm' ? '❄️' : '🔊'}
-                    </div>
-                  )}
-
-                  {item.category === 'card_skin' && (
-                    <div className="w-16 h-24 rounded-lg border-2 border-white/10 bg-slate-800 flex items-center justify-center font-bold text-xs shadow-2xl relative overflow-hidden">
-                      <div className="absolute inset-0 bg-red-500/10 flex items-center justify-center">
-                        {item.id === 'skin_holographic' && <div className="skin-holographic-overlay absolute inset-0" />}
-                        {item.id === 'skin_rune' && <div className="skin-rune-overlay absolute inset-0" />}
-                        {item.id === 'skin_snowstorm' && <div className="absolute inset-0 bg-gradient-to-br from-blue-300/30 to-sky-100/20 backdrop-blur-[1px] animate-pulse" />}
-                      </div>
-                      <span className="text-white text-xs drop-shadow-md z-10">{item.id === 'skin_snowstorm' ? 'BUZ' : 'KAPLAMA'}</span>
-                    </div>
-                  )}
-
-                  {item.category === 'action_vfx' && (
-                    <div className="w-14 h-14 rounded-full bg-red-500/15 border-2 border-red-500/40 flex items-center justify-center text-3xl text-red-400 animate-pulse relative">
-                      {item.id === 'vfx_meteor' ? '☄️' : (item.id === 'vfx_snowstorm' ? '❄️' : '🛡️')}
-                      <div className="absolute inset-0 rounded-full border border-red-400/20 scale-125 animate-ping" />
-                    </div>
-                  )}
-
-                  {isUnlocked && (
-                    <div className="absolute top-2 right-2 bg-red-500/20 border border-red-500/30 text-red-400 text-[10px] font-bold px-2.5 py-0.5 rounded-full">
-                      Açık
-                    </div>
-                  )}
+                  <h4 className="font-extrabold text-base text-slate-100 mb-1 flex items-center gap-1.5 group-hover:text-amber-400 transition-colors">
+                    {item.name}
+                  </h4>
+                  <p className="text-xs text-slate-400 leading-relaxed mb-4">{item.description}</p>
                 </div>
 
-                <h4 className="font-bold text-lg text-white mb-1 flex items-center gap-1.5">
-                  {item.name}
-                </h4>
-                <p className="text-xs text-slate-400 leading-relaxed mb-4">{item.description}</p>
-              </div>
-
-              <div>
-                {isUnlocked ? (
-                  <button
-                    disabled
-                    className="w-full py-2.5 bg-white/5 border border-white/5 text-slate-500 font-bold rounded-xl text-sm cursor-not-allowed"
-                  >
-                    Sahipsiniz
-                  </button>
-                ) : (
-                  <button
-                    onClick={() => handleBuy(item.id, item.price)}
-                    disabled={buyingId !== null}
-                    className="w-full py-2.5 bg-red-600 hover:bg-red-500 text-white font-bold rounded-xl text-sm transition-all flex items-center justify-center gap-2 shadow-lg shadow-red-600/20 active:scale-95 transform cursor-pointer"
-                  >
-                    <span>💰</span> {item.price} Altın - Satın Al
-                  </button>
-                )}
+                <div className="mt-auto">
+                  {isUnlocked ? (
+                    <button
+                      disabled
+                      className="w-full py-2.5 bg-emerald-500/10 border border-emerald-500/20 text-emerald-400/80 font-bold rounded-xl text-xs transition-all cursor-not-allowed uppercase tracking-wider"
+                    >
+                      ✓ Sahipsiniz
+                    </button>
+                  ) : (
+                    <button
+                      onClick={() => handleBuy(item.id, item.price)}
+                      disabled={buyingId !== null}
+                      className="w-full py-2.5 bg-gradient-to-r from-red-600 to-red-500 hover:from-red-500 hover:to-red-400 text-white font-black rounded-xl text-xs transition-all flex items-center justify-center gap-2 shadow-lg shadow-red-600/20 active:scale-95 transform cursor-pointer tracking-wider uppercase"
+                    >
+                      <span>💰</span> {item.price} Altın - Satın Al
+                    </button>
+                  )}
+                </div>
               </div>
             </div>
           );
@@ -520,40 +702,48 @@ export const ShopDialog: React.FC<Props> = ({ profile, onUpdateProfile }) => {
                   );
                 })()}
 
-                {previewItem.category === 'board_theme' && (
-                  <div
-                    className={`w-full h-full rounded-xl p-4 flex flex-col justify-between transition-colors duration-500 border border-white/10 ${
-                      previewItem.id === 'theme_atlantis' ? 'theme-atlantis-bg' : (previewItem.id === 'theme_volcano' ? 'theme-volcano-bg' : (previewItem.id === 'theme_snowstorm' ? 'bg-slate-950 border border-blue-400/20' : ''))
-                    }`}
-                    style={{
-                      backgroundColor: (previewItem.id === 'theme_atlantis' || previewItem.id === 'theme_volcano') ? undefined : (BOARD_THEME_COLORS[previewItem.id] || '#050B14'),
-                    }}
-                  >
-                    {previewItem.id === 'theme_snowstorm' && (
-                      <div className="absolute inset-0 bg-blue-500/5 backdrop-blur-[0.5px] pointer-events-none flex flex-wrap justify-around items-center opacity-30">
-                        <span>❄️</span><span>❄️</span><span>❄️</span><span>❄️</span>
+                {previewItem.category === 'board_theme' && (() => {
+                  const tStyle = BOARD_THEME_STYLES[previewItem.id] || { bgClass: 'bg-slate-900', icon: '📁', badge: 'Klasik', glowColor: 'rgba(255,255,255,0.1)' };
+                  return (
+                    <div
+                      className={`w-full h-full rounded-xl p-4 flex flex-col justify-between transition-all duration-500 border border-white/10 relative overflow-hidden ${tStyle.bgClass}`}
+                      style={{
+                        boxShadow: `inset 0 0 30px ${tStyle.glowColor}, 0 4px 20px rgba(0,0,0,0.6)`
+                      }}
+                    >
+                      {previewItem.id === 'theme_snowstorm' && (
+                        <div className="absolute inset-0 bg-blue-500/5 backdrop-blur-[0.5px] pointer-events-none flex flex-wrap justify-around items-center opacity-30">
+                          <span>❄️</span><span>❄️</span><span>❄️</span><span>❄️</span>
+                        </div>
+                      )}
+                      <div className="w-full flex justify-between items-center border-b border-white/5 pb-2 relative z-10">
+                        <div className="flex gap-1.5">
+                          <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse" />
+                          <span className="w-2 h-2 rounded-full bg-yellow-500 animate-pulse" style={{ animationDelay: '0.2s' }} />
+                          <span className="w-2 h-2 rounded-full bg-green-500 animate-pulse" style={{ animationDelay: '0.4s' }} />
+                        </div>
+                        <span className="text-[9px] font-mono text-white/40">
+                          {previewItem.id.includes('atlantis') || previewItem.id.includes('volcano') || previewItem.id.includes('snowstorm') ? 'DİNAMİK CANLI MAT' : 'LÜKS MASA TEMASI'}
+                        </span>
                       </div>
-                    )}
-                    <div className="w-full flex justify-between items-center border-b border-white/5 pb-2 relative z-10">
-                      <div className="flex gap-1.5">
-                        <span className="w-2 h-2 rounded-full bg-red-500 animate-pulse" />
-                        <span className="w-2 h-2 rounded-full bg-yellow-500 animate-pulse" style={{ animationDelay: '0.2s' }} />
-                        <span className="w-2 h-2 rounded-full bg-green-500 animate-pulse" style={{ animationDelay: '0.4s' }} />
+
+                      <div className="grid grid-cols-3 gap-3 my-auto relative z-10">
+                        <div className="bg-black/40 border border-white/10 rounded-xl p-3 text-center text-[10px] font-bold shadow-md text-slate-300">Banka 🏦</div>
+                        <div className="bg-amber-500/20 border border-amber-500/40 rounded-xl p-3 text-center text-[10px] font-bold text-amber-300 animate-pulse shadow-[0_0_15px_rgba(245,158,11,0.35)]">Deste 🃏</div>
+                        <div className="bg-black/40 border border-white/10 rounded-xl p-3 text-center text-[10px] font-bold shadow-md text-slate-300">Mülkler 🏡</div>
                       </div>
-                      <span className="text-[9px] font-mono text-white/40">
-                        {previewItem.id.includes('atlantis') || previewItem.id.includes('volcano') || previewItem.id.includes('snowstorm') ? 'DİNAMİK MASA TEMASI' : 'KLASİK MASA TEMASI'}
-                      </span>
-                    </div>
 
-                    <div className="grid grid-cols-3 gap-2 my-auto relative z-10">
-                      <div className="bg-white/5 border border-white/10 rounded-lg p-2.5 text-center text-[10px] font-bold shadow-sm">Banka</div>
-                      <div className="bg-amber-500/10 border border-amber-500/30 rounded-lg p-2.5 text-center text-[10px] font-bold text-amber-400 animate-pulse shadow-[0_0_10px_rgba(245,158,11,0.2)]">Deste 🃏</div>
-                      <div className="bg-white/5 border border-white/10 rounded-lg p-2.5 text-center text-[10px] font-bold shadow-sm">Mülkler</div>
-                    </div>
+                      <div className="text-center text-[10px] text-white/60 font-black uppercase tracking-wider animate-pulse relative z-10 flex items-center justify-center gap-1.5">
+                        <span>{tStyle.icon}</span>
+                        <span>{previewItem.name} - {tStyle.badge}</span>
+                        <span>{tStyle.icon}</span>
+                      </div>
 
-                    <div className="text-center text-[9px] text-white/45 font-black uppercase tracking-wider animate-pulse relative z-10">✨ {previewItem.name} Deneyimi ✨</div>
-                  </div>
-                )}
+                      {/* felt pattern overlay */}
+                      <div className="absolute inset-0 bg-[radial-gradient(rgba(255,255,255,0.02)_1.5px,transparent_1.5px)] [background-size:16px_16px] opacity-40 pointer-events-none" />
+                    </div>
+                  );
+                })()}
 
                 {previewItem.category === 'card_skin' && (
                   <div className="flex flex-col items-center">
@@ -636,6 +826,63 @@ export const ShopDialog: React.FC<Props> = ({ profile, onUpdateProfile }) => {
                     </span>
                   </div>
                 )}
+
+                {previewItem.category === 'player_board' && (() => {
+                  const bStyle = PLAYER_BOARD_STYLES[previewItem.id] || PLAYER_BOARD_STYLES.board_classic;
+                  return (
+                    <div className="flex flex-col items-center gap-3 w-full">
+                      <div className={`w-[260px] p-5 rounded-2xl border-3 shadow-2xl transition-all duration-500 relative overflow-hidden flex flex-col justify-between ${bStyle.bgClass} ${bStyle.borderClass} ${bStyle.glowClass}`}>
+                        {/* Dynamic atmospheric ambient lighting waves / patterns based on item */}
+                        <div className="absolute inset-0 pointer-events-none opacity-40 mix-blend-color-dodge">
+                          {previewItem.id === 'board_cyber' && (
+                            <div className="absolute inset-0 bg-[linear-gradient(to_bottom,rgba(236,72,153,0.1)_1px,transparent_1px),linear-gradient(to_right,rgba(6,182,212,0.1)_1px,transparent_1px)] bg-[size:10px_10px]" />
+                          )}
+                          {previewItem.id === 'board_magma' && (
+                            <div className="absolute inset-0 bg-radial-gradient from-red-600/30 to-orange-500/0 animate-pulse" />
+                          )}
+                          {previewItem.id === 'board_galaxy' && (
+                            <div className="absolute inset-0 bg-radial-gradient from-purple-500/20 via-indigo-500/10 to-transparent animate-spin-slow" />
+                          )}
+                          {previewItem.id === 'board_ice' && (
+                            <div className="absolute inset-0 bg-[linear-gradient(45deg,rgba(56,189,248,0.1)_25%,transparent_25%,transparent_50%,rgba(56,189,248,0.1)_50%,rgba(56,189,248,0.1)_75%,transparent_75%,transparent)] bg-[size:20px_20px]" />
+                          )}
+                          {previewItem.id === 'board_void' && (
+                            <div className="absolute inset-0 bg-radial-gradient from-violet-600/25 to-black/30 animate-pulse" />
+                          )}
+                        </div>
+
+                        <div className="flex justify-between items-center relative z-10">
+                          <div className="flex items-center gap-2">
+                            <div className="w-9 h-9 rounded-full border border-white/20 bg-slate-800 flex items-center justify-center text-xl">
+                              👨‍💼
+                            </div>
+                            <div>
+                              <div className="text-xs font-black text-slate-100">{profile.username}</div>
+                              <div className="text-[9px] text-slate-400">Geliştirici</div>
+                            </div>
+                          </div>
+                          <div className="bg-amber-500/20 border border-amber-500/40 text-amber-300 text-[10px] font-black px-2 py-0.5 rounded-lg flex items-center gap-1 shadow-md">
+                            💰 15M
+                          </div>
+                        </div>
+
+                        <div className="flex justify-between items-center mt-6 pt-3 border-t border-white/5 relative z-10">
+                          <div className="text-[10px] text-slate-400 font-bold flex items-center gap-1">
+                            🃏 5 Kart
+                          </div>
+                          <div className="flex gap-1">
+                            <span className="w-2.5 h-2.5 rounded-full bg-red-500" />
+                            <span className="w-2.5 h-2.5 rounded-full bg-amber-500" />
+                            <span className="w-2.5 h-2.5 rounded-full bg-emerald-500" />
+                          </div>
+                        </div>
+                      </div>
+                      <span className="text-[10px] text-amber-400 font-bold mt-2 animate-pulse uppercase tracking-wider">
+                        ✨ {profile.settings.language === 'en' ? bStyle.nameEn : bStyle.nameTr} ÖNİZLEMESİ AKTİF ✨
+                      </span>
+                    </div>
+                  );
+                })()}
 
                 {previewItem.category === 'celebration_sound' && (
                   <div className="flex flex-col items-center gap-4 w-full">

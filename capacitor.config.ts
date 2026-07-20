@@ -7,7 +7,7 @@ const config: CapacitorConfig = {
   server: {
     cleartext: true,
     allowNavigation: [
-      "monopolyyy.onrender.com"
+      "16.170.166.112"
     ]
   }
 };

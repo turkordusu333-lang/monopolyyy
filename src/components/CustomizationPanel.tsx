@@ -50,6 +50,33 @@ const CARD_BACKS = [
   { id: 'back_snowstorm', name: '❄️ Kar Fırtınası', color: '#E2E8F0', pattern: '❄️' },
 ];
 
+const PLAYER_BOARDS = [
+  { id: 'board_classic', name: 'Klasik Siyah', description: 'Standart sade mat siyah tahta.' },
+  { id: 'board_gold', name: '👑 V.I.P Altın', description: 'Asil lüks altın işlemeli tahta.' },
+  { id: 'board_cyber', name: '⚡ Siber Neon Izgara', description: 'Fütüristik pembe-mavi neon çizgili tahta.' },
+  { id: 'board_magma', name: '🔥 Magma Lav Tahtası', description: 'Kızgın aktif volkanik korlu tahta.' },
+  { id: 'board_galaxy', name: '🌌 Nebula Galaksi', description: 'Mor yıldız tozu ve nebula rüzgarlı tahta.' },
+  { id: 'board_ice', name: '❄️ Kutup Ayazı', description: 'Dondurucu buzul kristalleriyle kaplı tahta.' },
+  { id: 'board_void', name: '🌀 Karanlık Rift', description: 'Derin boşluk aurası saçan gizemli tahta.' },
+];
+
+const getPlayerBoardName = (id: string, profile: UserProfile): string => {
+  const opt = PLAYER_BOARDS.find(o => o.id === id);
+  if (profile.settings.language === 'en') {
+    switch(id) {
+      case 'board_classic': return 'Classic Dark';
+      case 'board_gold': return 'V.I.P Golden';
+      case 'board_cyber': return 'Cyber Neon';
+      case 'board_magma': return 'Magma Lava';
+      case 'board_galaxy': return 'Nebula Galaxy';
+      case 'board_ice': return 'Frosty Glacier';
+      case 'board_void': return 'Abyssal Void';
+      default: return opt ? opt.name : id;
+    }
+  }
+  return opt ? opt.name : id;
+};
+
 const PROFILE_FRAMES = [
   { id: 'frame_none', name: 'Klasik Sınır', description: 'Standart sade çerçeve.' },
   { id: 'frame_neon', name: 'Neon Aura', description: 'Siberpunk parlayan pembe.' },
@@ -741,6 +768,48 @@ export const CustomizationPanel: React.FC<Props> = ({ profile, onUpdateProfile }
                       <div>
                         <span className="font-semibold text-xs block text-white">{getProfileFrameName(frame.id, profile)}</span>
                         <span className="text-[10px] text-slate-400 leading-none">{getProfileFrameDesc(frame.id, profile)}</span>
+                      </div>
+                    </div>
+                    {!isUnlocked && (
+                      <span className="absolute top-1 right-1 text-[10px] bg-red-600/90 text-white font-bold px-1.5 py-0.5 rounded">
+                        {t('settings_locked', profile)}
+                      </span>
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Player Boards Selection */}
+          <div>
+            <span className="text-slate-300 text-sm block mb-3">
+              {profile.settings.language === 'en' ? 'Active Player Board Theme' : 'Aktif Oyuncu Tahtası Teması'}
+            </span>
+            <div className="grid grid-cols-2 gap-3 max-h-[220px] overflow-y-auto pr-1 scrollbar-thin">
+              {PLAYER_BOARDS.map((board) => {
+                const isUnlocked = board.id === 'board_classic' || profile.unlockedItems.includes(board.id);
+                const isSelected = (currentSettings.playerBoard || 'board_classic') === board.id;
+                return (
+                  <button
+                    key={board.id}
+                    disabled={!isUnlocked}
+                    onClick={() => handleSaveSetting('playerBoard', board.id)}
+                    className={`p-3 rounded-xl border text-left transition-all relative ${!isUnlocked ? 'opacity-40 cursor-not-allowed' : ''
+                      } ${isSelected
+                        ? 'border-red-500 bg-red-600/10'
+                        : 'border-white/5 bg-black/40 hover:border-white/10'
+                      }`}
+                  >
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 rounded-full border border-white/10 bg-slate-800 flex items-center justify-center text-xl shrink-0">
+                        {board.id === 'board_classic' ? '🎴' : board.id === 'board_gold' ? '👑' : board.id === 'board_cyber' ? '⚡' : board.id === 'board_magma' ? '🔥' : board.id === 'board_galaxy' ? '🌌' : board.id === 'board_ice' ? '❄️' : '🌀'}
+                      </div>
+                      <div>
+                        <span className="font-semibold text-xs block text-white">{getPlayerBoardName(board.id, profile)}</span>
+                        <span className="text-[10px] text-slate-400 leading-none">
+                          {profile.settings.language === 'en' ? 'Player board layout style.' : 'Oyuncu tahta çerçeve stili.'}
+                        </span>
                       </div>
                     </div>
                     {!isUnlocked && (
