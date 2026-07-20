@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Hesap Silme Talebi</title>
+
+<style>
+*{
+    margin:0;
+    padding:0;
+    box-sizing:border-box;
+    font-family:Arial,sans-serif;
+}
+
+body{
+    background:linear-gradient(135deg,#4f46e5,#2563eb);
+    display:flex;
+    justify-content:center;
+    align-items:center;
+    height:100vh;
+}
+
+.container{
+    background:#fff;
+    width:400px;
+    padding:30px;
+    border-radius:15px;
+    box-shadow:0 10px 30px rgba(0,0,0,.2);
+}
+
+h1{
+    text-align:center;
+    margin-bottom:20px;
+    color:#333;
+}
+
+p{
+    color:#666;
+    margin-bottom:20px;
+    text-align:center;
+}
+
+input, textarea{
+    width:100%;
+    padding:12px;
+    margin-bottom:15px;
+    border:1px solid #ddd;
+    border-radius:8px;
+    font-size:15px;
+}
+
+button{
+    width:100%;
+    padding:12px;
+    border:none;
+    background:#dc2626;
+    color:#fff;
+    border-radius:8px;
+    font-size:16px;
+    cursor:pointer;
+}
+
+button:hover{
+    background:#b91c1c;
+}
+
+#message{
+    margin-top:15px;
+    text-align:center;
+    color:green;
+    font-weight:bold;
+}
+</style>
+
+</head>
+<body>
+
+<div class="container">
+    <h1>Hesap Silme</h1>
+
+    <p>
+        Hesabınızı kalıcı olarak silmek için kullanıcı adınızı girin.
+    </p>
+
+    <form id="deleteForm">
+        <input
+            type="text"
+            id="username"
+            placeholder="Kullanıcı Adınız"
+            required
+        >
+
+        <textarea
+            id="reason"
+            rows="4"
+            placeholder="Silme nedeni (İsteğe bağlı)"
+        ></textarea>
+
+        <button type="submit">
+            Hesabımı Sil
+        </button>
+    </form>
+
+    <div id="message"></div>
+</div>
+
+<script>
+document.getElementById("deleteForm").addEventListener("submit", function(e){
+    e.preventDefault();
+
+    const username = document.getElementById("username").value;
+
+    document.getElementById("message").innerHTML =
+        "✅ <b>" + username + "</b> adlı kullanıcı için hesap silme talebiniz alınmıştır.";
+
+    this.reset();
+});
+</script>
+
+</body>
+</html>
