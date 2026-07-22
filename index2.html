@@ -3,118 +3,129 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Hesap Silme Talebi</title>
+<title>Monopoly Deal Card - Hesap Silme</title>
 
 <style>
-*{
-    margin:0;
-    padding:0;
-    box-sizing:border-box;
-    font-family:Arial,sans-serif;
-}
-
 body{
-    background:linear-gradient(135deg,#4f46e5,#2563eb);
-    display:flex;
-    justify-content:center;
-    align-items:center;
-    height:100vh;
-}
-
-.container{
-    background:#fff;
-    width:400px;
-    padding:30px;
-    border-radius:15px;
-    box-shadow:0 10px 30px rgba(0,0,0,.2);
-}
-
-h1{
-    text-align:center;
-    margin-bottom:20px;
+    margin:0;
+    font-family:Arial,Helvetica,sans-serif;
+    background:#f4f6f9;
     color:#333;
 }
 
-p{
-    color:#666;
-    margin-bottom:20px;
+.container{
+    max-width:700px;
+    margin:60px auto;
+    background:#fff;
+    padding:40px;
+    border-radius:15px;
+    box-shadow:0 5px 20px rgba(0,0,0,.15);
+}
+
+h1{
+    color:#d32f2f;
     text-align:center;
 }
 
-input, textarea{
+p{
+    line-height:1.7;
+}
+
+input{
     width:100%;
     padding:12px;
-    margin-bottom:15px;
-    border:1px solid #ddd;
+    margin:15px 0;
+    border:1px solid #ccc;
     border-radius:8px;
-    font-size:15px;
+    font-size:16px;
 }
 
 button{
     width:100%;
-    padding:12px;
+    padding:14px;
+    background:#d32f2f;
+    color:white;
     border:none;
-    background:#dc2626;
-    color:#fff;
     border-radius:8px;
     font-size:16px;
     cursor:pointer;
 }
 
 button:hover{
-    background:#b91c1c;
+    background:#b71c1c;
 }
 
-#message{
-    margin-top:15px;
+#result{
+    margin-top:20px;
     text-align:center;
-    color:green;
     font-weight:bold;
+    color:green;
+}
+
+.footer{
+    margin-top:30px;
+    font-size:14px;
+    color:#777;
 }
 </style>
-
 </head>
+
 <body>
 
 <div class="container">
-    <h1>Hesap Silme</h1>
 
-    <p>
-        Hesabınızı kalıcı olarak silmek için kullanıcı adınızı girin.
-    </p>
+<h1>Monopoly Deal Card</h1>
+<h2>Hesap Silme Talebi</h2>
 
-    <form id="deleteForm">
-        <input
-            type="text"
-            id="username"
-            placeholder="Kullanıcı Adınız"
-            required
-        >
+<p>
+Hesabınızı ve ilişkili verilerinizi silmek istiyorsanız aşağıdaki kullanıcı adını girerek talep oluşturabilirsiniz.
+</p>
 
-        <textarea
-            id="reason"
-            rows="4"
-            placeholder="Silme nedeni (İsteğe bağlı)"
-        ></textarea>
+<form id="deleteForm">
 
-        <button type="submit">
-            Hesabımı Sil
-        </button>
-    </form>
+<input
+type="text"
+id="username"
+placeholder="Kullanıcı Adınız"
+required>
 
-    <div id="message"></div>
+<button type="submit">
+Hesabımı Sil
+</button>
+
+</form>
+
+<div id="result"></div>
+
+<div class="footer">
+<p><strong>Silinecek Veriler</strong></p>
+<ul>
+<li>Oyun hesabınız</li>
+<li>Profil bilgileriniz</li>
+<li>Oyun kayıtlarınız</li>
+<li>Sunucudaki kullanıcı verileri</li>
+</ul>
+
+<p>
+Hesap silme işlemi geri alınamaz.
+</p>
+
+</div>
+
 </div>
 
 <script>
-document.getElementById("deleteForm").addEventListener("submit", function(e){
-    e.preventDefault();
+document.getElementById("deleteForm").addEventListener("submit",function(e){
 
-    const username = document.getElementById("username").value;
+e.preventDefault();
 
-    document.getElementById("message").innerHTML =
-        "✅ <b>" + username + "</b> adlı kullanıcı için hesap silme talebiniz alınmıştır.";
+let username=document.getElementById("username").value;
 
-    this.reset();
+document.getElementById("result").innerHTML=
+"✅ <b>"+username+"</b> için hesap silme talebi alınmıştır.";
+
+this.reset();
+
 });
 </script>
 
