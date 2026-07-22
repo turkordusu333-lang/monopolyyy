@@ -187,8 +187,9 @@ export default function App() {
         const err = await response.json();
         setAuthError(err.error || 'Giriş yapılamadı.');
       }
-    } catch (err) {
-      setAuthError('Sunucu bağlantısı kurulamadı. Lütfen sunucunun çalıştığından emin olun.');
+    } catch (err: any) {
+      console.error('Auth error:', err);
+      setAuthError(`Sunucu bağlantısı kurulamadı (${err?.message || 'Ağ Hatası'}). Hedef: ${API_BASE_URL || 'Göreceli Path'}`);
     } finally {
       setLoading(false);
     }
